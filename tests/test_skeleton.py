@@ -45,3 +45,28 @@ def test_skeleton_partition_preset_stig_server(minimal_cfg):
     out = render_skeleton(minimal_cfg, post_blocks=[])
     assert "/var/log/audit" in out
     assert "noexec" in out
+
+
+def test_skeleton_emits_pre_tailoring_fetcher(minimal_cfg):
+    out = render_skeleton(minimal_cfg, post_blocks=[])
+
+    pre_idx = out.find("%pre --erroronfail --log=/tmp/ks-pre-tailoring.log")
+    addon_idx = out.find("%addon org_fedora_oscap")
+    packages_idx = out.find("%packages")
+
+    assert pre_idx != -1, "missing %pre tailoring fetcher block"
+    assert addon_idx != -1, "missing %addon block"
+    assert packages_idx != -1, "missing %packages block"
+    assert pre_idx < packages_idx < addon_idx, "expected order: %pre < %packages < %addon"
+
+    pre_body = out[pre_idx:packages_idx]
+    assert "set -euo pipefail" in pre_body, "missing strict shell flags"
+    assert "[ -s /tailoring.xml ]" in pre_body, "missing idempotence guard"
+    assert "/proc/cmdline" in pre_body, "must derive transport from cmdline"
+    assert "http://*|https://*" in pre_body, "missing HTTP case branch"
+    assert "hd:*" in pre_body, "missing hd: case branch"
+    assert "curl -fsSL --retry 5 --retry-delay 3" in pre_body, "missing curl with retry"
+    assert "/run/install/repo/tailoring.xml" in pre_body, "missing hd: source path"
+    assert "head -c 5 /tailoring.xml | grep -q '<?xml'" in pre_body, "missing xml sentinel check"
+    assert "exit 1" in pre_body, "missing fallback hard-fail for unknown transport"
+    assert pre_body.count("%end") >= 1, "%pre block not closed"

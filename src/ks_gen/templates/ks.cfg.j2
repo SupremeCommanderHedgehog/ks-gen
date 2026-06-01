@@ -28,6 +28,34 @@ clearpart --all --initlabel
 services --enabled=chronyd,firewalld,auditd,rsyslog,sshd
 authselect select sssd --force
 
+%pre --erroronfail --log=/tmp/ks-pre-tailoring.log
+set -euo pipefail
+
+if [ -s /tailoring.xml ]; then
+  echo "ks-gen: /tailoring.xml already present, skipping fetch"
+  exit 0
+fi
+
+ks_arg=$(awk -F'inst.ks=' 'NF>1{print $2}' /proc/cmdline | awk '{print $1}')
+case "$ks_arg" in
+  http://*|https://*)
+    base="${ks_arg%/*}"
+    curl -fsSL --retry 5 --retry-delay 3 "${base}/tailoring.xml" -o /tailoring.xml
+    ;;
+  hd:*)
+    cp -f /run/install/repo/tailoring.xml /tailoring.xml || \
+      cp -f /run/install/repo/tailoring.xml /tailoring.xml
+    ;;
+  *)
+    echo "ks-gen: unsupported inst.ks transport '$ks_arg'; cannot fetch tailoring.xml" >&2
+    exit 1
+    ;;
+esac
+
+test -s /tailoring.xml
+head -c 5 /tailoring.xml | grep -q '<?xml'
+%end
+
 %packages
 {% for grp in cfg.packages.base_groups %}{{ grp }}
 {% endfor -%}
