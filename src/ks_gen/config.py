@@ -125,6 +125,44 @@ class Time(StrictModel):
     chrony_makestep_threshold: float = 1.0
 
 
+class CryptoPolicy(StrEnum):
+    STIG = "STIG"
+    MODERN = "MODERN"
+    FUTURE = "FUTURE"
+
+
+class Crypto(StrictModel):
+    policy: CryptoPolicy = CryptoPolicy.MODERN
+
+
+class Packages(StrictModel):
+    base_groups: list[str] = Field(default_factory=lambda: ["@^minimal-environment", "@standard"])
+    required: list[str] = Field(
+        default_factory=lambda: [
+            "scap-security-guide",
+            "openscap-scanner",
+            "oscap-anaconda-addon",
+            "aide",
+            "audit",
+            "rsyslog",
+            "chrony",
+            "firewalld",
+            "sudo",
+            "policycoreutils-python-utils",
+        ]
+    )
+    extra: list[str] = Field(default_factory=list)
+    excluded: list[str] = Field(
+        default_factory=lambda: [
+            "telnet-server",
+            "rsh-server",
+            "tftp-server",
+            "vsftpd",
+            "ypserv",
+        ]
+    )
+
+
 class HostConfig(StrictModel):
     meta: Meta = Field(default_factory=Meta)
     system: System
@@ -134,3 +172,5 @@ class HostConfig(StrictModel):
     ssh: Ssh = Field(default_factory=Ssh)
     banner: Banner = Field(default_factory=Banner)
     time: Time = Field(default_factory=Time)
+    crypto: Crypto = Field(default_factory=Crypto)
+    packages: Packages = Field(default_factory=Packages)
