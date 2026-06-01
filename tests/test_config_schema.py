@@ -11,6 +11,7 @@ from ks_gen.config import (
     CryptoPolicy,
     Disk,
     DiskPreset,
+    ExceptionDecl,
     HostConfig,
     Interface,
     Meta,
@@ -192,3 +193,42 @@ def test_overrides_safe_defaults():
 def test_auditd_actions_reject_bogus():
     with pytest.raises(ValidationError):
         AuditdActionsCfg(disk_full_action="BURN")  # type: ignore[arg-type]
+
+
+def test_custom_post_passes_through():
+    cfg = HostConfig.model_validate(
+        {
+            "system": {"hostname": "x"},
+            "user": {"admin": {"name": "ops", "authorized_keys": ["ssh-ed25519 A a@b"]}},
+            "custom_post": ["echo hello"],
+        }
+    )
+    assert cfg.custom_post == ["echo hello"]
+
+
+def test_exception_decl_requires_rule_ids():
+    with pytest.raises(ValidationError):
+        ExceptionDecl(id="no-luks", reason="x", stig_rules_disabled=[])
+
+
+def test_modern_crypto_and_fips_mode_rejected():
+    payload = {
+        "system": {"hostname": "x"},
+        "user": {"admin": {"name": "ops", "authorized_keys": ["ssh-ed25519 A a@b"]}},
+        "crypto": {"policy": "MODERN"},
+        "overrides": {"fips_mode": True},
+    }
+    with pytest.raises(ValidationError, match=r"MODERN.*fips_mode"):
+        HostConfig.model_validate(payload)
+
+
+def test_stig_crypto_without_fips_allowed():
+    cfg = HostConfig.model_validate(
+        {
+            "system": {"hostname": "x"},
+            "user": {"admin": {"name": "ops", "authorized_keys": ["ssh-ed25519 A a@b"]}},
+            "crypto": {"policy": "STIG"},
+            "overrides": {"fips_mode": False},
+        }
+    )
+    assert cfg.crypto.policy == CryptoPolicy.STIG
