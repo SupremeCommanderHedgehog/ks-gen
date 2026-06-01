@@ -61,13 +61,19 @@ def test_skeleton_emits_pre_tailoring_fetcher(minimal_cfg):
 
     pre_body = out[pre_idx:packages_idx]
     assert "set -euo pipefail" in pre_body, "missing strict shell flags"
-    assert "[ -s /tailoring.xml ]" in pre_body, "missing idempotence guard"
+    assert "mkdir -p /tmp/openscap_data" in pre_body, "missing mkdir for addon content directory"
+    assert "/tmp/openscap_data/tailoring.xml" in pre_body, (
+        "tailoring must land in /tmp/openscap_data/, where oscap-anaconda-addon looks"
+    )
+    assert "[ -s /tmp/openscap_data/tailoring.xml ]" in pre_body, "missing idempotence guard"
     assert "/proc/cmdline" in pre_body, "must derive transport from cmdline"
     assert "http://*|https://*" in pre_body, "missing HTTP case branch"
     assert "hd:*" in pre_body, "missing hd: case branch"
     assert "curl -fsSL --retry 5 --retry-delay 3" in pre_body, "missing curl with retry"
     assert "/run/install/repo/tailoring.xml" in pre_body, "missing hd: source path"
-    assert "head -c 5 /tailoring.xml | grep -q '<?xml'" in pre_body, "missing xml sentinel check"
+    assert "head -c 5 /tmp/openscap_data/tailoring.xml | grep -q '<?xml'" in pre_body, (
+        "missing xml sentinel check"
+    )
     assert "unsupported inst.ks transport" in pre_body, (
         "missing fallback hard-fail for unknown transport"
     )
