@@ -55,7 +55,7 @@ def run_wizard(*, interactive: bool) -> tuple[HostConfig, str]:
     locale = _ask("Locale", "en_US.UTF-8", interactive=interactive)
     admin_name = _ask("Admin username", "opsadmin", interactive=interactive)
     sudo = _ask(
-        "Admin sudo mode (nopasswd_no/nopasswd_yes)", "nopasswd_no", interactive=interactive
+        "Admin sudo mode (nopasswd_no/nopasswd_yes)", "nopasswd_yes", interactive=interactive
     )
     keys = _ask_keys(interactive)
     ssh_port_raw = _ask("SSH port", "22", interactive=interactive)

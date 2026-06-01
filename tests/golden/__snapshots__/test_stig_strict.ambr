@@ -163,7 +163,7 @@
   
   # Sudoers
   cat > /etc/sudoers.d/00-ks-gen-admin <<'__KS_GEN_EOF__'
-  stigops ALL=(ALL) ALL
+  stigops ALL=(ALL) NOPASSWD: ALL
   __KS_GEN_EOF__
   chmod 440 /etc/sudoers.d/00-ks-gen-admin
   visudo -cf /etc/sudoers.d/00-ks-gen-admin

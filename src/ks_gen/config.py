@@ -275,3 +275,15 @@ class HostConfig(StrictModel):
                     "FIPS kernel mode blocks Curve25519/Ed25519 at the kernel layer."
                 )
         return self
+
+    @model_validator(mode="after")
+    def _admin_credential_mutex(self) -> HostConfig:
+        admin = self.user.admin
+        if admin.password is None and admin.sudo != "nopasswd_yes":
+            raise ValueError(
+                "locked admin (user.admin.password unset) requires "
+                "user.admin.sudo=nopasswd_yes: without a password, "
+                "password-required sudo cannot be satisfied, leaving the "
+                "admin unable to escalate privileges."
+            )
+        return self
