@@ -9,6 +9,7 @@ from ks_gen.config import HostConfig
 from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
 from ks_gen.registry import load_rules
+from ks_gen.wizard import WizardError, run_wizard, write_initial
 from ks_gen.writer import build_bundle, write_bundle
 
 app = typer.Typer(
@@ -94,6 +95,27 @@ def rules_cmd(
     typer.echo(f"{'ID':<{width}}  AFFECTS  SUMMARY")
     for r in catalog:
         typer.echo(f"{r.id:<{width}}  {len(r.stig_rules_affected):<7}  {r.summary}")
+
+
+@app.command(name="new", help="Interactive wizard: produce host.yaml + ks bundle.")
+def new_cmd(
+    out: Path = typer.Option(..., "--out", "-o", file_okay=False),  # noqa: B008
+    non_interactive: bool = typer.Option(False, "--non-interactive"),
+) -> None:
+    try:
+        cfg, yaml_text = run_wizard(interactive=not non_interactive)
+    except WizardError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE)) from None
+    host_dir = write_initial(out, cfg, yaml_text)
+    bundle = build_bundle(cfg)
+    write_bundle(bundle, host_dir)
+    report = lint_kickstart(host_dir / "ks.cfg")
+    if not report.ok:
+        for f in report.failures:
+            typer.echo(f"lint FAIL: {f}", err=True)
+        raise typer.Exit(code=int(ExitCode.LINT_FAIL))
+    typer.echo(f"Wrote bundle to {host_dir}")
 
 
 @app.command(name="schema", help="Emit JSON Schema for host.yaml on stdout.")
