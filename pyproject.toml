@@ -48,6 +48,10 @@ strict = true
 files = ["src/ks_gen"]
 mypy_path = "src"
 
+[[tool.mypy.overrides]]
+module = ["pykickstart.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
