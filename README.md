@@ -7,7 +7,8 @@
 - Substitutes civilian text for DoD-specific banners, certificate bundles, time servers.
 - Emits an `exceptions.md` audit report naming every XCCDF rule it disables and why.
 
-See the design spec at `docs/superpowers/specs/2026-06-01-alma-stig-kickstart-design.md`.
+See [`MANUAL.md`](MANUAL.md) for the operator's reference, or the design spec at
+`docs/superpowers/specs/2026-06-01-alma-stig-kickstart-design.md` for the rationale.
 
 ## Quickstart
 
