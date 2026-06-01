@@ -68,5 +68,7 @@ def test_skeleton_emits_pre_tailoring_fetcher(minimal_cfg):
     assert "curl -fsSL --retry 5 --retry-delay 3" in pre_body, "missing curl with retry"
     assert "/run/install/repo/tailoring.xml" in pre_body, "missing hd: source path"
     assert "head -c 5 /tailoring.xml | grep -q '<?xml'" in pre_body, "missing xml sentinel check"
-    assert "exit 1" in pre_body, "missing fallback hard-fail for unknown transport"
+    assert "unsupported inst.ks transport" in pre_body, (
+        "missing fallback hard-fail for unknown transport"
+    )
     assert pre_body.count("%end") >= 1, "%pre block not closed"

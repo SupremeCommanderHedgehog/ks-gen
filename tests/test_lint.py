@@ -55,3 +55,18 @@ def test_lint_detects_sshd_before_admin(tmp_path):
     ks.write_text(text, encoding="utf-8")
     report = lint_kickstart(ks)
     assert not report.ok
+
+
+def test_lint_detects_missing_pre_tailoring_fetcher(tmp_path):
+    out = _generate(tmp_path)
+    ks = out / "ks.cfg"
+    text = ks.read_text(encoding="utf-8")
+    # Remove the %pre header line so the block is no longer recognisable
+    text = text.replace(
+        "%pre --erroronfail --log=/tmp/ks-pre-tailoring.log",
+        "%pre --log=/tmp/ks-pre-tailoring.log",
+    )
+    ks.write_text(text, encoding="utf-8")
+    report = lint_kickstart(ks)
+    assert not report.ok
+    assert any("missing: %pre tailoring fetcher block" in f for f in report.failures)
