@@ -163,6 +163,79 @@ class Packages(StrictModel):
     )
 
 
+class FaillockCfg(StrictModel):
+    enable: bool = True
+    deny: int = Field(default=3, ge=1)
+    unlock_time: int = Field(default=900, ge=0)
+    even_deny_root: bool = False
+
+
+class AuditdSystemAction(StrEnum):
+    SUSPEND = "SUSPEND"
+    SYSLOG = "SYSLOG"
+    HALT = "HALT"
+    SINGLE = "SINGLE"
+
+
+class AuditdMaxFileAction(StrEnum):
+    ROTATE = "ROTATE"
+    KEEP_LOGS = "keep_logs"
+    SYSLOG = "SYSLOG"
+    IGNORE = "IGNORE"
+
+
+class AuditdActionsCfg(StrictModel):
+    disk_full_action: AuditdSystemAction = AuditdSystemAction.SUSPEND
+    disk_error_action: AuditdSystemAction = AuditdSystemAction.SUSPEND
+    max_log_file_action: AuditdMaxFileAction = AuditdMaxFileAction.ROTATE
+
+
+class SshKeepOpenCfg(StrictModel):
+    ensure_firewalld_port: bool = True
+    ensure_selinux_port: bool = True
+
+
+class UsbguardCfg(StrictModel):
+    enable: bool = False
+
+
+class KernelModuleBlacklistCfg(StrictModel):
+    enable: bool = True
+    modules: list[str] = Field(
+        default_factory=lambda: [
+            "usb-storage",
+            "cramfs",
+            "freevxfs",
+            "jffs2",
+            "hfs",
+            "hfsplus",
+            "squashfs",
+            "udf",
+        ]
+    )
+
+
+class PackagePurgeCfg(StrictModel):
+    enable: bool = True
+
+
+class DodRootCaCfg(StrictModel):
+    install: bool = False
+
+
+class Overrides(StrictModel):
+    fips_mode: bool = False
+    faillock: FaillockCfg = Field(default_factory=FaillockCfg)
+    auditd: AuditdActionsCfg = Field(default_factory=AuditdActionsCfg)
+    ssh_keep_open: SshKeepOpenCfg = Field(default_factory=SshKeepOpenCfg)
+    usbguard: UsbguardCfg = Field(default_factory=UsbguardCfg)
+    kernel_module_blacklist: KernelModuleBlacklistCfg = Field(
+        default_factory=KernelModuleBlacklistCfg
+    )
+    package_purge: PackagePurgeCfg = Field(default_factory=PackagePurgeCfg)
+    dod_root_ca: DodRootCaCfg = Field(default_factory=DodRootCaCfg)
+
+
 class HostConfig(StrictModel):
     meta: Meta = Field(default_factory=Meta)
     system: System
@@ -174,3 +247,4 @@ class HostConfig(StrictModel):
     time: Time = Field(default_factory=Time)
     crypto: Crypto = Field(default_factory=Crypto)
     packages: Packages = Field(default_factory=Packages)
+    overrides: Overrides = Field(default_factory=Overrides)

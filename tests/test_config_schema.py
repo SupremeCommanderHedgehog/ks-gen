@@ -3,6 +3,9 @@ from pydantic import ValidationError
 
 from ks_gen.config import (
     AdminUser,
+    AuditdActionsCfg,
+    AuditdMaxFileAction,
+    AuditdSystemAction,
     Banner,
     Crypto,
     CryptoPolicy,
@@ -12,6 +15,7 @@ from ks_gen.config import (
     Interface,
     Meta,
     Network,
+    Overrides,
     Packages,
     Ssh,
     System,
@@ -170,3 +174,21 @@ def test_packages_exclude_known_legacy():
     p = Packages()
     for legacy in ("telnet-server", "rsh-server", "ypserv"):
         assert legacy in p.excluded
+
+
+def test_overrides_safe_defaults():
+    o = Overrides()
+    assert o.fips_mode is False
+    assert o.faillock.unlock_time == 900
+    assert o.faillock.even_deny_root is False
+    assert o.auditd.disk_full_action == AuditdSystemAction.SUSPEND
+    assert o.auditd.max_log_file_action == AuditdMaxFileAction.ROTATE
+    assert o.ssh_keep_open.ensure_firewalld_port is True
+    assert o.usbguard.enable is False
+    assert o.dod_root_ca.install is False
+    assert "usb-storage" in o.kernel_module_blacklist.modules
+
+
+def test_auditd_actions_reject_bogus():
+    with pytest.raises(ValidationError):
+        AuditdActionsCfg(disk_full_action="BURN")  # type: ignore[arg-type]
