@@ -1,0 +1,12 @@
+part /boot/efi --fstype=efi --size=1024 --asprimary
+part /boot --fstype=xfs --size=1024 --fsoptions="nodev,nosuid" --asprimary
+part pv.01 --grow --size=1
+volgroup vg_root pv.01
+logvol /             --vgname=vg_root --name=root     --fstype=xfs --size=15360
+logvol /home         --vgname=vg_root --name=home     --fstype=xfs --size=5120  --fsoptions="nodev,nosuid"
+logvol /tmp          --vgname=vg_root --name=tmp      --fstype=xfs --size=3072  --fsoptions="nodev,nosuid,noexec"
+logvol /var          --vgname=vg_root --name=var      --fstype=xfs --size=10240 --fsoptions="nodev"
+logvol /var/log      --vgname=vg_root --name=varlog   --fstype=xfs --size=5120  --fsoptions="nodev,nosuid,noexec"
+logvol /var/log/audit --vgname=vg_root --name=varlogaudit --fstype=xfs --size=3072 --fsoptions="nodev,nosuid,noexec"
+logvol /var/tmp      --vgname=vg_root --name=vartmp   --fstype=xfs --size=2048  --fsoptions="nodev,nosuid,noexec"
+logvol swap          --vgname=vg_root --name=swap     --fstype=swap --recommended
