@@ -127,9 +127,16 @@ Within ~30 seconds, window #1 should log:
 "GET /tailoring.xml HTTP/1.1" 200 -
 ```
 
-That confirms Anaconda fetched the kickstart. The install proceeds
-unattended — packages, oscap remediation, `%post` (admin user + sshd config +
-crypto policy + …), then a reboot. Total: ~10-15 minutes on a modern host.
+The first GET is Anaconda parsing the kickstart. The second is the `%pre`
+block inside `ks.cfg` reading `inst.ks=` from `/proc/cmdline` and curling
+`tailoring.xml` from the same base URL into `/tailoring.xml` for
+`oscap-anaconda-addon` to pick up. If you see only the first GET, the
+`%pre` is failing — check the VM console for the `ks-gen:` prefix or
+inspect `/tmp/ks-pre-tailoring.log` after Anaconda drops to a shell.
+
+The install proceeds unattended — packages, oscap remediation, `%post`
+(admin user + sshd config + crypto policy + …), then a reboot. Total:
+~10-15 minutes on a modern host.
 
 ## Step 6 — Find the VM's IP after reboot
 
