@@ -95,9 +95,10 @@ Within the recognized branches:
 - HTTP uses `curl -fsSL --retry 5 --retry-delay 3`. Five attempts at
   three-second intervals covers transient network blips without
   requiring intervention.
-- `hd:` falls back to a second `cp` attempt if the first fails — disk
-  contention during early install can briefly stall reads from the
-  installer media.
+- `hd:` exits with a clear error if `cp` fails. `cp -f` failures from a
+  mounted ISO are not transient (ENOENT / permission), so retrying the
+  same command would recover nothing; the explicit fail-loud matches the
+  HTTP branch (which relies on `curl -fsSL` exiting under `set -e`).
 
 After the fetch / copy, the block verifies `/tailoring.xml` is non-empty
 and that its first bytes are `<?xml`, as a cheap sanity check against
@@ -131,8 +132,10 @@ case "$ks_arg" in
     curl -fsSL --retry 5 --retry-delay 3 "${base}/tailoring.xml" -o /tailoring.xml
     ;;
   hd:*)
-    cp -f /run/install/repo/tailoring.xml /tailoring.xml || \
-      cp -f /run/install/repo/tailoring.xml /tailoring.xml
+    cp -f /run/install/repo/tailoring.xml /tailoring.xml || {
+      echo "ks-gen: failed to copy tailoring.xml from /run/install/repo" >&2
+      exit 1
+    }
     ;;
   *)
     echo "ks-gen: unsupported inst.ks transport '$ks_arg'; cannot fetch tailoring.xml" >&2
