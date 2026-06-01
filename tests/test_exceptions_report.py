@@ -1,0 +1,46 @@
+from ks_gen.exceptions_report import render_exceptions_md
+from ks_gen.registry import load_rules
+from ks_gen.topo import topo_sort
+
+
+def test_report_lists_applied_rules(minimal_cfg):
+    rules = [r for r in topo_sort(load_rules()) if r.applies(minimal_cfg)]
+    md = render_exceptions_md(minimal_cfg, rules)
+    assert "# Exceptions report" in md
+    assert "admin_user_and_keys" in md
+    assert "crypto_policy" in md
+
+
+def test_report_lists_disabled_xccdf_rules(minimal_cfg):
+    rules = [r for r in topo_sort(load_rules()) if r.applies(minimal_cfg)]
+    md = render_exceptions_md(minimal_cfg, rules)
+    assert "banner_etc_issue" in md
+    assert "sshd_use_approved_ciphers" in md
+
+
+def test_report_includes_declared_exceptions(minimal_cfg):
+    from ks_gen.config import ExceptionDecl
+
+    cfg = minimal_cfg.model_copy(
+        update={
+            "exceptions": [
+                ExceptionDecl(
+                    id="no-luks",
+                    reason="Cloud volumes encrypted by provider.",
+                    stig_rules_disabled=["xccdf_org.ssgproject.content_rule_encrypt_partitions"],
+                )
+            ]
+        }
+    )
+    rules = [r for r in topo_sort(load_rules()) if r.applies(cfg)]
+    md = render_exceptions_md(cfg, rules)
+    assert "no-luks" in md
+    assert "encrypt_partitions" in md
+
+
+def test_report_counts_summary(minimal_cfg):
+    rules = [r for r in topo_sort(load_rules()) if r.applies(minimal_cfg)]
+    md = render_exceptions_md(minimal_cfg, rules)
+    assert "Applied rules:" in md
+    assert "Tailored XCCDF rules:" in md
+    assert "Declared exceptions:" in md
