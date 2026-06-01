@@ -18,6 +18,10 @@ def build_iso(
     volid: str,
     keep_original_default: bool = False,
 ) -> None:
+    # v0.1 limitation: injects ks.cfg + tailoring.xml at ISO root but does NOT
+    # rewrite isolinux/grub configs. Operator must type
+    # `inst.ks=hd:LABEL=<volid>:/ks.cfg` at the boot prompt. Bootloader
+    # rewriting is tracked for v0.2.
     if shutil.which("xorriso") is None:
         raise IsoBuildError(
             "xorriso not on PATH (install: dnf install xorriso / brew install xorriso)"
