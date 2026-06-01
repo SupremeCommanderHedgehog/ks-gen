@@ -13,10 +13,14 @@ the catalog drives the audit story.
 - CLI subcommands: new, gen, iso, lint, rules, schema.
 - Four golden snapshots: minimal-dhcp, stig-strict, modern-crypto, bare-metal-usbguard.
 
-### Fixed
-- `ks.cfg` now emits a `%pre` block that stages `tailoring.xml` inside
-  `oscap-anaconda-addon`'s content directory (`/tmp/openscap_data/`)
-  before `%addon` runs. Previously the addon found nothing there under
-  both HTTP-served and `ks-gen iso` delivery, silently falling back to
-  the unmodified base STIG profile. See
-  `docs/superpowers/specs/2026-06-01-tailoring-pre-fetcher-design.md`.
+### Changed
+- Drop `%addon org_fedora_oscap` and the `oscap-anaconda-addon` package.
+  The addon's "supplied content" model didn't accommodate ks-gen's per-host
+  tailoring — files written to its staging directory weren't registered
+  unless they came through the addon's own content-handling pipeline. The
+  kickstart now emits a leading `%post` block that curls `tailoring.xml`
+  from the same URL `inst.ks=` used and runs `oscap xccdf eval --remediate
+  --tailoring-file /root/tailoring.xml ...` directly. `tailoring.xml`,
+  the oscap remediation report, and the ARF results all persist on the
+  installed FS under `/root/` for later audit. HTTP delivery only in v0.1;
+  `hd:LABEL=` / `ks-gen iso` punted to v0.2.

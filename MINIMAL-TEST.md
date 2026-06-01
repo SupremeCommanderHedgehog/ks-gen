@@ -120,24 +120,29 @@ When the GRUB menu appears in the vmconnect console:
 
 6. Press **Ctrl-X** to boot.
 
-Within ~30 seconds, window #1 should log:
+Within ~30 seconds, window #1 should log Anaconda's kickstart fetch:
 
 ```
 "GET /ks.cfg HTTP/1.1" 200 -
+```
+
+Then the install proceeds unattended — kernel boot, partition, package
+install (this is the slow part). Several minutes in, the first `%post`
+block fires and you should see a second GET:
+
+```
 "GET /tailoring.xml HTTP/1.1" 200 -
 ```
 
-The first GET is Anaconda parsing the kickstart. The second is the `%pre`
-block inside `ks.cfg` reading `inst.ks=` from `/proc/cmdline` and curling
-`tailoring.xml` from the same base URL into
-`/tmp/openscap_data/tailoring.xml` for `oscap-anaconda-addon` to pick up.
-If you see only the first GET, the `%pre` is failing — check the VM
-console for the `ks-gen:` prefix or inspect `/tmp/ks-pre-tailoring.log`
-after Anaconda drops to a shell.
+That second GET is `curl` from inside the chroot, fetching tailoring.xml
+from the same base URL the operator's `inst.ks=` pointed at. The block
+then runs `oscap xccdf eval --remediate` against the installed system,
+followed by a second `%post` that applies ks-gen's rule overrides
+(admin user + sshd config + crypto policy + …). If you see only the
+first GET and the install stalls, inspect `/root/ks-post-oscap.log` on
+the installed system after reboot (it survives the install for audit).
 
-The install proceeds unattended — packages, oscap remediation, `%post`
-(admin user + sshd config + crypto policy + …), then a reboot. Total:
-~10-15 minutes on a modern host.
+Total wall-clock: ~10-15 minutes on a modern host, then a reboot.
 
 ## Step 6 — Find the VM's IP after reboot
 
@@ -187,13 +192,15 @@ sudo cat /etc/issue.net
 # Confirm Ed25519 host key exists (MODERN crypto path)
 ls /etc/ssh/ssh_host_ed25519_key.pub
 
-# Fetch the same tailoring.xml the %pre used (not preserved on the installed FS)
-curl -fsSL http://172.19.176.1:8000/tailoring.xml -o /tmp/tailoring.xml
+# tailoring.xml is preserved on the installed FS at /root/tailoring.xml
+# by the oscap %post block. The oscap remediation report and ARF results
+# from install time also live there.
+ls -l /root/tailoring.xml /root/oscap-remediation-*.{xml,html}
 
-# Run oscap evaluation against the live system
+# Re-run oscap evaluation against the live system to see what state landed
 sudo oscap xccdf eval \
   --profile xccdf_org.ssgproject.content_profile_stig \
-  --tailoring-file /tmp/tailoring.xml \
+  --tailoring-file /root/tailoring.xml \
   /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml | tail -40
 ```
 
