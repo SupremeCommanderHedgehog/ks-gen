@@ -43,8 +43,10 @@ case "$ks_arg" in
     curl -fsSL --retry 5 --retry-delay 3 "${base}/tailoring.xml" -o /tailoring.xml
     ;;
   hd:*)
-    cp -f /run/install/repo/tailoring.xml /tailoring.xml || \
-      cp -f /run/install/repo/tailoring.xml /tailoring.xml
+    cp -f /run/install/repo/tailoring.xml /tailoring.xml || {
+      echo "ks-gen: failed to copy tailoring.xml from /run/install/repo" >&2
+      exit 1
+    }
     ;;
   *)
     echo "ks-gen: unsupported inst.ks transport '$ks_arg'; cannot fetch tailoring.xml" >&2

@@ -38,6 +38,8 @@ def _internal_checks(text: str) -> list[str]:
         failures.append("ordering: admin_user_and_keys must precede ssh_config_apply")
     if "tailoring-path = /tailoring.xml" not in text:
         failures.append("missing: %addon does not reference tailoring.xml")
+    if "%pre --erroronfail --log=/tmp/ks-pre-tailoring.log" not in text:
+        failures.append("missing: %pre tailoring fetcher block")
     return failures
 
 
