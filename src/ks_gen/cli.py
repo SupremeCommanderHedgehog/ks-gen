@@ -6,6 +6,7 @@ from pathlib import Path
 import typer
 
 from ks_gen.config import HostConfig
+from ks_gen.iso import IsoBuildError, build_iso
 from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
 from ks_gen.registry import load_rules
@@ -121,6 +122,22 @@ def new_cmd(
 @app.command(name="schema", help="Emit JSON Schema for host.yaml on stdout.")
 def schema_cmd() -> None:
     typer.echo(_json.dumps(HostConfig.model_json_schema(), indent=2))
+
+
+@app.command(name="iso", help="Repackage AlmaLinux DVD ISO with ks.cfg + tailoring embedded.")
+def iso_cmd(
+    src: Path = typer.Option(..., "--src", exists=True, dir_okay=False),  # noqa: B008
+    ks: Path = typer.Option(..., "--ks", exists=True, dir_okay=False),  # noqa: B008
+    tailoring: Path = typer.Option(..., "--tailoring", exists=True, dir_okay=False),  # noqa: B008
+    out: Path = typer.Option(..., "--out", dir_okay=False),  # noqa: B008
+    volid: str = typer.Option("ALMA9", "--volid"),
+) -> None:
+    try:
+        build_iso(src, ks, tailoring, out, volid=volid)
+    except IsoBuildError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=int(ExitCode.TOOL_MISSING)) from None
+    typer.echo(f"Wrote {out}")
 
 
 if __name__ == "__main__":
