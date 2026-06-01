@@ -1,7 +1,20 @@
 import pytest
 from pydantic import ValidationError
 
-from ks_gen.config import Disk, DiskPreset, HostConfig, Interface, Meta, Network, System
+from ks_gen.config import (
+    AdminUser,
+    Banner,
+    Disk,
+    DiskPreset,
+    HostConfig,
+    Interface,
+    Meta,
+    Network,
+    Ssh,
+    System,
+    Time,
+    User,
+)
 
 
 def test_meta_defaults():
@@ -24,14 +37,27 @@ def test_system_defaults():
 
 
 def test_host_config_partial_ok():
-    # Only meta + system are required at this stage.
-    cfg = HostConfig.model_validate({"meta": {}, "system": {"hostname": "web01.example.com"}})
+    # meta + system + user are the required fields.
+    cfg = HostConfig.model_validate(
+        {
+            "meta": {},
+            "system": {"hostname": "web01.example.com"},
+            "user": {"admin": {"name": "ops", "authorized_keys": ["ssh-ed25519 A a@b"]}},
+        }
+    )
     assert cfg.system.hostname == "web01.example.com"
 
 
 def test_unknown_top_level_key_rejected():
     with pytest.raises(ValidationError):
-        HostConfig.model_validate({"meta": {}, "system": {"hostname": "x"}, "garbage": True})
+        HostConfig.model_validate(
+            {
+                "meta": {},
+                "system": {"hostname": "x"},
+                "user": {"admin": {"name": "ops", "authorized_keys": ["ssh-ed25519 A a@b"]}},
+                "garbage": True,
+            }
+        )
 
 
 def test_interface_dhcp_minimum():
@@ -69,3 +95,48 @@ def test_disk_preset_default():
     assert d.preset == DiskPreset.STIG_SERVER
     assert d.wipe is True
     assert d.bootloader_password is None
+
+
+def test_admin_user_requires_keys_when_password_is_none():
+    with pytest.raises(ValidationError, match="authorized_keys"):
+        AdminUser(name="opsadmin", password=None, authorized_keys=[])
+
+
+def test_admin_user_with_keys_ok():
+    u = AdminUser(
+        name="opsadmin",
+        authorized_keys=["ssh-ed25519 AAAA... a@b"],
+    )
+    assert u.password is None
+    assert u.groups == ["wheel"]
+
+
+def test_admin_user_rejects_root():
+    with pytest.raises(ValidationError, match="root"):
+        AdminUser(name="root", authorized_keys=["ssh-ed25519 AAA a@b"])
+
+
+def test_user_holds_admin():
+    u = User(admin=AdminUser(name="opsadmin", authorized_keys=["ssh-ed25519 A a@b"]))
+    assert u.admin.name == "opsadmin"
+
+
+def test_ssh_defaults():
+    s = Ssh()
+    assert s.port == 22
+    assert s.permit_root_login == "no"
+    assert s.password_authentication is False
+    assert s.client_alive_interval == 600
+
+
+def test_banner_default_is_civilian():
+    b = Banner()
+    assert "U.S. Government" not in b.text
+    assert "private" in b.text.lower()
+    assert "issue" in b.apply_to
+
+
+def test_time_defaults_are_not_dod():
+    t = Time()
+    assert t.servers == ["pool.ntp.org"]
+    assert "usno" not in str(t.servers).lower()
