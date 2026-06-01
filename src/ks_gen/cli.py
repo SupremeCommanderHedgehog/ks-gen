@@ -5,6 +5,7 @@ from pathlib import Path
 
 import typer
 
+from ks_gen.config import HostConfig
 from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
 from ks_gen.registry import load_rules
@@ -93,6 +94,11 @@ def rules_cmd(
     typer.echo(f"{'ID':<{width}}  AFFECTS  SUMMARY")
     for r in catalog:
         typer.echo(f"{r.id:<{width}}  {len(r.stig_rules_affected):<7}  {r.summary}")
+
+
+@app.command(name="schema", help="Emit JSON Schema for host.yaml on stdout.")
+def schema_cmd() -> None:
+    typer.echo(_json.dumps(HostConfig.model_json_schema(), indent=2))
 
 
 if __name__ == "__main__":
