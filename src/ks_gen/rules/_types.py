@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Protocol
 
 if TYPE_CHECKING:
-    from ks_gen.config import HostConfig  # type: ignore[import-untyped]
+    from ks_gen.config import HostConfig
 
 TailoringAction = Literal["disable", "select", "set_value"]
 
