@@ -1,0 +1,11 @@
+system:
+  hostname: mod01.example.com
+user:
+  admin:
+    name: modops
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYmoderncrypto ops@host"
+crypto:
+  policy: MODERN
+overrides:
+  fips_mode: false
