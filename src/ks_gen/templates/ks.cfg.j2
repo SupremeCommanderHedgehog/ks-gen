@@ -31,8 +31,12 @@ authselect select sssd --force
 %pre --erroronfail --log=/tmp/ks-pre-tailoring.log
 set -euo pipefail
 
-if [ -s /tailoring.xml ]; then
-  echo "ks-gen: /tailoring.xml already present, skipping fetch"
+# oscap-anaconda-addon resolves tailoring-path inside its content staging dir
+# /tmp/openscap_data, not the installer-FS root. Create it and write here.
+mkdir -p /tmp/openscap_data
+
+if [ -s /tmp/openscap_data/tailoring.xml ]; then
+  echo "ks-gen: /tmp/openscap_data/tailoring.xml already present, skipping fetch"
   exit 0
 fi
 
@@ -40,10 +44,10 @@ ks_arg=$(awk -F'inst.ks=' 'NF>1{print $2}' /proc/cmdline | awk '{print $1}')
 case "$ks_arg" in
   http://*|https://*)
     base="${ks_arg%/*}"
-    curl -fsSL --retry 5 --retry-delay 3 "${base}/tailoring.xml" -o /tailoring.xml
+    curl -fsSL --retry 5 --retry-delay 3 "${base}/tailoring.xml" -o /tmp/openscap_data/tailoring.xml
     ;;
   hd:*)
-    cp -f /run/install/repo/tailoring.xml /tailoring.xml || {
+    cp -f /run/install/repo/tailoring.xml /tmp/openscap_data/tailoring.xml || {
       echo "ks-gen: failed to copy tailoring.xml from /run/install/repo" >&2
       exit 1
     }
@@ -54,8 +58,8 @@ case "$ks_arg" in
     ;;
 esac
 
-test -s /tailoring.xml
-head -c 5 /tailoring.xml | grep -q '<?xml'
+test -s /tmp/openscap_data/tailoring.xml
+head -c 5 /tmp/openscap_data/tailoring.xml | grep -q '<?xml'
 %end
 
 %packages
