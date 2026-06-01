@@ -129,10 +129,11 @@ Within ~30 seconds, window #1 should log:
 
 The first GET is Anaconda parsing the kickstart. The second is the `%pre`
 block inside `ks.cfg` reading `inst.ks=` from `/proc/cmdline` and curling
-`tailoring.xml` from the same base URL into `/tailoring.xml` for
-`oscap-anaconda-addon` to pick up. If you see only the first GET, the
-`%pre` is failing — check the VM console for the `ks-gen:` prefix or
-inspect `/tmp/ks-pre-tailoring.log` after Anaconda drops to a shell.
+`tailoring.xml` from the same base URL into
+`/tmp/openscap_data/tailoring.xml` for `oscap-anaconda-addon` to pick up.
+If you see only the first GET, the `%pre` is failing — check the VM
+console for the `ks-gen:` prefix or inspect `/tmp/ks-pre-tailoring.log`
+after Anaconda drops to a shell.
 
 The install proceeds unattended — packages, oscap remediation, `%post`
 (admin user + sshd config + crypto policy + …), then a reboot. Total:
@@ -186,10 +187,13 @@ sudo cat /etc/issue.net
 # Confirm Ed25519 host key exists (MODERN crypto path)
 ls /etc/ssh/ssh_host_ed25519_key.pub
 
+# Fetch the same tailoring.xml the %pre used (not preserved on the installed FS)
+curl -fsSL http://172.19.176.1:8000/tailoring.xml -o /tmp/tailoring.xml
+
 # Run oscap evaluation against the live system
 sudo oscap xccdf eval \
   --profile xccdf_org.ssgproject.content_profile_stig \
-  --tailoring-file /tailoring.xml \
+  --tailoring-file /tmp/tailoring.xml \
   /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml | tail -40
 ```
 
