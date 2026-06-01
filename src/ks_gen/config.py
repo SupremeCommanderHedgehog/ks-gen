@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StrictModel(BaseModel):
@@ -59,8 +59,78 @@ class Disk(StrictModel):
     bootloader_password: str | None = None
 
 
+DEFAULT_BANNER = (
+    "WARNING: This is a private computer system. Unauthorized access is\n"
+    "prohibited. All activity on this system may be monitored and logged.\n"
+    "Use of this system constitutes consent to such monitoring.\n"
+)
+
+
+class AdminUser(StrictModel):
+    name: str
+    gecos: str = ""
+    groups: list[str] = Field(default_factory=lambda: ["wheel"])
+    shell: str = "/bin/bash"
+    password: str | None = None
+    sudo: Literal["nopasswd_no", "nopasswd_yes"] = "nopasswd_no"
+    authorized_keys: list[str] = Field(default_factory=list)
+
+    @field_validator("name")
+    @classmethod
+    def _not_root(cls, v: str) -> str:
+        if v == "root":
+            raise ValueError("admin name cannot be 'root'")
+        return v
+
+    @model_validator(mode="after")
+    def _keys_or_password(self) -> AdminUser:
+        if self.password is None and not self.authorized_keys:
+            raise ValueError(
+                "user.admin.authorized_keys: at least one key required when password is null"
+            )
+        return self
+
+
+class User(StrictModel):
+    admin: AdminUser
+
+
+class Ssh(StrictModel):
+    port: int = Field(default=22, ge=1, le=65535)
+    permit_root_login: Literal["no", "prohibit-password"] = "no"
+    password_authentication: bool = False
+    client_alive_interval: int = Field(default=600, ge=0)
+    client_alive_count_max: int = Field(default=1, ge=0)
+    max_auth_tries: int = Field(default=4, ge=1)
+    use_pam: bool = True
+
+
+_APPLY_TO_DEFAULT: list[Literal["issue", "issue_net", "motd", "gdm"]] = [
+    "issue",
+    "issue_net",
+    "motd",
+    "gdm",
+]
+
+
+class Banner(StrictModel):
+    text: str = DEFAULT_BANNER
+    apply_to: list[Literal["issue", "issue_net", "motd", "gdm"]] = Field(
+        default_factory=lambda: list(_APPLY_TO_DEFAULT)
+    )
+
+
+class Time(StrictModel):
+    servers: list[str] = Field(default_factory=lambda: ["pool.ntp.org"])
+    chrony_makestep_threshold: float = 1.0
+
+
 class HostConfig(StrictModel):
     meta: Meta = Field(default_factory=Meta)
     system: System
     network: Network = Field(default_factory=Network)
     disk: Disk = Field(default_factory=Disk)
+    user: User
+    ssh: Ssh = Field(default_factory=Ssh)
+    banner: Banner = Field(default_factory=Banner)
+    time: Time = Field(default_factory=Time)
