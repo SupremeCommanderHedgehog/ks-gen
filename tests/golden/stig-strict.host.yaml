@@ -1,0 +1,22 @@
+system:
+  hostname: stig01.example.com
+user:
+  admin:
+    name: stigops
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYstigstrict ops@bastion"
+crypto:
+  policy: STIG
+overrides:
+  fips_mode: true
+  usbguard:
+    enable: true
+  faillock:
+    enable: true
+    deny: 3
+    unlock_time: 0
+    even_deny_root: true
+  auditd:
+    disk_full_action: HALT
+    disk_error_action: HALT
+    max_log_file_action: keep_logs
