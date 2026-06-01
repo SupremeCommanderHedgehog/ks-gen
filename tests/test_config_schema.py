@@ -4,12 +4,15 @@ from pydantic import ValidationError
 from ks_gen.config import (
     AdminUser,
     Banner,
+    Crypto,
+    CryptoPolicy,
     Disk,
     DiskPreset,
     HostConfig,
     Interface,
     Meta,
     Network,
+    Packages,
     Ssh,
     System,
     Time,
@@ -140,3 +143,30 @@ def test_time_defaults_are_not_dod():
     t = Time()
     assert t.servers == ["pool.ntp.org"]
     assert "usno" not in str(t.servers).lower()
+
+
+def test_crypto_default_is_modern():
+    assert Crypto().policy == CryptoPolicy.MODERN
+
+
+def test_crypto_accepts_stig_and_future():
+    assert Crypto(policy=CryptoPolicy.STIG).policy == CryptoPolicy.STIG
+    assert Crypto(policy=CryptoPolicy.FUTURE).policy == CryptoPolicy.FUTURE
+
+
+def test_packages_include_security_baseline():
+    p = Packages()
+    for required in (
+        "scap-security-guide",
+        "oscap-anaconda-addon",
+        "aide",
+        "firewalld",
+        "chrony",
+    ):
+        assert required in p.required
+
+
+def test_packages_exclude_known_legacy():
+    p = Packages()
+    for legacy in ("telnet-server", "rsh-server", "ypserv"):
+        assert legacy in p.excluded
