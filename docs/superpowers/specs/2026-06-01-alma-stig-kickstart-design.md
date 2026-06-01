@@ -99,12 +99,13 @@ Execution timeline inside Anaconda:
 %packages → %addon org_fedora_oscap [reads tailoring.xml, remediates] → %post → reboot
 ```
 
-**Tailoring delivery.** `oscap-anaconda-addon` reads `tailoring.xml` from
-a local installer-FS path (`/tailoring.xml`), not a URL. A static `%pre`
-block emitted into every `ks.cfg` is responsible for staging the file at
-that path before `%addon` runs — `curl`-ing from the same base URL when
-the kickstart was served over `http(s)://`, or `cp`-ing it from
-`/run/install/repo` when delivered via `hd:LABEL=` (the `ks-gen iso`
+**Tailoring delivery.** `oscap-anaconda-addon` resolves `tailoring-path`
+inside its content staging directory (`/tmp/openscap_data/`), not at the
+installer-FS root. A static `%pre` block emitted into every `ks.cfg` is
+responsible for `mkdir -p`ing that directory and writing
+`tailoring.xml` into it before `%addon` runs — `curl`-ing from the same
+base URL when the kickstart was served over `http(s)://`, or `cp`-ing it
+from `/run/install/repo` when delivered via `hd:LABEL=` (the `ks-gen iso`
 path). See `docs/superpowers/specs/2026-06-01-tailoring-pre-fetcher-design.md`
 for the full design.
 
