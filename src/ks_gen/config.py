@@ -236,6 +236,12 @@ class Overrides(StrictModel):
     dod_root_ca: DodRootCaCfg = Field(default_factory=DodRootCaCfg)
 
 
+class ExceptionDecl(StrictModel):
+    id: str
+    reason: str
+    stig_rules_disabled: list[str] = Field(..., min_length=1)
+
+
 class HostConfig(StrictModel):
     meta: Meta = Field(default_factory=Meta)
     system: System
@@ -248,3 +254,15 @@ class HostConfig(StrictModel):
     crypto: Crypto = Field(default_factory=Crypto)
     packages: Packages = Field(default_factory=Packages)
     overrides: Overrides = Field(default_factory=Overrides)
+    custom_post: list[str] = Field(default_factory=list)
+    exceptions: list[ExceptionDecl] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _crypto_fips_mutex(self) -> HostConfig:
+        if self.crypto.policy in (CryptoPolicy.MODERN, CryptoPolicy.FUTURE):
+            if self.overrides.fips_mode:
+                raise ValueError(
+                    "crypto.policy=MODERN/FUTURE conflicts with overrides.fips_mode=true: "
+                    "FIPS kernel mode blocks Curve25519/Ed25519 at the kernel layer."
+                )
+        return self
