@@ -79,25 +79,42 @@ repackaging.
 
 ### 2.1 Hybrid STIG application
 
-Most STIG rules (~400) are owned by `oscap` remediation via the
-`%addon org_fedora_oscap` block. The generator does **not** reimplement those.
-The generator owns only the named *conflict points* between STIG and
-remote-safety, plus DoD-content neutralization — roughly 12 rules in v1.
+Most STIG rules (~400) are owned by `oscap` remediation. The generator
+does **not** reimplement those. The generator owns only the named
+*conflict points* between STIG and remote-safety, plus DoD-content
+neutralization — roughly 12 rules in v1.
 
 Each rule has two channels:
 
-- **Tailoring channel:** XCCDF fragments merged into a per-host `tailoring.xml`.
-  This runs *before* oscap remediation and prevents oscap from doing things
-  (`disable` an XCCDF rule, `set_value` for a variable).
-- **Post channel:** shell injected into `%post` after oscap remediation. Used
-  to add things oscap doesn't (admin authorized_keys, civilian banner) or
-  re-assert values oscap may have over-tightened.
+- **Tailoring channel:** XCCDF fragments merged into a per-host
+  `tailoring.xml`. This is consumed by `oscap` *before* its remediation
+  pass and prevents oscap from doing things (`disable` an XCCDF rule,
+  `set_value` for a variable).
+- **Post channel:** shell injected into the rule-overrides `%post` block
+  after oscap remediation. Used to add things oscap doesn't (admin
+  authorized_keys, civilian banner) or re-assert values oscap may have
+  over-tightened.
 
 Execution timeline inside Anaconda:
 
 ```
-%packages → %addon org_fedora_oscap [reads tailoring.xml, remediates] → %post → reboot
+%packages → %post [curl tailoring.xml + oscap xccdf eval --remediate
+                   --tailoring-file ...] → %post [ks-gen rule overrides]
+          → reboot
 ```
+
+**Why oscap runs from `%post`, not `%addon`.** The original design used
+`%addon org_fedora_oscap`, but the addon's "supplied content" model
+required `tailoring.xml` to be registered through its own content-
+handling pipeline (e.g., `content-url` archive extraction). Per-host
+tailoring delivered via `%pre` could not satisfy that check — the addon
+aborts with `expected a file /tmp/openscap_data/tailoring.xml to be part
+of the supplied content`. Running `oscap` directly from `%post` is what
+the addon does internally anyway, so ks-gen invokes it directly. Side
+benefits: `tailoring.xml`, the remediation ARF, and the HTML report all
+land in `/root/` on the installed system for later audit. See
+`docs/superpowers/specs/2026-06-01-tailoring-pre-fetcher-design.md`
+for the full reasoning trail.
 
 ### 2.2 External tool dependencies
 

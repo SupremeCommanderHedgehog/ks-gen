@@ -1,0 +1,21 @@
+system:
+  hostname: baremetal01.example.com
+network:
+  interfaces:
+    - device: eno1
+      bootproto: static
+      ip: 192.168.50.10
+      netmask: 255.255.255.0
+      gateway: 192.168.50.1
+      nameservers: [1.1.1.1, 9.9.9.9]
+user:
+  admin:
+    name: physadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYbaremetalusbguard ops@kvm"
+    sudo: nopasswd_yes
+ssh:
+  port: 2222
+overrides:
+  usbguard:
+    enable: true

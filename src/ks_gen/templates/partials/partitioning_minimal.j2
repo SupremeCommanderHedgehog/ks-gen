@@ -1,0 +1,4 @@
+part /boot/efi --fstype=efi --size=1024 --asprimary
+part /boot --fstype=xfs --size=1024 --fsoptions="nodev,nosuid" --asprimary
+part / --fstype=xfs --grow --size=8192
+part swap --recommended
