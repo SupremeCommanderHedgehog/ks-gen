@@ -151,7 +151,6 @@ class Packages(StrictModel):
         default_factory=lambda: [
             "scap-security-guide",
             "openscap-scanner",
-            "oscap-anaconda-addon",
             "aide",
             "audit",
             "rsyslog",

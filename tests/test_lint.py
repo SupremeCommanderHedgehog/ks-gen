@@ -57,16 +57,16 @@ def test_lint_detects_sshd_before_admin(tmp_path):
     assert not report.ok
 
 
-def test_lint_detects_missing_pre_tailoring_fetcher(tmp_path):
+def test_lint_detects_missing_oscap_post_block(tmp_path):
     out = _generate(tmp_path)
     ks = out / "ks.cfg"
     text = ks.read_text(encoding="utf-8")
-    # Remove the %pre header line so the block is no longer recognisable
+    # Mangle the oscap %post header so the block is no longer recognisable
     text = text.replace(
-        "%pre --erroronfail --log=/tmp/ks-pre-tailoring.log",
-        "%pre --log=/tmp/ks-pre-tailoring.log",
+        "%post --erroronfail --log=/root/ks-post-oscap.log",
+        "%post --log=/root/ks-post-oscap.log",
     )
     ks.write_text(text, encoding="utf-8")
     report = lint_kickstart(ks)
     assert not report.ok
-    assert any("missing: %pre tailoring fetcher block" in f for f in report.failures)
+    assert any("missing: %post oscap remediation block" in f for f in report.failures)

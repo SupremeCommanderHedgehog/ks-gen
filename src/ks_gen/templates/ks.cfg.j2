@@ -28,40 +28,6 @@ clearpart --all --initlabel
 services --enabled=chronyd,firewalld,auditd,rsyslog,sshd
 authselect select sssd --force
 
-%pre --erroronfail --log=/tmp/ks-pre-tailoring.log
-set -euo pipefail
-
-# oscap-anaconda-addon resolves tailoring-path inside its content staging dir
-# /tmp/openscap_data, not the installer-FS root. Create it and write here.
-mkdir -p /tmp/openscap_data
-
-if [ -s /tmp/openscap_data/tailoring.xml ]; then
-  echo "ks-gen: /tmp/openscap_data/tailoring.xml already present, skipping fetch"
-  exit 0
-fi
-
-ks_arg=$(awk -F'inst.ks=' 'NF>1{print $2}' /proc/cmdline | awk '{print $1}')
-case "$ks_arg" in
-  http://*|https://*)
-    base="${ks_arg%/*}"
-    curl -fsSL --retry 5 --retry-delay 3 "${base}/tailoring.xml" -o /tmp/openscap_data/tailoring.xml
-    ;;
-  hd:*)
-    cp -f /run/install/repo/tailoring.xml /tmp/openscap_data/tailoring.xml || {
-      echo "ks-gen: failed to copy tailoring.xml from /run/install/repo" >&2
-      exit 1
-    }
-    ;;
-  *)
-    echo "ks-gen: unsupported inst.ks transport '$ks_arg'; cannot fetch tailoring.xml" >&2
-    exit 1
-    ;;
-esac
-
-test -s /tmp/openscap_data/tailoring.xml
-head -c 5 /tmp/openscap_data/tailoring.xml | grep -q '<?xml'
-%end
-
 %packages
 {% for grp in cfg.packages.base_groups %}{{ grp }}
 {% endfor -%}
@@ -73,10 +39,39 @@ head -c 5 /tmp/openscap_data/tailoring.xml | grep -q '<?xml'
 {% endfor -%}
 %end
 
-%addon org_fedora_oscap
-  content-type = scap-security-guide
-  profile = xccdf_org.ssgproject.content_profile_{{ cfg.meta.profile }}
-  tailoring-path = /tailoring.xml
+%post --erroronfail --log=/root/ks-post-oscap.log
+set -euo pipefail
+
+# Fetch tailoring.xml from the kickstart server, then run oscap remediation
+# directly. This replaces the org_fedora_oscap addon, which required
+# tailoring to be pre-registered as "supplied content" — a path that
+# doesn't fit ks-gen's per-host tailoring model. Running oscap from %post
+# puts us in full control of remediation timing and leaves tailoring.xml
+# on the installed system for later audit.
+ks_arg=$(awk -F'inst.ks=' 'NF>1{print $2}' /proc/cmdline | awk '{print $1}')
+case "$ks_arg" in
+  http://*|https://*)
+    base="${ks_arg%/*}"
+    curl -fsSL --retry 5 --retry-delay 3 "${base}/tailoring.xml" -o /root/tailoring.xml
+    ;;
+  *)
+    echo "ks-gen: unsupported inst.ks transport '$ks_arg' (v0.1 supports http(s) only)" >&2
+    exit 1
+    ;;
+esac
+
+test -s /root/tailoring.xml
+head -c 5 /root/tailoring.xml | grep -q '<?xml'
+
+# --remediate can exit non-zero when rules remain failed (e.g., exception-
+# disabled rules). The next %post block (ks-gen rule overrides) re-asserts
+# critical state, so don't abort the install on a non-zero oscap exit.
+oscap xccdf eval --remediate \
+  --profile xccdf_org.ssgproject.content_profile_{{ cfg.meta.profile }} \
+  --tailoring-file /root/tailoring.xml \
+  --results-arf /root/oscap-remediation-results.xml \
+  --report /root/oscap-remediation-report.html \
+  /usr/share/xml/scap/ssg/content/{{ cfg.meta.scap_content }} || true
 %end
 
 %post --erroronfail --log=/root/ks-post.log

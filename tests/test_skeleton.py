@@ -10,8 +10,10 @@ def test_skeleton_has_required_kickstart_directives(minimal_cfg):
     assert "rootpw --lock" in out
     assert "%packages" in out
     assert "scap-security-guide" in out
-    assert "%addon org_fedora_oscap" in out
-    assert "tailoring-path = /tailoring.xml" in out
+    assert "%addon org_fedora_oscap" not in out, (
+        "v0.1.1: addon dropped in favor of %post-driven oscap"
+    )
+    assert "%post --erroronfail --log=/root/ks-post-oscap.log" in out
     assert "%post --erroronfail --log=/root/ks-post.log" in out
     assert "# rule blocks go here" in out
     assert out.rstrip().endswith("reboot --eject")
@@ -47,34 +49,39 @@ def test_skeleton_partition_preset_stig_server(minimal_cfg):
     assert "noexec" in out
 
 
-def test_skeleton_emits_pre_tailoring_fetcher(minimal_cfg):
-    out = render_skeleton(minimal_cfg, post_blocks=[])
+def test_skeleton_emits_oscap_post_block(minimal_cfg):
+    out = render_skeleton(minimal_cfg, post_blocks=["# rule blocks go here"])
 
-    pre_idx = out.find("%pre --erroronfail --log=/tmp/ks-pre-tailoring.log")
-    addon_idx = out.find("%addon org_fedora_oscap")
+    oscap_idx = out.find("%post --erroronfail --log=/root/ks-post-oscap.log")
+    overrides_idx = out.find("%post --erroronfail --log=/root/ks-post.log")
     packages_idx = out.find("%packages")
 
-    assert pre_idx != -1, "missing %pre tailoring fetcher block"
-    assert addon_idx != -1, "missing %addon block"
+    assert oscap_idx != -1, "missing oscap %post block"
+    assert overrides_idx != -1, "missing rule-overrides %post block"
     assert packages_idx != -1, "missing %packages block"
-    assert pre_idx < packages_idx < addon_idx, "expected order: %pre < %packages < %addon"
-
-    pre_body = out[pre_idx:packages_idx]
-    assert "set -euo pipefail" in pre_body, "missing strict shell flags"
-    assert "mkdir -p /tmp/openscap_data" in pre_body, "missing mkdir for addon content directory"
-    assert "/tmp/openscap_data/tailoring.xml" in pre_body, (
-        "tailoring must land in /tmp/openscap_data/, where oscap-anaconda-addon looks"
+    assert packages_idx < oscap_idx < overrides_idx, (
+        "expected order: %packages < oscap %post < overrides %post"
     )
-    assert "[ -s /tmp/openscap_data/tailoring.xml ]" in pre_body, "missing idempotence guard"
-    assert "/proc/cmdline" in pre_body, "must derive transport from cmdline"
-    assert "http://*|https://*" in pre_body, "missing HTTP case branch"
-    assert "hd:*" in pre_body, "missing hd: case branch"
-    assert "curl -fsSL --retry 5 --retry-delay 3" in pre_body, "missing curl with retry"
-    assert "/run/install/repo/tailoring.xml" in pre_body, "missing hd: source path"
-    assert "head -c 5 /tmp/openscap_data/tailoring.xml | grep -q '<?xml'" in pre_body, (
+
+    oscap_body = out[oscap_idx:overrides_idx]
+    assert "set -euo pipefail" in oscap_body, "missing strict shell flags"
+    assert "/proc/cmdline" in oscap_body, "must derive transport from cmdline"
+    assert "http://*|https://*" in oscap_body, "missing HTTP case branch"
+    assert "curl -fsSL --retry 5 --retry-delay 3" in oscap_body, "missing curl with retry"
+    assert "/root/tailoring.xml" in oscap_body, (
+        "tailoring must land in /root/ on the installed system"
+    )
+    assert "head -c 5 /root/tailoring.xml | grep -q '<?xml'" in oscap_body, (
         "missing xml sentinel check"
     )
-    assert "unsupported inst.ks transport" in pre_body, (
+    assert "oscap xccdf eval --remediate" in oscap_body, "missing oscap remediation invocation"
+    assert "--tailoring-file /root/tailoring.xml" in oscap_body, (
+        "oscap must consume the fetched tailoring"
+    )
+    assert "/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml" in oscap_body, (
+        "missing SSG datastream path"
+    )
+    assert "unsupported inst.ks transport" in oscap_body, (
         "missing fallback hard-fail for unknown transport"
     )
-    assert pre_body.count("%end") >= 1, "%pre block not closed"
+    assert oscap_body.count("%end") >= 1, "oscap %post block not closed"

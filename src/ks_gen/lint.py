@@ -36,10 +36,14 @@ def _internal_checks(text: str) -> list[str]:
         failures.append("missing: ssh_config_apply post block")
     if a != -1 and s != -1 and a >= s:
         failures.append("ordering: admin_user_and_keys must precede ssh_config_apply")
-    if "tailoring-path = /tailoring.xml" not in text:
-        failures.append("missing: %addon does not reference tailoring.xml")
-    if "%pre --erroronfail --log=/tmp/ks-pre-tailoring.log" not in text:
-        failures.append("missing: %pre tailoring fetcher block")
+    oscap_idx = text.find("%post --erroronfail --log=/root/ks-post-oscap.log")
+    if oscap_idx == -1:
+        failures.append("missing: %post oscap remediation block")
+    else:
+        if "oscap xccdf eval --remediate" not in text[oscap_idx:]:
+            failures.append("missing: oscap remediation invocation in %post oscap block")
+        if "--tailoring-file /root/tailoring.xml" not in text[oscap_idx:]:
+            failures.append("missing: --tailoring-file reference in %post oscap block")
     return failures
 
 
