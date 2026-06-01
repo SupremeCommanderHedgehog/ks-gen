@@ -4,8 +4,7 @@ from ks_gen.registry import load_rules
 def test_registry_discovers_modules():
     rules = load_rules()
     ids = {r.id for r in rules}
-    # Stub rule from Task 11; will be removed in Task 15.
-    assert "stub_noop" in ids
+    assert "admin_user_and_keys" in ids
 
 
 def test_registry_skips_underscore_modules():
