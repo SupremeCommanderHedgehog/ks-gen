@@ -163,12 +163,14 @@ def test_packages_include_security_baseline():
     p = Packages()
     for required in (
         "scap-security-guide",
-        "oscap-anaconda-addon",
+        "openscap-scanner",
         "aide",
         "firewalld",
         "chrony",
     ):
         assert required in p.required
+    # v0.1.1: oscap-anaconda-addon dropped in favor of %post-driven oscap remediation.
+    assert "oscap-anaconda-addon" not in p.required
 
 
 def test_packages_exclude_known_legacy():
