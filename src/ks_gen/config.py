@@ -58,6 +58,16 @@ class Disk(StrictModel):
     wipe: bool = True
     bootloader_password: str | None = None
 
+    @field_validator("preset")
+    @classmethod
+    def _custom_not_yet_implemented(cls, v: DiskPreset) -> DiskPreset:
+        if v == DiskPreset.CUSTOM:
+            raise ValueError(
+                "disk.preset='custom' is reserved for v0.2 (operator-supplied layout block); "
+                "use 'stig_server' or 'minimal' in v0.1."
+            )
+        return v
+
 
 DEFAULT_BANNER = (
     "WARNING: This is a private computer system. Unauthorized access is\n"

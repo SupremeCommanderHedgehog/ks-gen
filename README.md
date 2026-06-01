@@ -38,6 +38,18 @@ ks-gen iso --src AlmaLinux-9-latest-x86_64-dvd.iso \
 
 `0` success · `1` usage · `2` config invalid · `3` rule conflict · `4` lint failure · `5` external tool missing.
 
+## v0.1 known limitations
+
+- **`ks-gen iso` does not rewrite the ISO's bootloader.** It places `ks.cfg`
+  and `tailoring.xml` at the ISO root, but the operator must type
+  `inst.ks=hd:LABEL=<volid>:/ks.cfg` at the Anaconda boot prompt. Fully
+  unattended installs from the generated ISO land in v0.2.
+- **`disk.preset: custom`** is reserved for v0.2. Only `stig_server` and
+  `minimal` are honored; selecting `custom` raises a config error.
+- **Wizard (`ks-gen new`) covers system / user / SSH / crypto only.**
+  Disk, network, and override-matrix tuning go through hand-edited
+  `host.yaml` + `ks-gen gen` for now.
+
 ## License
 
 Apache-2.0.
