@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from ks_gen.config import HostConfig, Meta, System
+from ks_gen.config import Disk, DiskPreset, HostConfig, Interface, Meta, Network, System
 
 
 def test_meta_defaults():
@@ -32,3 +32,40 @@ def test_host_config_partial_ok():
 def test_unknown_top_level_key_rejected():
     with pytest.raises(ValidationError):
         HostConfig.model_validate({"meta": {}, "system": {"hostname": "x"}, "garbage": True})
+
+
+def test_interface_dhcp_minimum():
+    iface = Interface(device="link", bootproto="dhcp")
+    assert iface.onboot is True
+    assert iface.ip is None
+
+
+def test_interface_static_requires_ip():
+    with pytest.raises(ValidationError, match="ip is required"):
+        Interface(device="enp1s0", bootproto="static")
+
+
+def test_interface_static_complete():
+    iface = Interface(
+        device="enp1s0",
+        bootproto="static",
+        ip="10.0.0.10",
+        netmask="255.255.255.0",
+        gateway="10.0.0.1",
+        nameservers=["1.1.1.1"],
+    )
+    assert iface.ip == "10.0.0.10"
+
+
+def test_network_defaults():
+    net = Network()
+    assert net.interfaces[0].device == "link"
+    assert net.interfaces[0].bootproto == "dhcp"
+    assert net.hostname_from_dhcp is False
+
+
+def test_disk_preset_default():
+    d = Disk()
+    assert d.preset == DiskPreset.STIG_SERVER
+    assert d.wipe is True
+    assert d.bootloader_password is None
