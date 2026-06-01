@@ -1,8 +1,10 @@
 # Design: tailoring.xml `%pre` fetcher
 
 **Date:** 2026-06-01
-**Status:** approved, queued for implementation
-**Companion plan:** `docs/superpowers/plans/2026-06-01-tailoring-pre-fetcher-implementation.md` (to be written)
+**Status:** SUPERSEDED on 2026-06-01 — the `%pre` + `%addon` approach
+documented below failed on the AlmaLinux 9 acceptance test. See the
+**Superseded by** section at the bottom for what shipped instead.
+**Companion plan:** `docs/superpowers/plans/2026-06-01-tailoring-pre-fetcher-implementation.md`
 
 ## Problem
 
@@ -198,3 +200,47 @@ verification" test-plan box gets ticked once the re-run of
 None at design time. Behavior for unrecognized `inst.ks=` transports is
 explicitly hard-fail; if future work needs to add `nfs:` or `cdrom:`
 support, it's a new branch in the `case` statement and a docs update.
+
+---
+
+## Superseded by
+
+This design lived for ~90 minutes on 2026-06-01 before the AlmaLinux 9
+Hyper-V acceptance test killed it. Two failure modes surfaced in
+sequence:
+
+1. **First `%pre` revision** wrote `tailoring.xml` to `/tailoring.xml`
+   in the installer runtime FS. Anaconda's `oscap-anaconda-addon`
+   resolves `tailoring-path` inside its content staging directory
+   (`/tmp/openscap_data/`), so the file was looked for at
+   `/tmp/openscap_data/tailoring.xml` and not found. Anaconda dropped
+   to the rescue shell.
+2. **Second `%pre` revision** correctly wrote to
+   `/tmp/openscap_data/tailoring.xml` plus `mkdir -p`d the directory.
+   The addon still refused, this time with:
+
+       expected a file /tmp/openscap_data/tailoring.xml to be part of
+       the supplied content, but it was not the case, got only
+       ['/usr/share/xml/scap/ssg/content//ssg-almalinux9-ds.xml']
+
+   Reading the upstream addon source revealed that "supplied content"
+   isn't a directory listing — it's a list of files the addon's own
+   content-handling pipeline registered. For `content-type = scap-
+   security-guide`, only the SSG datastream is registered. Tailoring
+   files have to be inside an archive the addon downloaded itself
+   (`content-type = archive` + `content-url = ...`). A static `%pre`
+   that writes to disk cannot make the addon's check pass.
+
+The architecture was reworked to drop the addon entirely. The kickstart
+now emits a leading `%post` block that `curl`s `tailoring.xml` from the
+same base URL `inst.ks=` used and runs `oscap xccdf eval --remediate
+--tailoring-file /root/tailoring.xml ...` directly — which is what the
+addon does internally anyway. Side benefits: `tailoring.xml`, the
+remediation ARF, and the HTML report all land in `/root/` on the
+installed system for later audit.
+
+The plan file
+(`docs/superpowers/plans/2026-06-01-tailoring-pre-fetcher-implementation.md`)
+is preserved as the historical record of the abandoned approach; do not
+follow it for new work. For the architecture as it actually shipped,
+see §2.1 of `2026-06-01-alma-stig-kickstart-design.md`.
