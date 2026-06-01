@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json as _json
 from pathlib import Path
 
 import typer
 
 from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
+from ks_gen.registry import load_rules
 from ks_gen.writer import build_bundle, write_bundle
 
 app = typer.Typer(
@@ -51,6 +53,46 @@ def lint_cmd(
     for f in report.failures:
         typer.echo(f"FAIL: {f}", err=True)
     raise typer.Exit(code=int(ExitCode.LINT_FAIL))
+
+
+@app.command(name="rules", help="List the shipped rule catalog.")
+def rules_cmd(
+    id_: str | None = typer.Option(None, "--id", help="Show detail for one rule id."),
+    format_: str = typer.Option("table", "--format", help="table | json"),
+) -> None:
+    catalog = load_rules()
+    if id_:
+        match = next((r for r in catalog if r.id == id_), None)
+        if not match:
+            typer.echo(f"unknown rule id: {id_}", err=True)
+            raise typer.Exit(code=int(ExitCode.USAGE))
+        typer.echo(f"id: {match.id}")
+        typer.echo(f"summary: {match.summary}")
+        typer.echo(f"depends_on: {match.depends_on}")
+        typer.echo(f"stig_rules_affected ({len(match.stig_rules_affected)}):")
+        for rid in match.stig_rules_affected:
+            typer.echo(f"  - {rid}")
+        return
+    if format_ == "json":
+        typer.echo(
+            _json.dumps(
+                [
+                    {
+                        "id": r.id,
+                        "summary": r.summary,
+                        "depends_on": r.depends_on,
+                        "stig_rules_affected": r.stig_rules_affected,
+                    }
+                    for r in catalog
+                ],
+                indent=2,
+            )
+        )
+        return
+    width = max(len(r.id) for r in catalog)
+    typer.echo(f"{'ID':<{width}}  AFFECTS  SUMMARY")
+    for r in catalog:
+        typer.echo(f"{r.id:<{width}}  {len(r.stig_rules_affected):<7}  {r.summary}")
 
 
 if __name__ == "__main__":
