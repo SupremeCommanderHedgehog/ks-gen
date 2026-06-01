@@ -16,6 +16,7 @@ def test_lint_subcommand_passes_on_generated_ks(tmp_path):
               admin:
                 name: ops
                 authorized_keys: ["ssh-ed25519 A a@b"]
+                sudo: nopasswd_yes
             """
         ),
         encoding="utf-8",

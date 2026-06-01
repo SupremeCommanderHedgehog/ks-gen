@@ -12,6 +12,7 @@ YAML = textwrap.dedent(
       admin:
         name: opsadmin
         authorized_keys: ["ssh-ed25519 AAAA a@b"]
+        sudo: nopasswd_yes
     """
 )
 

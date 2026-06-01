@@ -50,7 +50,13 @@ def test_host_config_partial_ok():
         {
             "meta": {},
             "system": {"hostname": "web01.example.com"},
-            "user": {"admin": {"name": "ops", "authorized_keys": ["ssh-ed25519 A a@b"]}},
+            "user": {
+                "admin": {
+                    "name": "ops",
+                    "authorized_keys": ["ssh-ed25519 A a@b"],
+                    "sudo": "nopasswd_yes",
+                }
+            },
         }
     )
     assert cfg.system.hostname == "web01.example.com"
@@ -62,7 +68,13 @@ def test_unknown_top_level_key_rejected():
             {
                 "meta": {},
                 "system": {"hostname": "x"},
-                "user": {"admin": {"name": "ops", "authorized_keys": ["ssh-ed25519 A a@b"]}},
+                "user": {
+                    "admin": {
+                        "name": "ops",
+                        "authorized_keys": ["ssh-ed25519 A a@b"],
+                        "sudo": "nopasswd_yes",
+                    }
+                },
                 "garbage": True,
             }
         )
@@ -201,7 +213,13 @@ def test_custom_post_passes_through():
     cfg = HostConfig.model_validate(
         {
             "system": {"hostname": "x"},
-            "user": {"admin": {"name": "ops", "authorized_keys": ["ssh-ed25519 A a@b"]}},
+            "user": {
+                "admin": {
+                    "name": "ops",
+                    "authorized_keys": ["ssh-ed25519 A a@b"],
+                    "sudo": "nopasswd_yes",
+                }
+            },
             "custom_post": ["echo hello"],
         }
     )
@@ -216,7 +234,13 @@ def test_exception_decl_requires_rule_ids():
 def test_modern_crypto_and_fips_mode_rejected():
     payload = {
         "system": {"hostname": "x"},
-        "user": {"admin": {"name": "ops", "authorized_keys": ["ssh-ed25519 A a@b"]}},
+        "user": {
+            "admin": {
+                "name": "ops",
+                "authorized_keys": ["ssh-ed25519 A a@b"],
+                "sudo": "nopasswd_yes",
+            }
+        },
         "crypto": {"policy": "MODERN"},
         "overrides": {"fips_mode": True},
     }
@@ -228,9 +252,66 @@ def test_stig_crypto_without_fips_allowed():
     cfg = HostConfig.model_validate(
         {
             "system": {"hostname": "x"},
-            "user": {"admin": {"name": "ops", "authorized_keys": ["ssh-ed25519 A a@b"]}},
+            "user": {
+                "admin": {
+                    "name": "ops",
+                    "authorized_keys": ["ssh-ed25519 A a@b"],
+                    "sudo": "nopasswd_yes",
+                }
+            },
             "crypto": {"policy": "STIG"},
             "overrides": {"fips_mode": False},
         }
     )
     assert cfg.crypto.policy == CryptoPolicy.STIG
+
+
+def test_locked_admin_with_password_sudo_rejected():
+    payload = {
+        "system": {"hostname": "x"},
+        "user": {
+            "admin": {
+                "name": "ops",
+                "authorized_keys": ["ssh-ed25519 A a@b"],
+                # password unset (locked account) AND sudo requires password
+                "sudo": "nopasswd_no",
+            }
+        },
+    }
+    with pytest.raises(ValidationError, match=r"locked admin.*nopasswd_yes"):
+        HostConfig.model_validate(payload)
+
+
+def test_locked_admin_with_nopasswd_sudo_allowed():
+    cfg = HostConfig.model_validate(
+        {
+            "system": {"hostname": "x"},
+            "user": {
+                "admin": {
+                    "name": "ops",
+                    "authorized_keys": ["ssh-ed25519 A a@b"],
+                    "sudo": "nopasswd_yes",
+                }
+            },
+        }
+    )
+    assert cfg.user.admin.password is None
+    assert cfg.user.admin.sudo == "nopasswd_yes"
+
+
+def test_password_admin_with_password_sudo_allowed():
+    cfg = HostConfig.model_validate(
+        {
+            "system": {"hostname": "x"},
+            "user": {
+                "admin": {
+                    "name": "ops",
+                    "authorized_keys": ["ssh-ed25519 A a@b"],
+                    "password": "$6$salt$hashvalue",
+                    "sudo": "nopasswd_no",
+                }
+            },
+        }
+    )
+    assert cfg.user.admin.password == "$6$salt$hashvalue"
+    assert cfg.user.admin.sudo == "nopasswd_no"

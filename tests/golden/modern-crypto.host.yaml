@@ -5,6 +5,7 @@ user:
     name: modops
     authorized_keys:
       - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYmoderncrypto ops@host"
+    sudo: nopasswd_yes
 crypto:
   policy: MODERN
 overrides:

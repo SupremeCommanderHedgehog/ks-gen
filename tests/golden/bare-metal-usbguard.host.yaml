@@ -13,6 +13,7 @@ user:
     name: physadmin
     authorized_keys:
       - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYbaremetalusbguard ops@kvm"
+    sudo: nopasswd_yes
 ssh:
   port: 2222
 overrides:
