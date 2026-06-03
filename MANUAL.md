@@ -434,7 +434,28 @@ overrides:
     enable: true
   dod_root_ca:
     install: false                 # default skip
+  unattended_updates:
+    enable: true                              # master switch; false leaves STIG defaults
+    nightly_security:
+      enable: true
+      on_calendar: "*-*-* 02:00:00"           # systemd OnCalendar; nightly 02:00 host-local
+    monthly_full:
+      enable: true
+      on_calendar: "Sun *-*-1..7 02:30:00"    # first Sunday each month, 02:30 host-local
+    reboot_window:
+      enable: true
+      on_calendar: "Sun *-*-* 03:00:00"       # weekly Sunday 03:00 host-local
 ```
+
+**Fleet operators:** the maintenance-window defaults are *not* staggered.
+A datacenter where every host runs the same `host.yaml` will see every
+host reboot at Sunday 03:00 in unison. Set `reboot_window.on_calendar`
+to different values per host (or per rack) to avoid a synchronous
+fleet-wide reboot.
+
+The rule preserves the STIG `timer_dnf-automatic_enabled` control — it
+overrides the stock timer's `OnCalendar` via a systemd drop-in rather
+than disabling and replacing the unit.
 
 See §6 for what each rule does with these inputs.
 
@@ -647,6 +668,7 @@ exact XCCDF IDs.
 | `usbguard` | Per `overrides.usbguard.enable`: either selects the USBGuard install + service oscap rules, or disables them. |
 | `kernel_module_blacklist` | Writes `/etc/modprobe.d/ks-gen-blacklist.conf` with `install <mod> /bin/true` lines for each configured module. |
 | `package_purge` | `dnf -y remove <packages.excluded>` after install completes — catches transitive pulls from group installs. |
+| `unattended_updates` | Configures `dnf-automatic` for nightly security + monthly full updates and drops a `needs-restarting`-driven reboot timer that fires only inside `overrides.unattended_updates.reboot_window`. Stock `dnf-automatic.timer` is kept enabled with operator-supplied `OnCalendar` via drop-in. |
 
 ### What is NOT a rule (handled by oscap)
 

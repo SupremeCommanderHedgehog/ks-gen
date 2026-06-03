@@ -1,0 +1,11 @@
+system:
+  hostname: airgap01.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYunattendeddisabled test@laptop"
+    sudo: nopasswd_yes
+overrides:
+  unattended_updates:
+    enable: false
