@@ -192,6 +192,16 @@ sudo cat /etc/issue.net
 # Confirm Ed25519 host key exists (MODERN crypto path)
 ls /etc/ssh/ssh_host_ed25519_key.pub
 
+# Verify unattended-update timers are scheduled
+systemctl list-timers --all | grep -E 'dnf-automatic|reboot-if-needed'
+# Expected: three timer entries with future NEXT columns —
+#           dnf-automatic.timer, ks-gen-dnf-automatic-full.timer, and
+#           ks-gen-reboot-if-needed.timer. If dnf-automatic.timer's schedule
+#           shows 06:00 (the SSG default) rather than the YAML-configured
+#           nightly 02:00, the drop-in at
+#           /etc/systemd/system/dnf-automatic.timer.d/ks-gen.conf wasn't
+#           picked up — re-check the %post log at /root/ks-post.log
+
 # tailoring.xml is preserved on the installed FS at /root/tailoring.xml
 # by the oscap %post block. The oscap remediation report and ARF results
 # from install time also live there.
