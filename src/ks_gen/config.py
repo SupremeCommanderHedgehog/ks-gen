@@ -257,7 +257,7 @@ class UnattendedUpdatesCfg(StrictModel):
 
     @model_validator(mode="after")
     def _reboot_window_needs_an_update_timer(self) -> UnattendedUpdatesCfg:
-        if self.reboot_window.enable and not (
+        if self.enable and self.reboot_window.enable and not (
             self.nightly_security.enable or self.monthly_full.enable
         ):
             raise ValueError(

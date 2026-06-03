@@ -15,10 +15,12 @@ from ks_gen.config import (
     HostConfig,
     Interface,
     Meta,
+    MonthlyFullCfg,
     Network,
     NightlySecurityCfg,
     Overrides,
     Packages,
+    RebootWindowCfg,
     Ssh,
     System,
     Time,
@@ -372,6 +374,18 @@ def test_reboot_window_without_updates_rejected():
     }
     with pytest.raises(ValidationError, match="reboot_window requires"):
         HostConfig.model_validate(payload)
+
+
+def test_reboot_window_validator_skipped_when_master_disabled():
+    # When the master enable=false, the rule no-ops anyway; the cross-field
+    # validator shouldn't raise on otherwise-inconsistent leftover knobs.
+    cfg = UnattendedUpdatesCfg(
+        enable=False,
+        nightly_security=NightlySecurityCfg(enable=False),
+        monthly_full=MonthlyFullCfg(enable=False),
+        reboot_window=RebootWindowCfg(enable=True),
+    )
+    assert cfg.enable is False
 
 
 def test_reboot_window_with_only_monthly_allowed():
