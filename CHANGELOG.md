@@ -3,6 +3,17 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [Unreleased]
+
+### Added
+- `unattended_updates` rule + `overrides.unattended_updates` config block.
+  Configures `dnf-automatic` for nightly security updates and monthly full
+  updates, plus a `needs-restarting`-driven reboot timer scoped to an
+  operator-defined maintenance window. Defaults: nightly 02:00, monthly
+  full first Sunday 02:30, reboot Sundays 03:00 — all host-local time and
+  overridable per host. `dnf-automatic` and `dnf-utils` added to required
+  package defaults.
+
 ## [0.1.0] — 2026-06-01
 
 ### Added
