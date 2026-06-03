@@ -277,6 +277,7 @@ class Overrides(StrictModel):
     )
     package_purge: PackagePurgeCfg = Field(default_factory=PackagePurgeCfg)
     dod_root_ca: DodRootCaCfg = Field(default_factory=DodRootCaCfg)
+    unattended_updates: UnattendedUpdatesCfg = Field(default_factory=UnattendedUpdatesCfg)
 
 
 class ExceptionDecl(StrictModel):

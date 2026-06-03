@@ -340,3 +340,53 @@ def test_unattended_updates_rejects_unknown_fields():
 def test_unattended_updates_on_calendar_must_be_nonempty():
     with pytest.raises(ValidationError):
         NightlySecurityCfg(on_calendar="")
+
+
+def test_overrides_has_unattended_updates_default():
+    o = Overrides()
+    assert o.unattended_updates.enable is True
+    assert o.unattended_updates.nightly_security.enable is True
+
+
+def test_reboot_window_without_updates_rejected():
+    payload = {
+        "system": {"hostname": "x"},
+        "user": {
+            "admin": {
+                "name": "ops",
+                "authorized_keys": ["ssh-ed25519 A a@b"],
+                "sudo": "nopasswd_yes",
+            }
+        },
+        "overrides": {
+            "unattended_updates": {
+                "nightly_security": {"enable": False},
+                "monthly_full": {"enable": False},
+                "reboot_window": {"enable": True},
+            }
+        },
+    }
+    with pytest.raises(ValidationError, match="reboot_window requires"):
+        HostConfig.model_validate(payload)
+
+
+def test_reboot_window_with_only_monthly_allowed():
+    payload = {
+        "system": {"hostname": "x"},
+        "user": {
+            "admin": {
+                "name": "ops",
+                "authorized_keys": ["ssh-ed25519 A a@b"],
+                "sudo": "nopasswd_yes",
+            }
+        },
+        "overrides": {
+            "unattended_updates": {
+                "nightly_security": {"enable": False},
+                "monthly_full": {"enable": True},
+                "reboot_window": {"enable": True},
+            }
+        },
+    }
+    cfg = HostConfig.model_validate(payload)
+    assert cfg.overrides.unattended_updates.reboot_window.enable is True
