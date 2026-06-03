@@ -129,6 +129,7 @@ def test_reboot_window_emits_script_service_and_timer(minimal_cfg):
     assert "ks-gen-reboot-if-needed.timer" in out
     assert "OnCalendar=Sun *-*-* 03:00:00" in out
     assert "systemctl enable ks-gen-reboot-if-needed.timer" in out
+    assert "$(date -Is)" in out
 
 
 def test_reboot_window_honors_custom_on_calendar(minimal_cfg):
