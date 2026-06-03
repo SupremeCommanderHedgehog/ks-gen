@@ -26,10 +26,43 @@ class _Rule:
         return []
 
     def emit_post(self, cfg: HostConfig) -> str:
-        return ""
+        u = cfg.overrides.unattended_updates
+        parts: list[str] = []
+        if u.nightly_security.enable:
+            parts.append(_nightly_security_block(u.nightly_security.on_calendar))
+        return "\n".join(parts)
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
         return None
+
+
+def _nightly_security_block(on_calendar: str) -> str:
+    return f"""\
+# unattended_updates: nightly security via stock dnf-automatic.timer
+cat > /etc/dnf/automatic.conf <<'__KS_GEN_EOF__'
+[commands]
+upgrade_type = security
+apply_updates = yes
+reboot = never
+network_online_timeout = 60
+[emitters]
+emit_via = motd
+[base]
+debuglevel = 1
+__KS_GEN_EOF__
+chmod 644 /etc/dnf/automatic.conf
+
+mkdir -p /etc/systemd/system/dnf-automatic.timer.d
+cat > /etc/systemd/system/dnf-automatic.timer.d/ks-gen.conf <<'__KS_GEN_EOF__'
+[Timer]
+OnCalendar=
+OnCalendar={on_calendar}
+RandomizedDelaySec=0
+__KS_GEN_EOF__
+
+systemctl daemon-reload
+systemctl enable dnf-automatic.timer
+"""
 
 
 RULE: Rule = cast(Rule, _Rule())
