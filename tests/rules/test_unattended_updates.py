@@ -109,9 +109,7 @@ def test_monthly_full_omitted_when_disabled(minimal_cfg):
     cfg = minimal_cfg.model_copy(
         update={
             "overrides": Overrides(
-                unattended_updates=UnattendedUpdatesCfg(
-                    monthly_full=MonthlyFullCfg(enable=False)
-                )
+                unattended_updates=UnattendedUpdatesCfg(monthly_full=MonthlyFullCfg(enable=False))
             )
         }
     )
@@ -150,9 +148,7 @@ def test_reboot_window_omitted_when_disabled(minimal_cfg):
     cfg = minimal_cfg.model_copy(
         update={
             "overrides": Overrides(
-                unattended_updates=UnattendedUpdatesCfg(
-                    reboot_window=RebootWindowCfg(enable=False)
-                )
+                unattended_updates=UnattendedUpdatesCfg(reboot_window=RebootWindowCfg(enable=False))
             )
         }
     )
