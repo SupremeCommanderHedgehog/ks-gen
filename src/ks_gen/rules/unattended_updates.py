@@ -32,6 +32,8 @@ class _Rule:
             parts.append(_nightly_security_block(u.nightly_security.on_calendar))
         if u.monthly_full.enable:
             parts.append(_monthly_full_block(u.monthly_full.on_calendar))
+        if u.reboot_window.enable:
+            parts.append(_reboot_window_block(u.reboot_window.on_calendar))
         return "\n".join(parts)
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
@@ -105,6 +107,48 @@ __KS_GEN_EOF__
 
 systemctl daemon-reload
 systemctl enable ks-gen-dnf-automatic-full.timer
+"""
+
+
+def _reboot_window_block(on_calendar: str) -> str:
+    return f"""\
+# unattended_updates: reboot inside maintenance window if needs-restarting -r says so
+cat > /usr/local/sbin/ks-gen-reboot-if-needed <<'__KS_GEN_EOF__'
+#!/bin/bash
+set -euo pipefail
+if ! command -v needs-restarting >/dev/null 2>&1; then
+  logger -t ks-gen -p user.err "needs-restarting missing; cannot evaluate reboot"
+  exit 1
+fi
+if needs-restarting -r >/dev/null 2>&1; then
+  logger -t ks-gen "no reboot needed at $(date -Is)"
+  exit 0
+fi
+logger -t ks-gen "reboot needed, rebooting at $(date -Is)"
+systemctl reboot
+__KS_GEN_EOF__
+chmod 755 /usr/local/sbin/ks-gen-reboot-if-needed
+
+cat > /etc/systemd/system/ks-gen-reboot-if-needed.service <<'__KS_GEN_EOF__'
+[Unit]
+Description=ks-gen reboot if pending kernel/glibc/etc.
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ks-gen-reboot-if-needed
+__KS_GEN_EOF__
+
+cat > /etc/systemd/system/ks-gen-reboot-if-needed.timer <<'__KS_GEN_EOF__'
+[Unit]
+Description=ks-gen reboot-if-needed schedule
+[Timer]
+OnCalendar={on_calendar}
+Persistent=true
+[Install]
+WantedBy=timers.target
+__KS_GEN_EOF__
+
+systemctl daemon-reload
+systemctl enable ks-gen-reboot-if-needed.timer
 """
 
 

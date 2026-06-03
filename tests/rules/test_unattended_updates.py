@@ -118,3 +118,49 @@ def test_monthly_full_omitted_when_disabled(minimal_cfg):
     out = RULE.emit_post(cfg)
     assert "/etc/dnf/automatic-full.conf" not in out
     assert "ks-gen-dnf-automatic-full" not in out
+
+
+def test_reboot_window_emits_script_service_and_timer(minimal_cfg):
+    out = RULE.emit_post(minimal_cfg)
+    assert "/usr/local/sbin/ks-gen-reboot-if-needed" in out
+    assert "needs-restarting -r" in out
+    assert "systemctl reboot" in out
+    assert "ks-gen-reboot-if-needed.service" in out
+    assert "ks-gen-reboot-if-needed.timer" in out
+    assert "OnCalendar=Sun *-*-* 03:00:00" in out
+    assert "systemctl enable ks-gen-reboot-if-needed.timer" in out
+
+
+def test_reboot_window_honors_custom_on_calendar(minimal_cfg):
+    cfg = minimal_cfg.model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    reboot_window=RebootWindowCfg(on_calendar="*-*-* 06:00:00")
+                )
+            )
+        }
+    )
+    out = RULE.emit_post(cfg)
+    assert "OnCalendar=*-*-* 06:00:00" in out
+
+
+def test_reboot_window_omitted_when_disabled(minimal_cfg):
+    cfg = minimal_cfg.model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    reboot_window=RebootWindowCfg(enable=False)
+                )
+            )
+        }
+    )
+    out = RULE.emit_post(cfg)
+    assert "ks-gen-reboot-if-needed" not in out
+
+
+def test_reboot_script_fails_loud_on_missing_needs_restarting(minimal_cfg):
+    out = RULE.emit_post(minimal_cfg)
+    # The script must log at error level and exit non-zero rather than reboot.
+    assert "needs-restarting missing" in out
+    assert "exit 1" in out
