@@ -158,6 +158,8 @@ class Packages(StrictModel):
             "firewalld",
             "sudo",
             "policycoreutils-python-utils",
+            "dnf-automatic",
+            "dnf-utils",
         ]
     )
     extra: list[str] = Field(default_factory=list)
