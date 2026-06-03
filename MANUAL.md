@@ -666,9 +666,9 @@ exact XCCDF IDs.
 |---|---|
 | `auditd_actions` | Sets `disk_full_action` / `disk_error_action` / `max_log_file_action` to operator-chosen values (defaults `SUSPEND`/`SUSPEND`/`ROTATE` instead of STIG's `HALT`/`HALT`/`keep_logs`). |
 | `usbguard` | Per `overrides.usbguard.enable`: either selects the USBGuard install + service oscap rules, or disables them. |
-| `unattended_updates` | Configures `dnf-automatic` for nightly security + monthly full updates and drops a `needs-restarting`-driven reboot timer that fires only inside `overrides.unattended_updates.reboot_window`. Stock `dnf-automatic.timer` is kept enabled with operator-supplied `OnCalendar` via drop-in. |
 | `kernel_module_blacklist` | Writes `/etc/modprobe.d/ks-gen-blacklist.conf` with `install <mod> /bin/true` lines for each configured module. |
 | `package_purge` | `dnf -y remove <packages.excluded>` after install completes — catches transitive pulls from group installs. |
+| `unattended_updates` | Configures `dnf-automatic` for nightly security + monthly full updates and drops a `needs-restarting`-driven reboot timer that fires only inside `overrides.unattended_updates.reboot_window`. Stock `dnf-automatic.timer` is kept enabled with operator-supplied `OnCalendar` via drop-in. |
 
 ### What is NOT a rule (handled by oscap)
 

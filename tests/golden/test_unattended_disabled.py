@@ -18,6 +18,7 @@ def test_unattended_disabled(snapshot):
     yaml_path = Path(__file__).parent / "unattended-disabled.host.yaml"
     cfg = load_host_config(yaml_path, sets=[])
     bundle = build_bundle(cfg)
+    assert "unattended_updates" not in bundle.ks_cfg
     assert _normalize(bundle.ks_cfg) == snapshot(name="ks.cfg")
     assert _normalize(bundle.tailoring_xml) == snapshot(name="tailoring.xml")
     assert _normalize(bundle.exceptions_md) == snapshot(name="exceptions.md")
