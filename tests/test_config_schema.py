@@ -195,6 +195,12 @@ def test_packages_exclude_known_legacy():
         assert legacy in p.excluded
 
 
+def test_packages_include_dnf_automatic_tooling():
+    p = Packages()
+    assert "dnf-automatic" in p.required
+    assert "dnf-utils" in p.required
+
+
 def test_overrides_safe_defaults():
     o = Overrides()
     assert o.fips_mode is False
