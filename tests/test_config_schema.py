@@ -15,12 +15,16 @@ from ks_gen.config import (
     HostConfig,
     Interface,
     Meta,
+    MonthlyFullCfg,
     Network,
+    NightlySecurityCfg,
     Overrides,
     Packages,
+    RebootWindowCfg,
     Ssh,
     System,
     Time,
+    UnattendedUpdatesCfg,
     User,
 )
 
@@ -191,6 +195,12 @@ def test_packages_exclude_known_legacy():
         assert legacy in p.excluded
 
 
+def test_packages_include_dnf_automatic_tooling():
+    p = Packages()
+    assert "dnf-automatic" in p.required
+    assert "dnf-utils" in p.required
+
+
 def test_overrides_safe_defaults():
     o = Overrides()
     assert o.fips_mode is False
@@ -315,3 +325,86 @@ def test_password_admin_with_password_sudo_allowed():
     )
     assert cfg.user.admin.password == "$6$salt$hashvalue"
     assert cfg.user.admin.sudo == "nopasswd_no"
+
+
+def test_unattended_updates_defaults_are_enabled():
+    u = UnattendedUpdatesCfg()
+    assert u.enable is True
+    assert u.nightly_security.enable is True
+    assert u.nightly_security.on_calendar == "*-*-* 02:00:00"
+    assert u.monthly_full.enable is True
+    assert u.monthly_full.on_calendar == "Sun *-*-1..7 02:30:00"
+    assert u.reboot_window.enable is True
+    assert u.reboot_window.on_calendar == "Sun *-*-* 03:00:00"
+
+
+def test_unattended_updates_rejects_unknown_fields():
+    with pytest.raises(ValidationError):
+        UnattendedUpdatesCfg.model_validate({"enable": True, "garbage": 1})
+
+
+def test_unattended_updates_on_calendar_must_be_nonempty():
+    with pytest.raises(ValidationError):
+        NightlySecurityCfg(on_calendar="")
+
+
+def test_overrides_has_unattended_updates_default():
+    o = Overrides()
+    assert o.unattended_updates.enable is True
+    assert o.unattended_updates.nightly_security.enable is True
+
+
+def test_reboot_window_without_updates_rejected():
+    payload = {
+        "system": {"hostname": "x"},
+        "user": {
+            "admin": {
+                "name": "ops",
+                "authorized_keys": ["ssh-ed25519 A a@b"],
+                "sudo": "nopasswd_yes",
+            }
+        },
+        "overrides": {
+            "unattended_updates": {
+                "nightly_security": {"enable": False},
+                "monthly_full": {"enable": False},
+                "reboot_window": {"enable": True},
+            }
+        },
+    }
+    with pytest.raises(ValidationError, match="reboot_window requires"):
+        HostConfig.model_validate(payload)
+
+
+def test_reboot_window_validator_skipped_when_master_disabled():
+    # When the master enable=false, the rule no-ops anyway; the cross-field
+    # validator shouldn't raise on otherwise-inconsistent leftover knobs.
+    cfg = UnattendedUpdatesCfg(
+        enable=False,
+        nightly_security=NightlySecurityCfg(enable=False),
+        monthly_full=MonthlyFullCfg(enable=False),
+        reboot_window=RebootWindowCfg(enable=True),
+    )
+    assert cfg.enable is False
+
+
+def test_reboot_window_with_only_monthly_allowed():
+    payload = {
+        "system": {"hostname": "x"},
+        "user": {
+            "admin": {
+                "name": "ops",
+                "authorized_keys": ["ssh-ed25519 A a@b"],
+                "sudo": "nopasswd_yes",
+            }
+        },
+        "overrides": {
+            "unattended_updates": {
+                "nightly_security": {"enable": False},
+                "monthly_full": {"enable": True},
+                "reboot_window": {"enable": True},
+            }
+        },
+    }
+    cfg = HostConfig.model_validate(payload)
+    assert cfg.overrides.unattended_updates.reboot_window.enable is True

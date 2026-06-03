@@ -158,6 +158,8 @@ class Packages(StrictModel):
             "firewalld",
             "sudo",
             "policycoreutils-python-utils",
+            "dnf-automatic",
+            "dnf-utils",
         ]
     )
     extra: list[str] = Field(default_factory=list)
@@ -232,6 +234,42 @@ class DodRootCaCfg(StrictModel):
     install: bool = False
 
 
+class NightlySecurityCfg(StrictModel):
+    enable: bool = True
+    on_calendar: str = Field(default="*-*-* 02:00:00", min_length=1)
+
+
+class MonthlyFullCfg(StrictModel):
+    enable: bool = True
+    on_calendar: str = Field(default="Sun *-*-1..7 02:30:00", min_length=1)
+
+
+class RebootWindowCfg(StrictModel):
+    enable: bool = True
+    on_calendar: str = Field(default="Sun *-*-* 03:00:00", min_length=1)
+
+
+class UnattendedUpdatesCfg(StrictModel):
+    enable: bool = True
+    nightly_security: NightlySecurityCfg = Field(default_factory=NightlySecurityCfg)
+    monthly_full: MonthlyFullCfg = Field(default_factory=MonthlyFullCfg)
+    reboot_window: RebootWindowCfg = Field(default_factory=RebootWindowCfg)
+
+    @model_validator(mode="after")
+    def _reboot_window_needs_an_update_timer(self) -> UnattendedUpdatesCfg:
+        if (
+            self.enable
+            and self.reboot_window.enable
+            and not (self.nightly_security.enable or self.monthly_full.enable)
+        ):
+            raise ValueError(
+                "overrides.unattended_updates.reboot_window requires at least one "
+                "update timer enabled (nightly_security or monthly_full) — "
+                "otherwise the host will reboot weekly against a never-updated system."
+            )
+        return self
+
+
 class Overrides(StrictModel):
     fips_mode: bool = False
     faillock: FaillockCfg = Field(default_factory=FaillockCfg)
@@ -243,6 +281,7 @@ class Overrides(StrictModel):
     )
     package_purge: PackagePurgeCfg = Field(default_factory=PackagePurgeCfg)
     dod_root_ca: DodRootCaCfg = Field(default_factory=DodRootCaCfg)
+    unattended_updates: UnattendedUpdatesCfg = Field(default_factory=UnattendedUpdatesCfg)
 
 
 class ExceptionDecl(StrictModel):
