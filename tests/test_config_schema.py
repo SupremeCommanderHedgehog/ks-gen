@@ -15,12 +15,16 @@ from ks_gen.config import (
     HostConfig,
     Interface,
     Meta,
+    MonthlyFullCfg,
     Network,
+    NightlySecurityCfg,
     Overrides,
     Packages,
+    RebootWindowCfg,
     Ssh,
     System,
     Time,
+    UnattendedUpdatesCfg,
     User,
 )
 
@@ -315,3 +319,24 @@ def test_password_admin_with_password_sudo_allowed():
     )
     assert cfg.user.admin.password == "$6$salt$hashvalue"
     assert cfg.user.admin.sudo == "nopasswd_no"
+
+
+def test_unattended_updates_defaults_are_enabled():
+    u = UnattendedUpdatesCfg()
+    assert u.enable is True
+    assert u.nightly_security.enable is True
+    assert u.nightly_security.on_calendar == "*-*-* 02:00:00"
+    assert u.monthly_full.enable is True
+    assert u.monthly_full.on_calendar == "Sun *-*-1..7 02:30:00"
+    assert u.reboot_window.enable is True
+    assert u.reboot_window.on_calendar == "Sun *-*-* 03:00:00"
+
+
+def test_unattended_updates_rejects_unknown_fields():
+    with pytest.raises(ValidationError):
+        UnattendedUpdatesCfg.model_validate({"enable": True, "garbage": 1})
+
+
+def test_unattended_updates_on_calendar_must_be_nonempty():
+    with pytest.raises(ValidationError):
+        NightlySecurityCfg(on_calendar="")
