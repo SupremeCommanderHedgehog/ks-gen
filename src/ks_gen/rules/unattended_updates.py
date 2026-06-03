@@ -30,6 +30,8 @@ class _Rule:
         parts: list[str] = []
         if u.nightly_security.enable:
             parts.append(_nightly_security_block(u.nightly_security.on_calendar))
+        if u.monthly_full.enable:
+            parts.append(_monthly_full_block(u.monthly_full.on_calendar))
         return "\n".join(parts)
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
@@ -62,6 +64,47 @@ __KS_GEN_EOF__
 
 systemctl daemon-reload
 systemctl enable dnf-automatic.timer
+"""
+
+
+def _monthly_full_block(on_calendar: str) -> str:
+    return f"""\
+# unattended_updates: monthly full update via custom dnf-automatic timer
+cat > /etc/dnf/automatic-full.conf <<'__KS_GEN_EOF__'
+[commands]
+upgrade_type = default
+apply_updates = yes
+reboot = never
+network_online_timeout = 60
+[emitters]
+emit_via = motd
+[base]
+debuglevel = 1
+__KS_GEN_EOF__
+chmod 644 /etc/dnf/automatic-full.conf
+
+cat > /etc/systemd/system/ks-gen-dnf-automatic-full.service <<'__KS_GEN_EOF__'
+[Unit]
+Description=ks-gen monthly full dnf-automatic run
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/dnf-automatic /etc/dnf/automatic-full.conf
+__KS_GEN_EOF__
+
+cat > /etc/systemd/system/ks-gen-dnf-automatic-full.timer <<'__KS_GEN_EOF__'
+[Unit]
+Description=ks-gen monthly full dnf-automatic schedule
+[Timer]
+OnCalendar={on_calendar}
+Persistent=true
+[Install]
+WantedBy=timers.target
+__KS_GEN_EOF__
+
+systemctl daemon-reload
+systemctl enable ks-gen-dnf-automatic-full.timer
 """
 
 

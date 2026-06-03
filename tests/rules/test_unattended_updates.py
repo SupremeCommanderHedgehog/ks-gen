@@ -1,4 +1,5 @@
 from ks_gen.config import (
+    MonthlyFullCfg,
     NightlySecurityCfg,
     Overrides,
     RebootWindowCfg,
@@ -77,3 +78,43 @@ def test_nightly_security_omitted_when_disabled(minimal_cfg):
     out = RULE.emit_post(cfg)
     assert "/etc/dnf/automatic.conf" not in out
     assert "dnf-automatic.timer.d" not in out
+
+
+def test_monthly_full_emits_separate_config_and_timer(minimal_cfg):
+    out = RULE.emit_post(minimal_cfg)
+    assert "cat > /etc/dnf/automatic-full.conf" in out
+    assert "upgrade_type = default" in out
+    assert "ks-gen-dnf-automatic-full.service" in out
+    assert "ks-gen-dnf-automatic-full.timer" in out
+    assert "OnCalendar=Sun *-*-1..7 02:30:00" in out
+    assert "Persistent=true" in out
+    assert "systemctl enable ks-gen-dnf-automatic-full.timer" in out
+
+
+def test_monthly_full_honors_custom_on_calendar(minimal_cfg):
+    cfg = minimal_cfg.model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    monthly_full=MonthlyFullCfg(on_calendar="*-*-15 04:00:00")
+                )
+            )
+        }
+    )
+    out = RULE.emit_post(cfg)
+    assert "OnCalendar=*-*-15 04:00:00" in out
+
+
+def test_monthly_full_omitted_when_disabled(minimal_cfg):
+    cfg = minimal_cfg.model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    monthly_full=MonthlyFullCfg(enable=False)
+                )
+            )
+        }
+    )
+    out = RULE.emit_post(cfg)
+    assert "/etc/dnf/automatic-full.conf" not in out
+    assert "ks-gen-dnf-automatic-full" not in out
