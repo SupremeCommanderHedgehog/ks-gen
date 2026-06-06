@@ -52,36 +52,47 @@ def test_skeleton_partition_preset_stig_server(minimal_cfg):
 def test_skeleton_emits_oscap_post_block(minimal_cfg):
     out = render_skeleton(minimal_cfg, post_blocks=["# rule blocks go here"])
 
-    oscap_idx = out.find("%post --erroronfail --log=/root/ks-post-oscap.log")
+    fetch_idx = out.find("%post --nochroot --erroronfail")
+    eval_idx = out.find("%post --erroronfail --log=/root/ks-post-oscap.log")
     overrides_idx = out.find("%post --erroronfail --log=/root/ks-post.log")
     packages_idx = out.find("%packages")
 
-    assert oscap_idx != -1, "missing oscap %post block"
+    assert fetch_idx != -1, "missing fetch %post --nochroot block"
+    assert eval_idx != -1, "missing eval %post --erroronfail block"
     assert overrides_idx != -1, "missing rule-overrides %post block"
     assert packages_idx != -1, "missing %packages block"
-    assert packages_idx < oscap_idx < overrides_idx, (
-        "expected order: %packages < oscap %post < overrides %post"
+    assert packages_idx < fetch_idx < eval_idx < overrides_idx, (
+        "expected order: %packages < fetch %post < eval %post < overrides %post"
     )
 
-    oscap_body = out[oscap_idx:overrides_idx]
-    assert "set -euo pipefail" in oscap_body, "missing strict shell flags"
-    assert "/proc/cmdline" in oscap_body, "must derive transport from cmdline"
-    assert "http://*|https://*" in oscap_body, "missing HTTP case branch"
-    assert "curl -fsSL --retry 5 --retry-delay 3" in oscap_body, "missing curl with retry"
-    assert "/root/tailoring.xml" in oscap_body, (
-        "tailoring must land in /root/ on the installed system"
+    fetch_body = out[fetch_idx:eval_idx]
+    eval_body = out[eval_idx:overrides_idx]
+    oscap_body = out[fetch_idx:overrides_idx]
+
+    # Fetch block checks: transport detection and tailoring staging
+    assert "/proc/cmdline" in fetch_body, "must derive transport from cmdline in fetch block"
+    assert "http://*|https://*" in fetch_body, "missing HTTP case branch in fetch block"
+    assert "curl -fsSL --retry 5 --retry-delay 3" in fetch_body, (
+        "missing curl with retry in fetch block"
     )
-    assert "head -c 5 /root/tailoring.xml | grep -q '<?xml'" in oscap_body, (
-        "missing xml sentinel check"
+    assert "/mnt/sysimage/root/tailoring.xml" in fetch_body, (
+        "tailoring must stage to /mnt/sysimage/root/ in fetch block"
     )
-    assert "oscap xccdf eval --remediate" in oscap_body, "missing oscap remediation invocation"
-    assert "--tailoring-file /root/tailoring.xml" in oscap_body, (
+    assert "hd:LABEL=*)" in fetch_body, "missing hd:LABEL case branch in fetch block"
+    assert "unsupported inst.ks transport" in fetch_body, (
+        "missing fallback hard-fail for unknown transport in fetch block"
+    )
+
+    # Eval block checks: oscap remediation
+    assert "set -euo pipefail" in eval_body, "missing strict shell flags in eval block"
+    assert "head -c 5 /root/tailoring.xml | grep -q '<?xml'" in eval_body, (
+        "missing xml sentinel check in eval block"
+    )
+    assert "oscap xccdf eval --remediate" in eval_body, "missing oscap remediation invocation"
+    assert "--tailoring-file /root/tailoring.xml" in eval_body, (
         "oscap must consume the fetched tailoring"
     )
-    assert "/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml" in oscap_body, (
+    assert "/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml" in eval_body, (
         "missing SSG datastream path"
     )
-    assert "unsupported inst.ks transport" in oscap_body, (
-        "missing fallback hard-fail for unknown transport"
-    )
-    assert oscap_body.count("%end") >= 1, "oscap %post block not closed"
+    assert oscap_body.count("%end") >= 2, "both fetch and eval %post blocks must be closed"
