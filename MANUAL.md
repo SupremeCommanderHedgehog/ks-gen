@@ -590,7 +590,8 @@ v0.2.
 with a `%post --nochroot` block that runs in the Anaconda installer
 environment (not the target chroot) and copies
 `/run/install/repo/tailoring.xml` — the path Anaconda mounts the
-boot media at — to `/root/tailoring.xml` on the installed system.
+boot media at — to `/mnt/sysimage/root/tailoring.xml`
+(= `/root/tailoring.xml` on the installed system).
 A chrooted `%post` block then runs `oscap xccdf eval --remediate`
 against it. The same `--nochroot` block handles HTTP delivery via
 `curl`; the transport is auto-detected from `/proc/cmdline`. No HTTP
