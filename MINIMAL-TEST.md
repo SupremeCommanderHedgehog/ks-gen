@@ -183,7 +183,7 @@ At the GRUB `e`-edit prompt, append (note leading space):
  inst.ks=hd:LABEL=ALMA9KS:/ks.cfg
 ```
 
-The label must match the `--volid` from step A. No HTTP server is
+The label must match the `--volid` from Step A. No HTTP server is
 needed; window #1 (`python -m http.server`) is irrelevant for this path.
 
 ### D. Expected signals during install
@@ -197,7 +197,7 @@ needed; window #1 (`python -m http.server`) is irrelevant for this path.
 - The second `%post` block runs `oscap xccdf eval --remediate` against
   `/root/tailoring.xml` exactly as on the HTTP path.
 
-After reboot, both logs should exist on the installed system:
+After reboot, all three logs should exist on the installed system:
 
 ```bash
 ls -l /root/ks-post-oscap-fetch.log /root/ks-post-oscap.log /root/ks-post.log
