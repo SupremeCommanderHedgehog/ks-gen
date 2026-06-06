@@ -1004,7 +1004,8 @@ common remediation failures:
 
 The oscap remediation `%post` block runs *before* the `ks-gen`
 rule-overrides `%post` block, so any `crypto_policy` rule output
-in the overrides block is too late to influence oscap's view. Tailoring is the right channel for this — and ks-gen
+in the overrides block is too late to influence oscap's view.
+Tailoring is the right channel for this — and ks-gen
 handles it for the rules in its catalog. If you've added custom
 oscap rules, you may need to add tailoring entries for them in
 `exceptions[]`.
