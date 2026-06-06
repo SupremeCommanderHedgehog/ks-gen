@@ -6,6 +6,13 @@ the catalog drives the audit story.
 ## [Unreleased]
 
 ### Added
+- **`hd:LABEL=` transport for oscap tailoring fetch.** The oscap `%post`
+  block is now split into a `--nochroot` fetch stage and a chrooted
+  eval stage. ISO-delivered bundles (`ks-gen iso`) now reach oscap
+  remediation at install time; previously, install failed with
+  `unsupported inst.ks transport`. HTTP delivery is unchanged
+  operator-visibly. Closes the second of the two v0.1.x gaps queued
+  before v0.2.0.
 - `unattended_updates` rule + `overrides.unattended_updates` config block.
   Configures `dnf-automatic` for nightly security updates and monthly full
   updates, plus a `needs-restarting`-driven reboot timer scoped to an
