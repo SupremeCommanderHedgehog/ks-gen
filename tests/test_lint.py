@@ -71,3 +71,47 @@ def test_lint_detects_missing_oscap_post_block(tmp_path):
     report = lint_kickstart(ks)
     assert not report.ok
     assert any("missing: %post oscap remediation block" in f for f in report.failures)
+
+
+def test_lint_detects_missing_oscap_fetch_block(tmp_path):
+    out = _generate(tmp_path)
+    ks = out / "ks.cfg"
+    text = ks.read_text(encoding="utf-8")
+    # Mangle the fetch %post header so the block is no longer recognisable
+    text = text.replace(
+        "%post --nochroot --erroronfail --log=/mnt/sysimage/root/ks-post-oscap-fetch.log",
+        "%post --nochroot --log=/mnt/sysimage/root/ks-post-oscap-fetch.log",
+    )
+    ks.write_text(text, encoding="utf-8")
+    report = lint_kickstart(ks)
+    assert not report.ok
+    assert any("missing: %post --nochroot oscap fetch block" in f for f in report.failures)
+
+
+def test_lint_detects_missing_hd_label_branch(tmp_path):
+    out = _generate(tmp_path)
+    ks = out / "ks.cfg"
+    text = ks.read_text(encoding="utf-8")
+    # Rename the hd: arm header so lint's branch-presence check fails
+    text = text.replace("hd:LABEL=*)", "hd:DISARMED=*)")
+    ks.write_text(text, encoding="utf-8")
+    report = lint_kickstart(ks)
+    assert not report.ok
+    assert any("hd:LABEL= branch in oscap fetch case" in f for f in report.failures)
+
+
+def test_lint_detects_missing_hd_cp_line(tmp_path):
+    out = _generate(tmp_path)
+    ks = out / "ks.cfg"
+    text = ks.read_text(encoding="utf-8")
+    # Delete the cp line so the cp-presence invariant fires while
+    # the hd:LABEL=*) arm header is still intact (proves the two checks
+    # are independent code paths).
+    text = text.replace(
+        "    cp /run/install/repo/tailoring.xml /mnt/sysimage/root/tailoring.xml",
+        "",
+    )
+    ks.write_text(text, encoding="utf-8")
+    report = lint_kickstart(ks)
+    assert not report.ok
+    assert any("hd: cp from /run/install/repo in oscap fetch case" in f for f in report.failures)

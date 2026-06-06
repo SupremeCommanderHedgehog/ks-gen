@@ -36,7 +36,12 @@ def _internal_checks(text: str) -> list[str]:
         failures.append("missing: ssh_config_apply post block")
     if a != -1 and s != -1 and a >= s:
         failures.append("ordering: admin_user_and_keys must precede ssh_config_apply")
+    fetch_idx = text.find(
+        "%post --nochroot --erroronfail --log=/mnt/sysimage/root/ks-post-oscap-fetch.log"
+    )
     oscap_idx = text.find("%post --erroronfail --log=/root/ks-post-oscap.log")
+    if fetch_idx == -1:
+        failures.append("missing: %post --nochroot oscap fetch block")
     if oscap_idx == -1:
         failures.append("missing: %post oscap remediation block")
     else:
@@ -44,6 +49,19 @@ def _internal_checks(text: str) -> list[str]:
             failures.append("missing: oscap remediation invocation in %post oscap block")
         if "--tailoring-file /root/tailoring.xml" not in text[oscap_idx:]:
             failures.append("missing: --tailoring-file reference in %post oscap block")
+    # If both blocks are present, check ordering and fetch-region content.
+    if fetch_idx != -1 and oscap_idx != -1:
+        if fetch_idx >= oscap_idx:
+            failures.append("ordering: oscap fetch block must precede oscap eval block")
+        else:
+            fetch_region = text[fetch_idx:oscap_idx]
+            if "hd:LABEL=*)" not in fetch_region:
+                failures.append("missing: hd:LABEL= branch in oscap fetch case")
+            if (
+                "cp /run/install/repo/tailoring.xml /mnt/sysimage/root/tailoring.xml"
+                not in fetch_region
+            ):
+                failures.append("missing: hd: cp from /run/install/repo in oscap fetch case")
     return failures
 
 

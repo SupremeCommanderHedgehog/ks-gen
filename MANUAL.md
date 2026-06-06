@@ -586,6 +586,17 @@ inst.ks=hd:LABEL=ALMA9:/ks.cfg
 Bootloader rewriting for fully unattended installs is tracked for
 v0.2.
 
+**How `tailoring.xml` gets to oscap:** the generated `ks.cfg` opens
+with a `%post --nochroot` block that runs in the Anaconda installer
+environment (not the target chroot) and copies
+`/run/install/repo/tailoring.xml` — the path Anaconda mounts the
+boot media at — to `/mnt/sysimage/root/tailoring.xml`
+(= `/root/tailoring.xml` on the installed system).
+A chrooted `%post` block then runs `oscap xccdf eval --remediate`
+against it. The same `--nochroot` block handles HTTP delivery via
+`curl`; the transport is auto-detected from `/proc/cmdline`. No HTTP
+server is needed for the ISO path.
+
 `xorriso` must be on `PATH`. If it isn't, `iso` exits 5 with a
 clear error.
 

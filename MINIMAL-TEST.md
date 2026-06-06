@@ -144,6 +144,68 @@ the installed system after reboot (it survives the install for audit).
 
 Total wall-clock: ~10-15 minutes on a modern host, then a reboot.
 
+## Alternative — ISO delivery (instead of Steps 1-5)
+
+Use this path when you want to verify the `hd:LABEL=` transport — i.e.,
+that a `ks-gen iso` bundle installs end-to-end without an HTTP server.
+
+### A. Build the tailored ISO
+
+```powershell
+cd C:\Users\yizshachuck\source\alma-linux-security
+.venv\Scripts\python.exe -m ks_gen iso `
+  --src AlmaLinux-9-latest-x86_64-dvd.iso `
+  --ks  build\web01\ks.cfg `
+  --tailoring build\web01\tailoring.xml `
+  --out build\web01\ks-gen-web01.iso `
+  --volid ALMA9KS
+```
+
+The `--volid ALMA9KS` label is distinct from the v0.1.0 default `ALMA9`
+to make the LABEL → boot-prompt mapping visually obvious below.
+
+### B. Create the VM (replaces Step 4)
+
+Same `New-VM` block as Step 4, but attach the tailored ISO instead of
+the stock one:
+
+```powershell
+$ISO  = 'C:\Users\yizshachuck\source\alma-linux-security\build\web01\ks-gen-web01.iso'
+$VHDX = 'C:\Hyper-V\Virtual Hard Disks\ks-gen-web01.vhdx'
+# ...rest of Step 4 unchanged...
+```
+
+### C. Boot and inject `inst.ks=hd:LABEL=…` (replaces Step 5)
+
+At the GRUB `e`-edit prompt, append (note leading space):
+
+```
+ inst.ks=hd:LABEL=ALMA9KS:/ks.cfg
+```
+
+The label must match the `--volid` from Step A. No HTTP server is
+needed; window #1 (`python -m http.server`) is irrelevant for this path.
+
+### D. Expected signals during install
+
+- Anaconda mounts the ISO at `/run/install/repo` and reads `/ks.cfg`
+  from there. You won't see GETs in any HTTP server log.
+- The first `%post --nochroot` block stages
+  `/run/install/repo/tailoring.xml` into the target rootfs at
+  `/mnt/sysimage/root/tailoring.xml` (= `/root/tailoring.xml` on the
+  installed system).
+- The second `%post` block runs `oscap xccdf eval --remediate` against
+  `/root/tailoring.xml` exactly as on the HTTP path.
+
+After reboot, all three logs should exist on the installed system:
+
+```bash
+ls -l /root/ks-post-oscap-fetch.log /root/ks-post-oscap.log /root/ks-post.log
+```
+
+Continue to Steps 6 (find VM IP), 7 (SSH in), and 8 (verify STIG
+compliance) below — they are transport-agnostic.
+
 ## Step 6 — Find the VM's IP after reboot
 
 ```powershell
