@@ -98,3 +98,20 @@ def test_lint_detects_missing_hd_label_branch(tmp_path):
     report = lint_kickstart(ks)
     assert not report.ok
     assert any("hd:LABEL= branch in oscap fetch case" in f for f in report.failures)
+
+
+def test_lint_detects_missing_hd_cp_line(tmp_path):
+    out = _generate(tmp_path)
+    ks = out / "ks.cfg"
+    text = ks.read_text(encoding="utf-8")
+    # Delete the cp line so the cp-presence invariant fires while
+    # the hd:LABEL=*) arm header is still intact (proves the two checks
+    # are independent code paths).
+    text = text.replace(
+        "    cp /run/install/repo/tailoring.xml /mnt/sysimage/root/tailoring.xml",
+        "",
+    )
+    ks.write_text(text, encoding="utf-8")
+    report = lint_kickstart(ks)
+    assert not report.ok
+    assert any("hd: cp from /run/install/repo in oscap fetch case" in f for f in report.failures)

@@ -49,6 +49,7 @@ def _internal_checks(text: str) -> list[str]:
             failures.append("missing: oscap remediation invocation in %post oscap block")
         if "--tailoring-file /root/tailoring.xml" not in text[oscap_idx:]:
             failures.append("missing: --tailoring-file reference in %post oscap block")
+    # If both blocks are present, check ordering and fetch-region content.
     if fetch_idx != -1 and oscap_idx != -1:
         if fetch_idx >= oscap_idx:
             failures.append("ordering: oscap fetch block must precede oscap eval block")
