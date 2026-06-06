@@ -24,6 +24,10 @@ ks-gen iso --src AlmaLinux-9-latest-x86_64-dvd.iso \
            --out ./<hostname>-installer.iso
 ```
 
+Delivery modes: HTTP (`inst.ks=http://…/ks.cfg`) or ISO
+(`inst.ks=hd:LABEL=<volid>:/ks.cfg`, with the ISO from `ks-gen iso`).
+Both run oscap remediation at install time; see `MANUAL.md` §5.4.
+
 ## Subcommands
 
 | Command | Purpose |

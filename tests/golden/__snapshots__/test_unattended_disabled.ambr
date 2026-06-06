@@ -150,26 +150,33 @@
   -ypserv
   %end
   
-  %post --erroronfail --log=/root/ks-post-oscap.log
+  %post --nochroot --erroronfail --log=/mnt/sysimage/root/ks-post-oscap-fetch.log
   set -euo pipefail
   
-  # Fetch tailoring.xml from the kickstart server, then run oscap remediation
-  # directly. This replaces the org_fedora_oscap addon, which required
-  # tailoring to be pre-registered as "supplied content" — a path that
-  # doesn't fit ks-gen's per-host tailoring model. Running oscap from %post
-  # puts us in full control of remediation timing and leaves tailoring.xml
-  # on the installed system for later audit.
+  # Stage tailoring.xml into the target rootfs. Runs in the installer
+  # environment so both network (http(s)) and the kickstart media at
+  # /run/install/repo (hd:LABEL=) are reachable. The chrooted oscap
+  # block that follows reads /root/tailoring.xml unconditionally.
   ks_arg=$(awk -F'inst.ks=' 'NF>1{print $2}' /proc/cmdline | awk '{print $1}')
   case "$ks_arg" in
     http://*|https://*)
       base="${ks_arg%/*}"
-      curl -fsSL --retry 5 --retry-delay 3 "${base}/tailoring.xml" -o /root/tailoring.xml
+      curl -fsSL --retry 5 --retry-delay 3 \
+        "${base}/tailoring.xml" -o /mnt/sysimage/root/tailoring.xml
+      ;;
+    hd:LABEL=*)
+      cp /run/install/repo/tailoring.xml /mnt/sysimage/root/tailoring.xml
       ;;
     *)
-      echo "ks-gen: unsupported inst.ks transport '$ks_arg' (v0.1 supports http(s) only)" >&2
+      echo "ks-gen: unsupported inst.ks transport '$ks_arg' (supports http(s) and hd:LABEL=)" >&2
       exit 1
       ;;
   esac
+  chmod 0600 /mnt/sysimage/root/tailoring.xml
+  %end
+  
+  %post --erroronfail --log=/root/ks-post-oscap.log
+  set -euo pipefail
   
   test -s /root/tailoring.xml
   head -c 5 /root/tailoring.xml | grep -q '<?xml'
