@@ -70,6 +70,7 @@ def test_skeleton_emits_oscap_post_block(minimal_cfg):
     oscap_body = out[fetch_idx:overrides_idx]
 
     # Fetch block checks: transport detection and tailoring staging
+    assert "set -euo pipefail" in fetch_body, "missing strict shell flags in fetch block"
     assert "/proc/cmdline" in fetch_body, "must derive transport from cmdline in fetch block"
     assert "http://*|https://*" in fetch_body, "missing HTTP case branch in fetch block"
     assert "curl -fsSL --retry 5 --retry-delay 3" in fetch_body, (
@@ -95,4 +96,4 @@ def test_skeleton_emits_oscap_post_block(minimal_cfg):
     assert "/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml" in eval_body, (
         "missing SSG datastream path"
     )
-    assert oscap_body.count("%end") >= 2, "both fetch and eval %post blocks must be closed"
+    assert oscap_body.count("%end") == 2, "exactly two %end markers (fetch and eval blocks)"
