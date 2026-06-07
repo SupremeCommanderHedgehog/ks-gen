@@ -371,6 +371,71 @@ missing any of them fails with a specific error.
 Encryption is not yet supported via the layout block (issue #7 will
 add LUKS presets).
 
+#### `disk.luks` (PV-level LUKS encryption)
+
+Enables LUKS2 encryption on the LVM physical volume, with optional
+clevis/tang network-bound unlock.
+
+```yaml
+disk:
+  preset: stig_server     # or `disk.layout: ...`
+  luks:
+    preset: partial       # or "tang" or "none" (default)
+    passphrase: hunter2   # OR passphrase_file (mutually exclusive)
+    # tang only when preset == tang:
+    # tang:
+    #   servers:
+    #     - url: https://tang1.example.com
+    #       thumbprint: <sha256-base64url>
+    #     - url: https://tang2.example.com
+    #       thumbprint: <sha256-base64url>
+    #   threshold: 1       # SSS threshold; default 1
+```
+
+| Preset | Behavior |
+|---|---|
+| `none` (default) | No LUKS. |
+| `partial` | LUKS2 on the LVM PV (`pv.01`). All LVs inherit. `/boot` and `/boot/efi` stay plain. Passphrase unlock. |
+| `tang` | Same coverage as `partial`. Adds a `%post` block that installs `clevis-luks`, binds to each tang server (Shamir Secret Sharing across servers with threshold-of-N), and enables `clevis-luks-askpass.path`. The `passphrase` field stays as a fallback if all tang servers are unreachable. |
+
+**Passphrase source.** Provide exactly one of `passphrase:` (inline,
+operator-friendly but lands in VCS if `host.yaml` is committed) or
+`passphrase_file:` (relative-to-cwd path read at `ks-gen gen` time;
+keep the file out of VCS).
+
+**Tang thumbprint capture.** Tang servers advertise their signing key
+via HTTPS. Capture the thumbprint with the same tool that does the
+binding:
+
+```bash
+clevis-encrypt-tang '{"url": "https://tang1.example.com"}' < /dev/null 2>&1 \
+  | grep -oP 'Trust the .*? Tang server.*? \(\K[^)]+'
+```
+
+Pin that thumbprint in `host.yaml` to prevent first-boot
+trust-on-first-use weakness.
+
+**Constraints.**
+
+- `disk.preset: minimal` has no LVM PV — `disk.luks` is rejected at
+  config-load. Use `disk.preset: stig_server` or `disk.layout` instead.
+- Per-LV encryption via `disk.layout.lvs[].encrypted: true` is rejected
+  at config-load with a pointer to `disk.luks.preset` (the supported
+  PV-level path).
+- LUKS2 + argon2id is FIPS-compatible on AlmaLinux 9.2+; no special
+  configuration needed.
+
+**Post-install rotation.** To rotate the passphrase later:
+
+```bash
+cryptsetup luksAddKey   /dev/<pv-device> [/path/to/new-key]
+cryptsetup luksRemoveKey /dev/<pv-device> [/path/to/old-key]
+```
+
+For tang re-binding after a tang server rotates its key, re-run
+`clevis luks bind` with the new thumbprint and remove the old slot
+with `clevis luks unbind`.
+
 ### 4.5 `user.admin` — the lockout-resistance cornerstone
 
 ```yaml
