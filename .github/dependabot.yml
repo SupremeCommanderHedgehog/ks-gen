@@ -1,0 +1,52 @@
+version: 2
+updates:
+  # Python dependencies declared in pyproject.toml (runtime + [dev]).
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    labels:
+      - "type:chore"
+      - "dependencies"
+      - "area:deps"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+    groups:
+      dev-deps:
+        patterns:
+          - "pytest*"
+          - "ruff*"
+          - "mypy*"
+          - "syrupy*"
+          - "types-*"
+          - "pre-commit*"
+      runtime-deps:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "pytest*"
+          - "ruff*"
+          - "mypy*"
+          - "syrupy*"
+          - "types-*"
+          - "pre-commit*"
+
+  # GitHub Actions versions in .github/workflows/*.yml.
+  # Keeps the SHA pins from Task A8 fresh.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - "type:chore"
+      - "dependencies"
+      - "area:ci"
+    commit-message:
+      prefix: "chore(actions)"
