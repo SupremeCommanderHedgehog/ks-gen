@@ -586,3 +586,32 @@ def test_disk_layout_multiple_swap_rejected():
     lvs = [*_stig_layout_lvs(), {"name": "swap2", "fstype": "swap"}]
     with pytest.raises(ValidationError, match=r"exactly one swap"):
         DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_duplicate_lv_name_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = _stig_layout_lvs()
+    lvs.append({"name": "root", "mount": "/extra"})  # duplicate name
+    with pytest.raises(ValidationError, match=r"duplicate LV name"):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_duplicate_lv_mount_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = _stig_layout_lvs()
+    lvs.append({"name": "extra", "mount": "/var"})  # duplicate mount
+    with pytest.raises(ValidationError, match=r"duplicate LV mount"):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_multiple_swap_lvs_without_mounts_still_caught_by_swap_cardinality():
+    # Sanity check: two swap LVs both with mount=None aren't caught by the
+    # mount-uniqueness check (mount=None is excluded) but ARE caught by
+    # the swap cardinality check.
+    from ks_gen.config import DiskLayout
+
+    lvs = [*_stig_layout_lvs(), {"name": "swap2", "fstype": "swap"}]
+    with pytest.raises(ValidationError, match=r"exactly one swap"):
+        DiskLayout.model_validate({"lvs": lvs})
