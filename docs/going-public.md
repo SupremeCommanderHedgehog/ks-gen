@@ -66,8 +66,9 @@ on:
   #   - cron: '17 7 * * 1'  # Mondays 07:17 UTC
 ```
 
-Uncomment the five lines under the comment. Commit on a branch, open a
-PR titled `ci(codeql): activate scheduled and PR scans`, merge.
+Uncomment every line in that block (six lines — the three trigger keys
+plus their three inline values). Commit on a branch, open a PR titled
+`ci(codeql): activate scheduled and PR scans`, merge.
 
 ## 5. Tighten the branch ruleset
 
