@@ -70,6 +70,15 @@ Uncomment every line in that block (six lines — the three trigger keys
 plus their three inline values). Commit on a branch, open a PR titled
 `ci(codeql): activate scheduled and PR scans`, merge.
 
+**Code Scanning enable.** On a public repo, Code Scanning auto-enables
+on the first successful SARIF upload from this workflow — no UI step or
+API call is required. On a private personal repo without GitHub
+Advanced Security the upload step fails with `Code scanning is not
+enabled for this repository. Please enable code scanning in the
+repository settings.` That means **do not attempt to smoke-test the
+codeql workflow before step 1 (visibility flip) is complete** — the
+analyze step will run cleanly but the upload will hard-fail.
+
 ## 5. Tighten the branch ruleset
 
 Find the ruleset id:
@@ -159,6 +168,11 @@ you haven't listed, you'll see it fail and can add the host to an
 allow-list.
 
 ## 8. Smoke-test CodeQL
+
+> **Prerequisite:** step 1 (visibility flip) must be complete. See the
+> note under step 4 — on a private personal repo the upload step
+> hard-fails with `Code scanning is not enabled for this repository`,
+> regardless of whether the action SHAs and analyze step are healthy.
 
 ```bash
 gh workflow run codeql.yml -R SupremeCommanderHedgehog/ks-gen
