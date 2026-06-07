@@ -165,6 +165,13 @@ Execution timeline inside Anaconda:
   -> reboot
 ```
 
+The chrooted `oscap` invocation passes `--fetch-remote-resources`; on
+online installs it fetches the AlmaLinux OVAL CVE feed before
+evaluating. On air-gapped installs (`hd:LABEL=`) the fetch fails
+harmlessly — `|| true` swallows the non-zero exit, the install
+completes, and OVAL-dependent rules skip. See §10 for the matching
+troubleshooting entry.
+
 ### 3.3 The override rule contract
 
 Every rule is a single file in `src/ks_gen/rules/`. The file exports
