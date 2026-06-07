@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from pydantic import ValidationError
 
@@ -545,3 +547,42 @@ def test_disk_layout_empty_lvs_rejected():
 
     with pytest.raises(ValidationError):
         DiskLayout.model_validate({"lvs": []})
+
+
+REQUIRED_MOUNTS_FOR_PARAMETRIZE = [
+    "/",
+    "/home",
+    "/tmp",
+    "/var",
+    "/var/log",
+    "/var/log/audit",
+    "/var/tmp",
+]
+
+
+@pytest.mark.parametrize("missing_mount", REQUIRED_MOUNTS_FOR_PARAMETRIZE)
+def test_disk_layout_missing_required_mountpoint(missing_mount):
+    from ks_gen.config import DiskLayout
+
+    lvs = [lv for lv in _stig_layout_lvs() if lv.get("mount") != missing_mount]
+    with pytest.raises(
+        ValidationError,
+        match=rf"disk\.layout missing STIG-required mountpoint: {re.escape(missing_mount)}",
+    ):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_no_swap_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = [lv for lv in _stig_layout_lvs() if lv["name"] != "swap"]
+    with pytest.raises(ValidationError, match=r"exactly one swap"):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_multiple_swap_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = [*_stig_layout_lvs(), {"name": "swap2", "fstype": "swap"}]
+    with pytest.raises(ValidationError, match=r"exactly one swap"):
+        DiskLayout.model_validate({"lvs": lvs})
