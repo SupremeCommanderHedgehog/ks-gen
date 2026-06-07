@@ -2,8 +2,21 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from typing import Literal, cast
 
 from ks_gen.verify.errors import ArfParseError
+
+ResultState = Literal[
+    "pass",
+    "fail",
+    "notapplicable",
+    "notchecked",
+    "notselected",
+    "error",
+    "unknown",
+    "fixed",
+    "informational",
+]
 
 VALID_RESULTS: frozenset[str] = frozenset(
     {
@@ -23,7 +36,7 @@ VALID_RESULTS: frozenset[str] = frozenset(
 @dataclass(frozen=True)
 class RuleResult:
     rule_id: str
-    result: str
+    result: ResultState
 
 
 def _localname(tag: str) -> str:
@@ -59,7 +72,7 @@ def parse_arf(text: str) -> dict[str, RuleResult]:
             state = (child.text or "").strip()
             if state not in VALID_RESULTS:
                 state = "unknown"
-            results[rule_id] = RuleResult(rule_id=rule_id, result=state)
+            results[rule_id] = RuleResult(rule_id=rule_id, result=cast(ResultState, state))
             break
 
     if not found_test_result:
