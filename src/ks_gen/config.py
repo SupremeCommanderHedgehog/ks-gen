@@ -183,17 +183,31 @@ class DiskLayout(StrictModel):
 
 
 class Disk(StrictModel):
-    preset: DiskPreset = DiskPreset.STIG_SERVER
+    preset: DiskPreset | None = None
+    layout: DiskLayout | None = None
     wipe: bool = True
     bootloader_password: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _preset_xor_layout(cls, data: dict[str, object]) -> dict[str, object]:
+        if not isinstance(data, dict):
+            return data
+        preset = data.get("preset")
+        layout = data.get("layout")
+        if preset is not None and layout is not None:
+            raise ValueError("disk.preset and disk.layout are mutually exclusive; specify one")
+        # v0.3 backwards-compat: both omitted -> default to STIG_SERVER
+        if preset is None and layout is None:
+            data["preset"] = DiskPreset.STIG_SERVER
+        return data
+
     @field_validator("preset")
     @classmethod
-    def _custom_not_yet_implemented(cls, v: DiskPreset) -> DiskPreset:
+    def _custom_not_yet_implemented(cls, v: DiskPreset | None) -> DiskPreset | None:
         if v == DiskPreset.CUSTOM:
             raise ValueError(
-                "disk.preset='custom' is reserved for v0.2 (operator-supplied layout block); "
-                "use 'stig_server' or 'minimal' in v0.1."
+                "disk.preset='custom' was reserved in v0.1-v0.3; use the disk.layout block instead."
             )
         return v
 
