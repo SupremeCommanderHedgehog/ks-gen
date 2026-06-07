@@ -221,3 +221,68 @@ def test_skeleton_luks_macro_partial_emits_flags():
         tmpl.render(cfg=cfg)
         == 'BEFORE --encrypted --luks-version=luks2 --passphrase="hunter2"AFTER'
     )
+
+
+def test_skeleton_tang_block_emitted_when_preset_tang():
+    from ks_gen.config import AdminUser, Disk, DiskLuks, HostConfig, System, User
+    from ks_gen.skeleton import render_skeleton
+
+    cfg = HostConfig(
+        system=System(hostname="x"),
+        user=User(
+            admin=AdminUser(
+                name="ops",
+                authorized_keys=["ssh-ed25519 A a@b"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        disk=Disk(
+            luks=DiskLuks.model_validate(
+                {
+                    "preset": "tang",
+                    "passphrase": "fallback",
+                    "tang": {
+                        "servers": [
+                            {
+                                "url": "https://tang1.example.com",
+                                "thumbprint": "xK3HFGm-AVOaJVlA8oFAo7uMcrJBhFCdwq8WX8gqXJU",
+                            },
+                            {
+                                "url": "https://tang2.example.com",
+                                "thumbprint": "yL4IGHn-BWPbKWmA9pBp8vNdsKChiGDexr9XY9hrYKV",
+                            },
+                        ],
+                        "threshold": 1,
+                    },
+                }
+            )
+        ),
+    )
+    out = render_skeleton(cfg, post_blocks=[])
+    assert "dnf -y install clevis clevis-luks clevis-systemd" in out
+    assert 'clevis luks bind -d "$luks_dev" -y sss' in out
+    assert '"url": "https://tang1.example.com"' in out
+    assert '"url": "https://tang2.example.com"' in out
+    assert '"thp": "xK3HFGm-AVOaJVlA8oFAo7uMcrJBhFCdwq8WX8gqXJU"' in out
+    assert '"t": 1' in out
+    assert "systemctl enable clevis-luks-askpass.path" in out
+
+
+def test_skeleton_tang_block_not_emitted_for_partial():
+    from ks_gen.config import AdminUser, Disk, DiskLuks, HostConfig, System, User
+    from ks_gen.skeleton import render_skeleton
+
+    cfg = HostConfig(
+        system=System(hostname="x"),
+        user=User(
+            admin=AdminUser(
+                name="ops",
+                authorized_keys=["ssh-ed25519 A a@b"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        disk=Disk(luks=DiskLuks.model_validate({"preset": "partial", "passphrase": "x"})),
+    )
+    out = render_skeleton(cfg, post_blocks=[])
+    assert "clevis luks bind" not in out
+    assert "clevis-luks-askpass" not in out

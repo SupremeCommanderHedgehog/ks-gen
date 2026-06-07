@@ -1,0 +1,25 @@
+%post --erroronfail --log=/root/ks-post-clevis.log
+set -euo pipefail
+
+# Install clevis + tang bindings. Run after the rootfs is in place so
+# the new system has the packages it needs to unlock at next boot.
+dnf -y install clevis clevis-luks clevis-systemd
+
+# Identify the LUKS device backing pv.01.
+luks_dev=$(blkid -t TYPE=crypto_LUKS -o device | head -n1)
+test -n "$luks_dev"  # fail loudly if no LUKS device found
+
+# Bind each tang server. SSS threshold {{ cfg.disk.luks.tang.threshold }} of {{ cfg.disk.luks.tang.servers | length }}.
+clevis luks bind -d "$luks_dev" -y sss '{
+  "t": {{ cfg.disk.luks.tang.threshold }},
+  "pins": {
+    "tang": [
+      {% for s in cfg.disk.luks.tang.servers -%}
+      {"url": "{{ s.url }}", "thp": "{{ s.thumbprint }}"}{{ "," if not loop.last else "" }}
+      {% endfor %}
+    ]
+  }
+}'
+
+systemctl enable clevis-luks-askpass.path
+%end
