@@ -1,0 +1,35 @@
+# Local hook chain mirroring the CI workflow at .github/workflows/ci.yml.
+# Install once per checkout:  pre-commit install
+# Run on demand:               pre-commit run --all-files
+#
+# Hooks here are deliberately non-mutating to avoid surprise tree-wide
+# rewrites on Windows checkouts (CRLF line endings). The CI workflow
+# also does not auto-fix; if you want trailing-whitespace and EOL
+# fixes locally, run them via your editor.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.4
+    hooks:
+      - id: ruff
+        args: [src, tests]
+      - id: ruff-format
+        args: [--check, src, tests]
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        args: [--config-file=pyproject.toml]
+        additional_dependencies:
+          - pydantic>=2.6
+          - types-PyYAML
+          - typer>=0.12
+        pass_filenames: false
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
