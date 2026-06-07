@@ -84,6 +84,16 @@ _DEFAULT_LV_SIZES: dict[str | None, str] = {
 }
 
 
+_DEFAULT_FSOPTIONS: dict[str, str] = {
+    "/home": "nodev,nosuid",
+    "/tmp": "nodev,nosuid,noexec",
+    "/var": "nodev",
+    "/var/log": "nodev,nosuid,noexec",
+    "/var/log/audit": "nodev,nosuid,noexec",
+    "/var/tmp": "nodev,nosuid,noexec",
+}
+
+
 class Disk(StrictModel):
     preset: DiskPreset = DiskPreset.STIG_SERVER
     wipe: bool = True
