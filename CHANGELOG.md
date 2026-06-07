@@ -3,6 +3,30 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.5.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.4.0...v0.5.0) (2026-06-07)
+
+
+### Features
+
+* **config:** add DiskLuks model with internal validators ([65880c3](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/65880c32bcd0ae50ef0ea66d11788960b624b330)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+* **config:** add LuksPreset, TangServer, and Tang models ([b3b82b0](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/b3b82b09808730c72400b86394516b168dfc74cf)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+* **config:** mount DiskLuks on Disk + minimal+LUKS HostConfig validator ([24c334e](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/24c334e1ddd24749aa386666ad7a52363c783759)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+* **disk_luks:** kickstart_passphrase_quoted helper ([e1cebe8](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/e1cebe8e8a90eb5c17dff31e4ebe14591d7bc669)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+* **disk_luks:** resolve_passphrase helper ([ea5b44d](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/ea5b44d52900c63b23ae59cbe65d6975fe31c157)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+* **skeleton:** register disk_luks helpers as Jinja globals ([08acaa5](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/08acaa5ff1f87be24592345a53e7553de88ae65f)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+* **templates:** _luks_flags.j2 macro ([3ee0be7](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/3ee0be7b16d3fd550e2d591f92f26f2a3b768cf1)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+* **templates:** luks_tang_bind.j2 partial + ks.cfg.j2 selector ([b69522c](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/b69522c1f3deeda17f1847eac4512caae6402142)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+* **templates:** wire luks_pv_flags into partitioning_layout.j2 ([5d4855b](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/5d4855b4134354cf8a7ef8dc10de4317fa7f1832)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+* **templates:** wire luks_pv_flags into partitioning_stig_server.j2 ([3664ba0](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/3664ba0ebf2c65911d527a7cfb264a6b453d3d72)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+
+
+### Documentation
+
+* **manual:** document disk.luks block ([d9c5039](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/d9c5039bfdeb4afb1b74f243ec280b1e3765f28c)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+* **manual:** replace stale 'LUKS not yet supported' note in disk.layout ([9961bf5](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/9961bf51473ca5c462dd06b3ee9fff2fbdeb98b4)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+* **plans:** LUKS presets implementation plan ([9fce355](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/9fce3559b8d47c9d89f8e082b00f53ab3984a3b6)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+* **specs:** LUKS presets design ([2233c33](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/2233c33d4612396260acf1bc6993337db6146a16)), closes [#7](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/7)
+
 ## [0.4.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.3.0...v0.4.0) (2026-06-07)
 
 
