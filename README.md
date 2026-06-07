@@ -1,5 +1,11 @@
 # ks-gen — remote-safe DISA STIG kickstart generator for AlmaLinux 9
 
+[![ci](https://github.com/SupremeCommanderHedgehog/ks-gen/actions/workflows/ci.yml/badge.svg)](https://github.com/SupremeCommanderHedgehog/ks-gen/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/ks-gen/)
+[![Latest release](https://img.shields.io/github/v/release/SupremeCommanderHedgehog/ks-gen?display_name=tag&sort=semver)](https://github.com/SupremeCommanderHedgehog/ks-gen/releases/latest)
+[![Open issues](https://img.shields.io/github/issues/SupremeCommanderHedgehog/ks-gen)](https://github.com/SupremeCommanderHedgehog/ks-gen/issues)
+
 `ks-gen` turns a small YAML file into a fully baked AlmaLinux 9 kickstart that:
 
 - Applies the upstream DISA STIG profile via `scap-security-guide` + `oscap-anaconda-addon`.
