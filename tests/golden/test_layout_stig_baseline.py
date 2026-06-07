@@ -25,7 +25,7 @@ def _partitioning_lines(ks_cfg: str) -> list[str]:
     return lines
 
 
-def test_layout_stig_baseline_equivalent_to_preset(snapshot):
+def test_layout_stig_baseline_equivalent_to_preset():
     layout_yaml = Path(__file__).parent / "layout-stig-baseline.host.yaml"
     preset_yaml = Path(__file__).parent / "layout-stig-baseline-preset.host.yaml"
     layout_bundle = build_bundle(load_host_config(layout_yaml, sets=[]))
