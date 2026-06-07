@@ -105,6 +105,14 @@ class DiskEfiPart(StrictModel):
     # fstype is always "efi" for the EFI System Partition; not configurable.
 
 
+class DiskLayout(StrictModel):
+    ondisk: str | None = Field(default=None, pattern=r"^[a-zA-Z][a-zA-Z0-9]*$")
+    boot: DiskBootPart = Field(default_factory=DiskBootPart)
+    efi: DiskEfiPart = Field(default_factory=DiskEfiPart)
+    vg_name: str = "vg_root"
+    lvs: list[DiskLvDef] = Field(..., min_length=1)
+
+
 class Disk(StrictModel):
     preset: DiskPreset = DiskPreset.STIG_SERVER
     wipe: bool = True
