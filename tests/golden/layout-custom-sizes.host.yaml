@@ -1,0 +1,21 @@
+system:
+  hostname: layout02.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYlayoutcustom ops@bastion"
+    sudo: nopasswd_yes
+disk:
+  layout:
+    ondisk: sda
+    lvs:
+      - {name: root, mount: /}
+      - {name: home, mount: /home}
+      - {name: tmp, mount: /tmp}
+      - {name: var, mount: /var, size: 20G}
+      - {name: varlog, mount: /var/log, size: 10G}
+      - {name: varlogaudit, mount: /var/log/audit}
+      - {name: vartmp, mount: /var/tmp}
+      - {name: srv, mount: /srv, size: 50G, fsoptions: "nodev,nosuid"}
+      - {name: swap, fstype: swap}
