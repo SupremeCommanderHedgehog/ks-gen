@@ -28,8 +28,9 @@ This document is the operator's reference for `ks-gen` v0.1. The
 configured AlmaLinux 9 Anaconda kickstart. The generated kickstart is:
 
 - **DISA STIG compliant** — most rules are applied by the upstream
-  `scap-security-guide` profile (via the `oscap-anaconda-addon`),
-  driven by a per-host `tailoring.xml`.
+  `scap-security-guide` profile (`oscap xccdf eval --remediate`
+  invoked from `%post` at install time), driven by a per-host
+  `tailoring.xml`.
 - **Remote-safe by default** — won't lock you out of a freshly-installed
   cloud or headless host. The admin user is created with
   `authorized_keys` in `%post` **before** any sshd config touch, the SSH
@@ -128,7 +129,7 @@ Every successful run of `ks-gen new` or `ks-gen gen` writes a
 |---|---|---|
 | `host.yaml` | The canonical, validated config. Re-runnable. | You, the next time you regenerate. Source-control it. |
 | `ks.cfg` | The kickstart file. Lives at the ISO root or behind an HTTP URL referenced from `inst.ks=`. | Anaconda, at install time. |
-| `tailoring.xml` | An XCCDF 1.2 tailoring document referenced by `%addon org_fedora_oscap`. | `oscap` during Anaconda's remediation phase. |
+| `tailoring.xml` | An XCCDF 1.2 tailoring document staged into the target rootfs by a `%post --nochroot` block at install time, then passed to `oscap --tailoring-file`. | `oscap` during the install-time `%post` remediation phase. |
 | `exceptions.md` | Human-readable audit report listing every applied rule, every disabled XCCDF rule, and every declared exception. | You, your auditor, your future self. |
 
 The bundle is self-contained. If you serve it from an HTTP root,
@@ -142,8 +143,8 @@ at). For ISO delivery, both files end up at the ISO's root via
 DISA STIG for RHEL 9 has ~400 rules. `ks-gen` does **not**
 reimplement them. It owns only the named conflict points between STIG
 and remote safety, plus DoD-content neutralization — roughly 12 rules
-in v0.1. Everything else is owned by `oscap` remediation via the
-`%addon org_fedora_oscap` block.
+in v0.1. Everything else is owned by `oscap` remediation via a
+`%post` block that runs `oscap xccdf eval --remediate` directly.
 
 Each ks-gen rule has up to two channels:
 
@@ -157,7 +158,11 @@ Each ks-gen rule has up to two channels:
 Execution timeline inside Anaconda:
 
 ```
-%packages -> %addon org_fedora_oscap [reads tailoring.xml, remediates] -> %post -> reboot
+%packages
+  -> %post --nochroot [stages tailoring.xml]
+  -> %post [oscap reads tailoring.xml, remediates]
+  -> %post [ks-gen rule overrides]
+  -> reboot
 ```
 
 ### 3.3 The override rule contract
@@ -384,7 +389,6 @@ packages:
   required:                        # STIG/oscap dependencies + ops baseline
     - scap-security-guide
     - openscap-scanner
-    - oscap-anaconda-addon
     - aide
     - audit
     - rsyslog
@@ -965,8 +969,19 @@ The four most common lint failures:
   Same root cause; topo sort would never produce this.
   Hand-edit removed the section markers, or the rule registry is
   bypassed.
-- **`missing: %addon does not reference tailoring.xml`** — The addon
-  block was edited. Regenerate.
+- **`missing: %post --nochroot oscap fetch block`** — The leading
+  `%post --nochroot` block that stages `tailoring.xml` is missing
+  or its `--log=` path was hand-edited. Regenerate.
+- **`ordering: oscap fetch block must precede oscap eval block`** —
+  Something reordered the `%post` blocks; the fetch must run before
+  the chrooted oscap eval. Regenerate.
+- **`missing: hd:LABEL= branch in oscap fetch case`** — The
+  `hd:LABEL=*)` arm of the fetch `case` statement was removed.
+  ISO-delivered installs (`inst.ks=hd:LABEL=…`) will hard-fail
+  without it. Regenerate.
+- **`missing: hd: cp from /run/install/repo in oscap fetch case`** —
+  The `hd:LABEL=` arm is present but the `cp /run/install/repo/...`
+  line that does the actual staging was edited. Regenerate.
 - **`ksvalidator: ...`** — pykickstart's parser disagrees with the
   syntax. Almost always a malformed `%post` heredoc or stray
   character from a hand-edit.
@@ -976,8 +991,10 @@ a bug — please file it.
 
 ### "oscap remediation failed during install"
 
-Check `/root/ks-post.log` (if you got far enough into `%post`) and
-`/tmp/anaconda.log` on the install media or via VNC. The most
+Check `/root/ks-post-oscap-fetch.log`, `/root/ks-post-oscap.log`,
+and `/root/ks-post.log` (in that order — they correspond to the
+fetch / eval / overrides `%post` blocks), and `/tmp/anaconda.log`
+on the install media or via VNC. The most
 common remediation failures:
 
 - A package was removed but oscap expected it to be present.
@@ -985,9 +1002,10 @@ common remediation failures:
 - The custom crypto policy hadn't been applied yet when oscap
   checked for FIPS mode.
 
-The `%addon org_fedora_oscap` block runs *before* `%post`, so any
-`crypto_policy` rule output in `%post` is too late to influence
-oscap's view. Tailoring is the right channel for this — and ks-gen
+The oscap remediation `%post` block runs *before* the `ks-gen`
+rule-overrides `%post` block, so any `crypto_policy` rule output
+in the overrides block is too late to influence oscap's view.
+Tailoring is the right channel for this — and ks-gen
 handles it for the rules in its catalog. If you've added custom
 oscap rules, you may need to add tailoring entries for them in
 `exceptions[]`.
