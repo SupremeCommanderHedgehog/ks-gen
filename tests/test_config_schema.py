@@ -702,3 +702,10 @@ def test_disk_preset_and_layout_both_set_rejected():
     }
     with pytest.raises(ValidationError, match=r"mutually exclusive"):
         Disk.model_validate(payload)
+
+
+def test_disk_preset_custom_rejected_with_layout_message():
+    from ks_gen.config import Disk
+
+    with pytest.raises(ValidationError, match=r"disk\.layout block"):
+        Disk.model_validate({"preset": "custom"})
