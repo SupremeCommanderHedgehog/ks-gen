@@ -131,6 +131,8 @@ class DiskLayout(StrictModel):
 
         missing = _STIG_REQUIRED_LV_MOUNTPOINTS - lv_mounts
         if missing:
+            # deterministic: report the lexicographically-first missing mount
+            # so the parametrized tests can pin a stable error message.
             mount = sorted(missing)[0]
             raise ValueError(f"disk.layout missing STIG-required mountpoint: {mount}")
 
