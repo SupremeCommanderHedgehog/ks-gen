@@ -16,6 +16,36 @@ dependencies = [
   "pyyaml>=6.0",
   "pykickstart>=3.52",
 ]
+keywords = [
+  "kickstart",
+  "almalinux",
+  "stig",
+  "disa",
+  "oscap",
+  "scap",
+  "compliance",
+  "security-hardening",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: System :: Installation/Setup",
+  "Topic :: System :: Systems Administration",
+]
+
+[project.urls]
+Homepage      = "https://github.com/SupremeCommanderHedgehog/ks-gen"
+Documentation = "https://github.com/SupremeCommanderHedgehog/ks-gen/blob/main/MANUAL.md"
+Issues        = "https://github.com/SupremeCommanderHedgehog/ks-gen/issues"
+Changelog     = "https://github.com/SupremeCommanderHedgehog/ks-gen/blob/main/CHANGELOG.md"
+Source        = "https://github.com/SupremeCommanderHedgehog/ks-gen"
 
 [project.optional-dependencies]
 dev = [
