@@ -119,6 +119,7 @@ def test_network_defaults():
 def test_disk_preset_default():
     d = Disk()
     assert d.preset == DiskPreset.STIG_SERVER
+    assert d.layout is None
     assert d.wipe is True
     assert d.bootloader_password is None
 
@@ -664,3 +665,40 @@ def test_disk_layout_non_swap_without_mount_rejected():
     lvs.append({"name": "weird", "fstype": "xfs"})  # no mount, no swap
     with pytest.raises(ValidationError, match=r"non-swap LV.*mount"):
         DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_neither_defaults_to_stig_server():
+    # v0.3 backwards compat: empty `disk:` block -> preset=STIG_SERVER
+    from ks_gen.config import Disk, DiskPreset
+
+    d = Disk()
+    assert d.preset == DiskPreset.STIG_SERVER
+    assert d.layout is None
+
+
+def test_disk_preset_explicit_works():
+    from ks_gen.config import Disk, DiskPreset
+
+    d = Disk(preset=DiskPreset.MINIMAL)
+    assert d.preset == DiskPreset.MINIMAL
+    assert d.layout is None
+
+
+def test_disk_layout_only_leaves_preset_none():
+    from ks_gen.config import Disk
+
+    payload = {"layout": {"lvs": _stig_layout_lvs()}}
+    d = Disk.model_validate(payload)
+    assert d.preset is None
+    assert d.layout is not None
+
+
+def test_disk_preset_and_layout_both_set_rejected():
+    from ks_gen.config import Disk
+
+    payload = {
+        "preset": "stig_server",
+        "layout": {"lvs": _stig_layout_lvs()},
+    }
+    with pytest.raises(ValidationError, match=r"mutually exclusive"):
+        Disk.model_validate(payload)
