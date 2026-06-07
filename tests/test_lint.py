@@ -127,7 +127,12 @@ def test_lint_detects_missing_fetch_remote_resources(tmp_path):
         "  --fetch-remote-resources \\\n",
         "",
     )
+    assert "--fetch-remote-resources" not in text, (
+        "replace was a no-op; template indentation may have changed"
+    )
     ks.write_text(text, encoding="utf-8")
     report = lint_kickstart(ks)
     assert not report.ok
-    assert any("--fetch-remote-resources" in f for f in report.failures)
+    assert any(
+        "missing: --fetch-remote-resources flag in %post oscap block" in f for f in report.failures
+    )
