@@ -1,0 +1,10 @@
+system:
+  hostname: layout01.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYlayout ops@bastion"
+    sudo: nopasswd_yes
+disk:
+  preset: stig_server
