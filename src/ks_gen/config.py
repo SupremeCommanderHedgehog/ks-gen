@@ -182,6 +182,32 @@ class DiskLayout(StrictModel):
         return self
 
 
+class LuksPreset(StrEnum):
+    NONE = "none"
+    PARTIAL = "partial"
+    TANG = "tang"
+
+
+class TangServer(StrictModel):
+    url: str = Field(..., pattern=r"^https?://[^\s/]+(/.*)?$")
+    thumbprint: str = Field(..., pattern=r"^[A-Za-z0-9_-]{32,}$")
+
+
+class Tang(StrictModel):
+    servers: list[TangServer] = Field(..., min_length=1)
+    threshold: int = Field(default=1, ge=1)
+
+    @model_validator(mode="after")
+    def _threshold_within_servers(self) -> Tang:
+        if self.threshold > len(self.servers):
+            raise ValueError(
+                f"disk.luks.tang.threshold ({self.threshold}) exceeds "
+                f"servers count ({len(self.servers)}); threshold must be "
+                f"<= servers count"
+            )
+        return self
+
+
 class Disk(StrictModel):
     preset: DiskPreset | None = None
     layout: DiskLayout | None = None
