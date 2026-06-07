@@ -796,3 +796,104 @@ def test_tang_threshold_equal_servers_ok():
 
     t = Tang.model_validate({"servers": _tang_server_dict(2), "threshold": 2})
     assert t.threshold == 2
+
+
+def test_disk_luks_default_is_none():
+    from ks_gen.config import DiskLuks, LuksPreset
+
+    d = DiskLuks()
+    assert d.preset == LuksPreset.NONE
+    assert d.passphrase is None
+    assert d.passphrase_file is None
+    assert d.tang is None
+
+
+def test_disk_luks_none_with_passphrase_rejected():
+    from ks_gen.config import DiskLuks
+
+    with pytest.raises(ValidationError, match=r"preset='none' rejects"):
+        DiskLuks.model_validate({"preset": "none", "passphrase": "x"})
+
+
+def test_disk_luks_none_with_passphrase_file_rejected():
+    from ks_gen.config import DiskLuks
+
+    with pytest.raises(ValidationError, match=r"preset='none' rejects"):
+        DiskLuks.model_validate({"preset": "none", "passphrase_file": "/k"})
+
+
+def test_disk_luks_none_with_tang_rejected():
+    from ks_gen.config import DiskLuks
+
+    with pytest.raises(ValidationError, match=r"preset='none' rejects"):
+        DiskLuks.model_validate({"preset": "none", "tang": {"servers": _tang_server_dict(1)}})
+
+
+def test_disk_luks_partial_without_passphrase_rejected():
+    from ks_gen.config import DiskLuks
+
+    with pytest.raises(ValidationError, match=r"requires passphrase or passphrase_file"):
+        DiskLuks.model_validate({"preset": "partial"})
+
+
+def test_disk_luks_partial_with_passphrase_ok():
+    from ks_gen.config import DiskLuks, LuksPreset
+
+    d = DiskLuks.model_validate({"preset": "partial", "passphrase": "hunter2"})
+    assert d.preset == LuksPreset.PARTIAL
+    assert d.passphrase == "hunter2"
+
+
+def test_disk_luks_partial_with_passphrase_file_ok():
+    from ks_gen.config import DiskLuks
+
+    d = DiskLuks.model_validate({"preset": "partial", "passphrase_file": "/etc/ks-gen/luks.key"})
+    assert d.passphrase_file == "/etc/ks-gen/luks.key"
+
+
+def test_disk_luks_passphrase_and_file_both_set_rejected():
+    from ks_gen.config import DiskLuks
+
+    with pytest.raises(ValidationError, match=r"mutually exclusive"):
+        DiskLuks.model_validate(
+            {
+                "preset": "partial",
+                "passphrase": "x",
+                "passphrase_file": "/k",
+            }
+        )
+
+
+def test_disk_luks_partial_with_tang_block_rejected():
+    from ks_gen.config import DiskLuks
+
+    with pytest.raises(ValidationError, match=r"rejects tang block"):
+        DiskLuks.model_validate(
+            {
+                "preset": "partial",
+                "passphrase": "x",
+                "tang": {"servers": _tang_server_dict(1)},
+            }
+        )
+
+
+def test_disk_luks_tang_without_tang_block_rejected():
+    from ks_gen.config import DiskLuks
+
+    with pytest.raises(ValidationError, match=r"preset='tang' requires disk\.luks\.tang"):
+        DiskLuks.model_validate({"preset": "tang", "passphrase": "x"})
+
+
+def test_disk_luks_tang_with_passphrase_ok():
+    from ks_gen.config import DiskLuks, LuksPreset
+
+    d = DiskLuks.model_validate(
+        {
+            "preset": "tang",
+            "passphrase": "fallback",
+            "tang": {"servers": _tang_server_dict(2)},
+        }
+    )
+    assert d.preset == LuksPreset.TANG
+    assert d.tang is not None
+    assert len(d.tang.servers) == 2
