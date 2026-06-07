@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<arf:asset-report-collection xmlns:arf="http://scap.nist.gov/schema/asset-reporting-format/1.1">
+  <arf:reports>
+    <arf:report id="r1">
+      <arf:content>
+        <TestResult xmlns="http://checklists.nist.gov/xccdf/1.2" id="xccdf_org.test_TR">
+          <rule-result idref="xccdf_org.ssgproject.content_rule_rule_a">
+            <result>pass</result>
+          </rule-result>
+          <rule-result idref="xccdf_org.ssgproject.content_rule_rule_b">
+            <result>pass</result>
+          </rule-result>
+          <rule-result idref="xccdf_org.ssgproject.content_rule_rule_c">
+            <result>pass</result>
+          </rule-result>
+          <rule-result idref="xccdf_org.ssgproject.content_rule_rule_d">
+            <result>fail</result>
+          </rule-result>
+          <rule-result idref="xccdf_org.ssgproject.content_rule_rule_e">
+            <result>fail</result>
+          </rule-result>
+          <rule-result idref="xccdf_org.ssgproject.content_rule_rule_f">
+            <result>error</result>
+          </rule-result>
+        </TestResult>
+      </arf:content>
+    </arf:report>
+  </arf:reports>
+</arf:asset-report-collection>
