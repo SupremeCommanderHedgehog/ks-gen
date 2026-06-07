@@ -84,6 +84,17 @@ requirement. The maintainer bypass actor id was `5` (Repository admin
 role); the GitHub Actions bot bypass entry stays so release-please's
 release PRs can still merge.
 
+> **NOTE on the `Integration` bypass entry below.** GitHub rejects
+> `actor_type: "Integration"` bypass entries on personal-account
+> private repos with `422: must be part of the ruleset source or
+> owner organization`. The entry works once the repo is public OR if
+> the repo is owned by an organization. Until then (i.e. on this
+> private personal repo), the maintainer must manually merge each
+> release-please PR — the existing `RepositoryRole/5/always` bypass
+> covers that path. If you keep `actor_id: 15368` in the JSON below
+> and the PUT fails with that 422, drop the Integration entry and
+> rely on the manual-merge path; the rest of the runbook still applies.
+
 ```bash
 RULESET_ID=<id from above>
 
