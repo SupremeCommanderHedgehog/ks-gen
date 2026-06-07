@@ -7,6 +7,12 @@ part /boot/efi --fstype=efi --size={{ size_to_mb(cfg.disk.layout.efi.size) }} --
 part /boot --fstype={{ cfg.disk.layout.boot.fstype }} --size={{ size_to_mb(cfg.disk.layout.boot.size) }}{% if cfg.disk.layout.boot.fsoptions %} --fsoptions="{{ cfg.disk.layout.boot.fsoptions }}"{% endif %} --asprimary{{ OND }}
 part pv.01 --grow --size=1{{ OND }}
 volgroup {{ cfg.disk.layout.vg_name }} pv.01
+{# Trailing {{ "" }} on the logvol line is load-bearing: the Jinja env
+   uses trim_blocks=True which strips the newline after any {% block %}
+   tag. The logvol line ends with {% endif %}, so without the empty
+   expression tag the line's terminating newline gets eaten and all 8
+   logvols fuse into one. The expression tag breaks the
+   block-tag-at-EOL pattern, preserving the newline. #}
 {% for lv in cfg.disk.layout.lvs -%}
 logvol {{ lv.mount or 'swap' }} --vgname={{ cfg.disk.layout.vg_name }} --name={{ lv.name }} --fstype={{ lv.fstype }} {% set sz = effective_size_mb(lv) %}{% if sz == 'recommended' %}--recommended{% else %}--size={{ sz }}{% endif %}{% set fso = effective_fsoptions(lv) %}{% if fso %} --fsoptions="{{ fso }}"{% endif %}{{ "" }}
 {% endfor %}
