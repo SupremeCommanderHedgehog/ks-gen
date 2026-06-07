@@ -281,6 +281,32 @@ row in `build\web01\exceptions.md` on the host. Any oscap fail that **isn't**
 in `exceptions.md` is real compliance drift — file it as a bug against
 `ks-gen`.
 
+## (Optional) Step 9 — Verify the installed host with ks-gen verify
+
+Once you can SSH in as the admin user (Step 7 above), you can close the
+loop from the workstation without typing any manual `oscap` commands on
+the VM:
+
+```powershell
+ks-gen verify --host <vm-ip> --config build\web01\host.yaml
+```
+
+Replace `<vm-ip>` with the address from Step 6.
+
+Prerequisites: `ssh` and `scp` on `PATH`, and the admin user must have
+passwordless sudo (`sudo: nopasswd_yes` in `host.yaml`). The
+`minimal-dhcp` golden YAML ships `sudo: nopasswd_no`; either edit it
+before regenerating, or skip this step and rely on the manual checks
+in Step 8.
+
+Expected: exit 0 and a summary line ending with `— CLEAN`. Any
+`new_fail` or `regression` rows mean the install didn't fully apply
+the intended state, or the host has drifted from the install-time
+baseline. Action: rerun `ks-gen gen` against an updated `host.yaml`,
+reinstall, and re-verify; or, if a failure is intentional, add it to
+`host.yaml`'s `exceptions:` block. See `MANUAL.md` §8.5 for exit codes
+and how to interpret each category.
+
 ## Cleanup
 
 When done with the test VM:

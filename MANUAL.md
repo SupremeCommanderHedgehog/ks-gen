@@ -14,7 +14,7 @@ This document is the operator's reference for `ks-gen` v0.1. The
 - [5. Subcommands](#5-subcommands)
 - [6. The override rule catalog](#6-the-override-rule-catalog)
 - [7. The audit story — `exceptions.md`](#7-the-audit-story--exceptionsmd)
-- [8. Building and using an installer](#8-building-and-using-an-installer)
+- [8. Building and using an installer](#8-building-and-using-an-installer) — includes [§8.5 Post-install verification](#85-post-install-verification-ks-gen-verify)
 - [9. Common workflows](#9-common-workflows)
 - [10. Troubleshooting](#10-troubleshooting)
 - [11. Glossary](#11-glossary)
@@ -650,11 +650,14 @@ will give you autocomplete + inline validation via:
 | 2 | Config invalid (YAML or schema failed) |
 | 3 | Rule conflict (e.g., `crypto.policy=MODERN` + `fips_mode=true`) |
 | 4 | Lint failure on generated `ks.cfg` |
-| 5 | External tool missing (`xorriso`, `ksvalidator`) |
+| 5 | External tool missing (`xorriso`, `ksvalidator`, `ssh`/`scp`) |
+| 6 | `verify`: at least one rule fails on the live host |
+| 7 | `verify`: transport failure (ssh unreachable, sudo prompt, ARF parse error) |
 
 CI scripts can branch on these precisely. Code 3 in particular tells
 you the YAML is internally inconsistent in a way that isn't a typo —
-the generator refused to produce an unsafe kickstart.
+the generator refused to produce an unsafe kickstart. Codes 6 and 7
+are only emitted by `ks-gen verify`; see §8.5 for details.
 
 ---
 
@@ -863,6 +866,110 @@ The oscap result should be a small set of "fail" entries — every one
 of them should correspond to an entry in your `exceptions.md`. If
 something fails that ISN'T in `exceptions.md`, that's drift between
 the kickstart and the live system and warrants investigation.
+
+### 8.5 Post-install verification (`ks-gen verify`)
+
+`ks-gen verify` automates the §8.4 oscap re-run from the workstation
+side — no manual SSH, no raw oscap command. It runs `oscap` on the
+deployed host over SSH, pulls the ARF, reconciles failures against
+`host.yaml`, and reports compliance + drift against the install-time
+baseline.
+
+#### Command shape
+
+```bash
+ks-gen verify --host <addr> --config hosts/<name>/host.yaml
+```
+
+All flags:
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--host` | (required) | Target address or hostname |
+| `--config`/`-c` | (required) | Path to `host.yaml` |
+| `--user` | `cfg.user.admin.name` | SSH login user |
+| `--ssh-opts` | `""` | Extra args appended to every `ssh`/`scp` call (shell-quoted) |
+| `--format` | `table` | Output format: `table` or `json` |
+| `--arf-out` | (none) | Persist pulled ARFs to this directory |
+| `--keep-arf` | false | Persist pulled ARFs to a new temp directory (path is echoed) |
+| `--no-drift` | false | Skip the install-time ARF pull; compliance-only |
+| `--timeout` | 600 | oscap run timeout in seconds |
+
+#### Prerequisites
+
+- `ssh` and `scp` on the workstation's `PATH`. Missing either exits
+  with code 5.
+- The admin user (`cfg.user.admin.name`) reachable via SSH with the
+  workstation's key in `~/.ssh/authorized_keys`.
+- **Passwordless sudo** for that user. The wizard defaults to
+  `sudo: nopasswd_no`; set `sudo: nopasswd_yes` for hosts you intend
+  to verify remotely. The locked-password-requires-nopasswd validator
+  enforces it whenever the admin has no password. Hosts not configured
+  this way fail with:
+  ```
+  ks-gen verify: sudo -n true failed (exit N) on <host> as <user>: passwordless sudo is required
+  ```
+- `/root/tailoring.xml` present on the host (placed there by every
+  ks-gen install). Hosts not provisioned by ks-gen are not supported.
+
+#### Output
+
+Plain-text table grouped by category, omitting clean rules:
+
+```
+verify host=h1.example.com user=ops at=2026-06-07T12:00:00Z
+  summary: clean=412 expected_fail=3 new_fail=1 regression=2 incomplete=0 — FAILURES
+
+  CATEGORY    CURRENT  INSTALL  EXP  RULE
+  regression  fail     pass     no   xccdf_org.ssgproject.content_rule_<id>
+  new_fail    fail     -        no   xccdf_org.ssgproject.content_rule_<id>
+  ...
+```
+
+Column widths are dynamic. The `EXP` column is `yes` when the rule
+appears in the host's declared exceptions (so a failure is allowed),
+`no` otherwise. `--format json` emits the same data as a JSON document.
+
+#### Drift comparison
+
+`verify` pulls the install-time ARF from `/root/oscap-remediation-results.xml`
+and compares rule outcomes against the live run. A rule that passes
+now and failed at install is clean; a rule that fails now and passed
+at install is reported as `regression`.
+
+If the install-time ARF is missing (e.g., rotated or never written),
+the table prints a banner:
+
+```
+  NOTE: drift comparison skipped — install-time ARF not present on host
+```
+
+The compliance check still runs; only the `regression` vs. `new_fail`
+distinction is lost. `--no-drift` skips the install-baseline pull
+entirely (compliance-only mode).
+
+#### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | All rules pass or are accounted for by declared exceptions (`expected_fail`); no `new_fail` or `regression`. |
+| 1 | Bad `--format` value (usage error). |
+| 2 | `host.yaml` invalid. |
+| 5 | `ssh` or `scp` not on `PATH`. |
+| 6 | At least one rule fails on the live host (`new_fail` or `regression`). |
+| 7 | Transport failure: ssh unreachable, sudo prompt, oscap not runnable, ARF parse error. |
+
+Codes 3 and 4 are never emitted by `verify` (they're `gen`/`lint`-only —
+see §5.7 for the global table). CI scripts can branch on these; code 6
+in particular means the host is live but non-compliant — actionable for
+a remediation pass.
+
+#### Out of scope (v0.3)
+
+Single-host, on-demand only. Batch sweeps, captured-baseline mode,
+tailoring drift detection, on-host self-check timers, history tracking,
+HTML report generation, and exception auto-suggest are tracked
+separately as GitHub issues #10–#17.
 
 ---
 

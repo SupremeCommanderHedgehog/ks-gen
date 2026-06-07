@@ -44,3 +44,38 @@ def test_report_counts_summary(minimal_cfg):
     assert "Applied rules:" in md
     assert "Tailored XCCDF rules:" in md
     assert "Declared exceptions:" in md
+
+
+def test_expected_failure_rule_ids_includes_rule_exceptions(minimal_cfg):
+    from ks_gen.exceptions_report import expected_failure_rule_ids
+
+    ids = expected_failure_rule_ids(minimal_cfg)
+    assert "xccdf_org.ssgproject.content_rule_banner_etc_issue" in ids
+    assert "xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers" in ids
+
+
+def test_expected_failure_rule_ids_includes_declared_exceptions(minimal_cfg):
+    from ks_gen.config import ExceptionDecl
+    from ks_gen.exceptions_report import expected_failure_rule_ids
+
+    cfg = minimal_cfg.model_copy(
+        update={
+            "exceptions": [
+                ExceptionDecl(
+                    id="no-luks",
+                    reason="Cloud volumes encrypted by provider.",
+                    stig_rules_disabled=["xccdf_org.ssgproject.content_rule_encrypt_partitions"],
+                )
+            ]
+        }
+    )
+    ids = expected_failure_rule_ids(cfg)
+    assert "xccdf_org.ssgproject.content_rule_encrypt_partitions" in ids
+
+
+def test_expected_failure_rule_ids_returns_a_set(minimal_cfg):
+    from ks_gen.exceptions_report import expected_failure_rule_ids
+
+    ids = expected_failure_rule_ids(minimal_cfg)
+    assert isinstance(ids, set)
+    assert all(isinstance(rid, str) for rid in ids)

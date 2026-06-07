@@ -1,0 +1,33 @@
+# serializer version: 1
+# name: test_render_table_clean_report
+  '''
+  verify host=h1.example.com user=opsadmin at=2026-06-07T12:00:00Z
+    summary: clean=1 expected_fail=0 new_fail=0 regression=0 incomplete=0 — CLEAN
+    (no actionable rows)
+  
+  '''
+# ---
+# name: test_render_table_no_baseline_shows_banner
+  '''
+  verify host=h1.example.com user=opsadmin at=2026-06-07T12:00:00Z
+    NOTE: drift comparison skipped — install-time ARF not present on host
+    summary: clean=0 expected_fail=0 new_fail=1 regression=0 incomplete=0 — FAILURES
+  
+    CATEGORY  CURRENT  INSTALL  EXP  RULE
+    new_fail  fail     -        no   xccdf_org.ssgproject.content_rule_a
+  
+  '''
+# ---
+# name: test_render_table_one_of_each_category
+  '''
+  verify host=h1.example.com user=opsadmin at=2026-06-07T12:00:00Z
+    summary: clean=1 expected_fail=1 new_fail=1 regression=1 incomplete=1 — FAILURES
+  
+    CATEGORY       CURRENT  INSTALL  EXP  RULE
+    new_fail       fail     fail     no   xccdf_org.ssgproject.content_rule_b
+    regression     fail     pass     no   xccdf_org.ssgproject.content_rule_c
+    expected_fail  fail     pass     yes  xccdf_org.ssgproject.content_rule_d
+    incomplete     error    pass     no   xccdf_org.ssgproject.content_rule_e
+  
+  '''
+# ---
