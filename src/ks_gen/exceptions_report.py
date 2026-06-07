@@ -18,6 +18,9 @@ def expected_failure_rule_ids(cfg: HostConfig) -> set[str]:
     from ks_gen.registry import load_rules
     from ks_gen.topo import topo_sort
 
+    # The applies() guard here must mirror writer.build_bundle's pre-filter
+    # of applicable = [r for r in rules if r.applies(cfg)]; if the two diverge,
+    # the exceptions.md report and the verify reconciliation will disagree.
     ids: set[str] = set()
     for r in topo_sort(load_rules()):
         if not r.applies(cfg):

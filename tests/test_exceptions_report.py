@@ -50,9 +50,8 @@ def test_expected_failure_rule_ids_includes_rule_exceptions(minimal_cfg):
     from ks_gen.exceptions_report import expected_failure_rule_ids
 
     ids = expected_failure_rule_ids(minimal_cfg)
-    # rules like banner_text, sshd ciphers etc. tailor specific XCCDF rules out
-    assert any("banner" in rid for rid in ids)
-    assert any("sshd" in rid or "ssh" in rid for rid in ids)
+    assert "xccdf_org.ssgproject.content_rule_banner_etc_issue" in ids
+    assert "xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers" in ids
 
 
 def test_expected_failure_rule_ids_includes_declared_exceptions(minimal_cfg):
