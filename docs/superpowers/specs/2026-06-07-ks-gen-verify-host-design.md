@@ -113,7 +113,7 @@ tests/
     test_integration_end_to_end.py
     fixtures/
       arf-clean.xml
-      arf-with-failures.xml
+      arf-mixed.xml
       arf-install-baseline.xml
 ```
 
@@ -231,7 +231,7 @@ class VerifyReport:
 
 | `current` | `install` | declared exception? | `category` |
 |---|---|---|---|
-| `pass` / `fixed` | * | * | `clean` (omitted from table by default; shown with `--verbose`) |
+| `pass` / `fixed` | * | * | `clean` (omitted from the rendered table; counted in the summary line) |
 | `notapplicable` / `notselected` / `informational` | * | * | `clean` (rule didn't apply or wasn't selected — not an actionable signal) |
 | `fail` | * | yes | `expected_fail` |
 | `fail` | `fail` | no | `new_fail` (still failing from install — never remediated) |
@@ -325,10 +325,10 @@ Small, hand-authored ARFs (~30–50 lines each), not real oscap output. Three
 baseline files cover all reconciliation paths:
 
 - `arf-clean.xml` — 3 rules, all pass.
-- `arf-with-failures.xml` — 3 pass, 2 fail (one matches an exception in the
+- `arf-mixed.xml` — 3 pass, 2 fail (one matches an exception in the
   fixture `host.yaml`, one doesn't), 1 error.
 - `arf-install-baseline.xml` — same 6 rules, all pass at install time. Diffed
-  against `arf-with-failures.xml` produces 1 regression + 1 new_fail + 1
+  against `arf-mixed.xml` produces 1 regression + 1 new_fail + 1
   expected_fail + 1 incomplete.
 
 ### 9.4 Lint integration
