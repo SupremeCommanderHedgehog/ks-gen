@@ -26,7 +26,8 @@ def categorize(current: str, install: str | None, expected: bool) -> Category:
         return "new_fail"
     if install in CLEAN_CURRENT_STATES:
         return "regression"
-    # install is fail
+    # install is fail, or current is an unrecognized non-clean/non-incomplete state.
+    # Conservative fallback: treat as new_fail rather than silently dropping.
     return "new_fail"
 
 
@@ -61,6 +62,11 @@ def build_report(
     user: str,
     timestamp_utc: str,
 ) -> VerifyReport:
+    """Build a VerifyReport from current and install ARF result dicts.
+
+    Iterates over rules in `current` (rules only in `install` are dropped).
+    Sets `install_baseline_available` to True iff `install` is non-None.
+    """
     rows: list[VerifyRow] = []
     for rule_id in sorted(current):
         cur_state = current[rule_id].result
