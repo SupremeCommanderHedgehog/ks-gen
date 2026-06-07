@@ -17,6 +17,8 @@ class ExitCode(IntEnum):
     RULE_CONFLICT = 3
     LINT_FAIL = 4
     TOOL_MISSING = 5
+    VERIFY_FAIL = 6
+    TRANSPORT_FAIL = 7
 
 
 class ConfigError(Exception):
