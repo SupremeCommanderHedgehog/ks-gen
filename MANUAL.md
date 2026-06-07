@@ -319,6 +319,58 @@ collapses non-`/` mounts into root.
 `bootloader_password` is STIG-required. `null` means "left unset by
 ks-gen" — supply a value or accept the resulting STIG finding.
 
+### `disk.layout` (alternative to `disk.preset`)
+
+For operators who need to customize partition sizes or add extra
+mountpoints, `disk.layout` accepts a structured LVM definition. It is
+mutually exclusive with `disk.preset`.
+
+```yaml
+disk:
+  layout:
+    ondisk: sda           # optional, hints anaconda to use this disk
+    lvs:
+      - {name: root, mount: /}
+      - {name: home, mount: /home}
+      - {name: tmp, mount: /tmp}
+      - {name: var, mount: /var, size: 20G}     # override default 10G
+      - {name: varlog, mount: /var/log}
+      - {name: varlogaudit, mount: /var/log/audit}
+      - {name: vartmp, mount: /var/tmp}
+      - {name: srv, mount: /srv, size: 50G}     # custom mountpoint
+      - {name: swap, fstype: swap}
+```
+
+LVs that mount a STIG-required path can omit `size:` and inherit the
+default from this table:
+
+| Mountpoint | Default size | Default fsoptions |
+|---|---|---|
+| `/` | 15G | (none) |
+| `/home` | 5G | `nodev,nosuid` |
+| `/tmp` | 3G | `nodev,nosuid,noexec` |
+| `/var` | 10G | `nodev` |
+| `/var/log` | 5G | `nodev,nosuid,noexec` |
+| `/var/log/audit` | 3G | `nodev,nosuid,noexec` |
+| `/var/tmp` | 2G | `nodev,nosuid,noexec` |
+| swap | `--recommended` | (none) |
+
+LVs that mount a non-STIG path (`/srv`, `/data`, etc.) must specify
+`size:` explicitly. `fsoptions:` can be set explicitly on any LV to
+override the default.
+
+The PV grows to fill the disk; LVs are fixed-size, leaving free VG
+space for future `lvextend`. The `/boot` and `/boot/efi` partitions
+default to 1G xfs/efi respectively and can be overridden with a top-level
+`boot:` or `efi:` block.
+
+STIG-required mountpoints (`/`, `/home`, `/tmp`, `/var`, `/var/log`,
+`/var/log/audit`, `/var/tmp`) are enforced at config-load — a layout
+missing any of them fails with a specific error.
+
+Encryption is not yet supported via the layout block (issue #7 will
+add LUKS presets).
+
 ### 4.5 `user.admin` — the lockout-resistance cornerstone
 
 ```yaml
