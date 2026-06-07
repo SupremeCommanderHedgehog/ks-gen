@@ -615,3 +615,52 @@ def test_disk_layout_multiple_swap_lvs_without_mounts_still_caught_by_swap_cardi
     lvs = [*_stig_layout_lvs(), {"name": "swap2", "fstype": "swap"}]
     with pytest.raises(ValidationError, match=r"exactly one swap"):
         DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_custom_mount_without_size_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = _stig_layout_lvs()
+    lvs.append({"name": "srv", "mount": "/srv"})  # custom mount, no size
+    with pytest.raises(
+        ValidationError,
+        match=r"disk\.layout\.lvs\[srv\]\.size: required for custom mountpoint /srv",
+    ):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_custom_mount_with_size_ok():
+    from ks_gen.config import DiskLayout
+
+    lvs = _stig_layout_lvs()
+    lvs.append({"name": "srv", "mount": "/srv", "size": "50G"})
+    layout = DiskLayout.model_validate({"lvs": lvs})
+    assert layout.lvs[-1].name == "srv"
+
+
+def test_disk_layout_stig_mount_without_size_ok():
+    # /var is in the defaults table -> size may be omitted
+    from ks_gen.config import DiskLayout
+
+    layout = DiskLayout.model_validate({"lvs": _stig_layout_lvs()})
+    var = next(lv for lv in layout.lvs if lv.mount == "/var")
+    assert var.size is None  # validator passes; renderer fills 10G
+
+
+def test_disk_layout_swap_with_mount_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = _stig_layout_lvs()
+    # Add a "swap" with a mount path — nonsense, must be rejected.
+    lvs.append({"name": "weird", "mount": "/foo", "fstype": "swap"})
+    with pytest.raises(ValidationError, match=r"swap LV.*mount.*null"):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_non_swap_without_mount_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = _stig_layout_lvs()
+    lvs.append({"name": "weird", "fstype": "xfs"})  # no mount, no swap
+    with pytest.raises(ValidationError, match=r"non-swap LV.*mount"):
+        DiskLayout.model_validate({"lvs": lvs})

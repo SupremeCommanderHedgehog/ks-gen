@@ -136,6 +136,17 @@ class DiskLayout(StrictModel):
             mount = sorted(missing)[0]
             raise ValueError(f"disk.layout missing STIG-required mountpoint: {mount}")
 
+        # Per-LV swap consistency runs BEFORE the swap-cardinality check so
+        # that a swap LV with a mount path is reported as a config error on
+        # that specific LV, rather than as an opaque "found 2 swap LVs" miss.
+        for lv in self.lvs:
+            if lv.fstype == "swap" and lv.mount is not None:
+                raise ValueError(
+                    f"disk.layout.lvs[{lv.name}]: swap LV mount must be null (got {lv.mount!r})"
+                )
+            if lv.fstype != "swap" and lv.mount is None:
+                raise ValueError(f"disk.layout.lvs[{lv.name}]: non-swap LV requires a mount path")
+
         swap_lvs = [lv for lv in self.lvs if lv.fstype == "swap"]
         if len(swap_lvs) != 1:
             raise ValueError(
@@ -158,6 +169,15 @@ class DiskLayout(StrictModel):
                 if m in seen_m:
                     raise ValueError(f"disk.layout duplicate LV mount: {m}")
                 seen_m.add(m)
+
+        # Size check runs LAST so duplicate-name / duplicate-mount errors
+        # surface first when a custom-mount LV is also a duplicate.
+        for lv in self.lvs:
+            if lv.size is None and lv.mount not in _DEFAULT_LV_SIZES:
+                raise ValueError(
+                    f"disk.layout.lvs[{lv.name}].size: required for custom "
+                    f"mountpoint {lv.mount}; no default available"
+                )
 
         return self
 
