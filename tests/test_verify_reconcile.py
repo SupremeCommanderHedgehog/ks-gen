@@ -156,3 +156,5 @@ def test_verify_report_is_immutable_tuple_of_rows() -> None:
         install_baseline_available=False,
     )
     assert isinstance(report.rows, tuple)
+    with pytest.raises(FrozenInstanceError):
+        report.rows = (VerifyRow("r", "pass", None, False, "clean"),)  # type: ignore[misc]
