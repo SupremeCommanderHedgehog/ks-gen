@@ -58,7 +58,9 @@ Conventional Commits:
 - `ci:` — CI-config-only changes.
 
 Subject line under 72 characters. Body wrapped at 72 columns. End with
-a blank line; do not append `Co-Authored-By:` trailers.
+a blank line; do not append `Co-Authored-By:` trailers (this includes
+AI-generated trailers some code-assistant tools add by default — turn
+them off in your tool's config).
 
 Every commit on `main` is GPG-signed. Use `git commit -S`. If you do not
 yet have a GPG key, ask the maintainer for guidance before opening a
