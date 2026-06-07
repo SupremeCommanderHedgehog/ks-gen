@@ -43,6 +43,10 @@ authselect select sssd --force
 {% endfor -%}
 %end
 
+{% if cfg.disk.luks.preset.value == 'tang' -%}
+{% include 'partials/luks_tang_bind.j2' %}
+{% endif -%}
+
 %post --nochroot --erroronfail --log=/mnt/sysimage/root/ks-post-oscap-fetch.log
 set -euo pipefail
 
