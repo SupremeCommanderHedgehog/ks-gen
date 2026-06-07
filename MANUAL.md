@@ -982,6 +982,11 @@ The four most common lint failures:
 - **`missing: hd: cp from /run/install/repo in oscap fetch case`** —
   The `hd:LABEL=` arm is present but the `cp /run/install/repo/...`
   line that does the actual staging was edited. Regenerate.
+- **`missing: --fetch-remote-resources flag in %post oscap block`** —
+  The chrooted `oscap xccdf eval` invocation is missing the
+  `--fetch-remote-resources` argument. Without it, STIG rules tied
+  to the AlmaLinux OVAL CVE feed silently skip at install time.
+  Regenerate.
 - **`ksvalidator: ...`** — pykickstart's parser disagrees with the
   syntax. Almost always a malformed `%post` heredoc or stray
   character from a hand-edit.
@@ -1009,6 +1014,28 @@ Tailoring is the right channel for this — and ks-gen
 handles it for the rules in its catalog. If you've added custom
 oscap rules, you may need to add tailoring entries for them in
 `exceptions[]`.
+
+### "I see a fetch failure for security.almalinux.org in the oscap log on an ISO install"
+
+Expected. The install-time `oscap xccdf eval` invocation passes
+`--fetch-remote-resources` so STIG rules whose OVAL definitions
+reference the AlmaLinux CVE feed at
+`https://security.almalinux.org/oval/org.almalinux.alsa-9.xml.bz2`
+can run. On an ISO-delivered (`hd:LABEL=`) install with no
+install-time network access, that fetch fails — the eval wrapper
+`|| true` swallows the non-zero exit, the install completes, and
+the affected OVAL-dependent rules skip the same way they did in
+v0.1.
+
+If you need CVE-tied coverage on an air-gapped install, the rules
+fire on the first post-install run against an updated SSG content
+package — there is no installer-side workaround in v0.2.
+
+If the failed fetch appears on an install that DOES have network
+access (HTTP delivery, working DNS, no egress filtering of
+`security.almalinux.org`), that's a real problem worth
+investigating: check `/etc/resolv.conf`, the host firewall, and
+any upstream proxy configuration.
 
 ### "the install reboots to a black screen"
 

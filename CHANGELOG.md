@@ -6,6 +6,15 @@ the catalog drives the audit story.
 ## [Unreleased]
 
 ### Added
+- **`--fetch-remote-resources` on install-time oscap eval.** The
+  chrooted `oscap xccdf eval --remediate` invocation now passes
+  `--fetch-remote-resources`, so STIG rules whose OVAL definitions
+  reference the AlmaLinux CVE feed
+  (`security.almalinux.org/oval/org.almalinux.alsa-9.xml.bz2`) run
+  at install time instead of silently skipping. Air-gapped
+  (`hd:LABEL=`) installs will log a failed fetch but complete
+  normally; OVAL-dependent rules skip cleanly. See MANUAL.md §10.
+  Closes the last v0.1-era gap. Lint guards the flag's presence.
 - **`hd:LABEL=` transport for oscap tailoring fetch.** The oscap `%post`
   block is now split into a `--nochroot` fetch stage and a chrooted
   eval stage. ISO-delivered bundles (`ks-gen iso`) now reach oscap
