@@ -191,6 +191,14 @@ class Disk(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def _preset_xor_layout(cls, data: dict[str, object]) -> dict[str, object]:
+        """Enforce preset/layout mutual exclusion and fill the v0.3 default.
+
+        ``mode='before'`` is required because StrictModel is ``frozen=True``,
+        so we cannot mutate ``self.preset`` after construction. Filling the
+        default at the dict-input layer is the only place we can apply a
+        conditional default (preset=STIG_SERVER only when layout is also
+        absent).
+        """
         if not isinstance(data, dict):
             return data
         preset = data.get("preset")
