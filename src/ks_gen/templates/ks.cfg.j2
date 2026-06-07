@@ -23,7 +23,11 @@ zerombr
 clearpart --all --initlabel
 {% endif -%}
 
+{% if cfg.disk.layout -%}
+{% include 'partials/partitioning_layout.j2' %}
+{% else -%}
 {% include 'partials/partitioning_' ~ cfg.disk.preset.value ~ '.j2' %}
+{% endif %}
 
 services --enabled=chronyd,firewalld,auditd,rsyslog,sshd
 authselect select sssd --force

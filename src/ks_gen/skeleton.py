@@ -18,13 +18,24 @@ class PostBlock:
 
 def _env() -> Environment:
     templates_path = files("ks_gen") / "templates"
-    return Environment(
+    env = Environment(
         loader=FileSystemLoader(str(templates_path)),
         undefined=StrictUndefined,
         trim_blocks=True,
         lstrip_blocks=True,
         keep_trailing_newline=True,
     )
+    # Import locally to avoid module-load-time circular import risk.
+    from ks_gen.disk_layout import (
+        effective_fsoptions,
+        effective_size_mb,
+        size_to_mb,
+    )
+
+    env.globals["effective_size_mb"] = effective_size_mb
+    env.globals["effective_fsoptions"] = effective_fsoptions
+    env.globals["size_to_mb"] = size_to_mb
+    return env
 
 
 def render_skeleton(cfg: HostConfig, post_blocks: list[PostBlock | str]) -> str:

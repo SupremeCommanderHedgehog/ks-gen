@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from pydantic import ValidationError
 
@@ -117,6 +119,7 @@ def test_network_defaults():
 def test_disk_preset_default():
     d = Disk()
     assert d.preset == DiskPreset.STIG_SERVER
+    assert d.layout is None
     assert d.wipe is True
     assert d.bootloader_password is None
 
@@ -408,3 +411,301 @@ def test_reboot_window_with_only_monthly_allowed():
     }
     cfg = HostConfig.model_validate(payload)
     assert cfg.overrides.unattended_updates.reboot_window.enable is True
+
+
+def test_disk_lv_def_minimal_valid():
+    from ks_gen.config import DiskLvDef
+
+    lv = DiskLvDef(name="root", mount="/", size="15G")
+    assert lv.name == "root"
+    assert lv.mount == "/"
+    assert lv.size == "15G"
+    assert lv.fstype == "xfs"
+    assert lv.fsoptions is None
+    assert lv.encrypted is False
+
+
+def test_disk_lv_def_name_rejects_special_chars():
+    from ks_gen.config import DiskLvDef
+
+    with pytest.raises(ValidationError):
+        DiskLvDef(name="root/path", mount="/", size="15G")
+
+
+def test_disk_lv_def_size_rejects_bare_number():
+    from ks_gen.config import DiskLvDef
+
+    with pytest.raises(ValidationError):
+        DiskLvDef(name="root", mount="/", size="15")
+
+
+def test_disk_lv_def_size_rejects_unknown_unit():
+    from ks_gen.config import DiskLvDef
+
+    with pytest.raises(ValidationError):
+        DiskLvDef(name="root", mount="/", size="15K")
+
+
+def test_disk_lv_def_size_accepts_recommended():
+    from ks_gen.config import DiskLvDef
+
+    lv = DiskLvDef(name="swap", size="recommended", fstype="swap")
+    assert lv.size == "recommended"
+
+
+def test_disk_lv_def_size_accepts_omitted():
+    from ks_gen.config import DiskLvDef
+
+    lv = DiskLvDef(name="root", mount="/")
+    assert lv.size is None
+
+
+def test_disk_lv_def_encrypted_true_rejected():
+    from ks_gen.config import DiskLvDef
+
+    with pytest.raises(ValidationError, match=r"luks\.preset.*#7"):
+        DiskLvDef(name="root", mount="/", size="15G", encrypted=True)
+
+
+def test_disk_boot_part_defaults():
+    from ks_gen.config import DiskBootPart
+
+    b = DiskBootPart()
+    assert b.size == "1G"
+    assert b.fstype == "xfs"
+    assert b.fsoptions == "nodev,nosuid"
+
+
+def test_disk_boot_part_rejects_T_unit():
+    from ks_gen.config import DiskBootPart
+
+    with pytest.raises(ValidationError):
+        DiskBootPart(size="2T")
+
+
+def test_disk_boot_part_accepts_M_and_G_units():
+    from ks_gen.config import DiskBootPart
+
+    assert DiskBootPart(size="500M").size == "500M"
+    assert DiskBootPart(size="2G").size == "2G"
+
+
+def test_disk_efi_part_defaults():
+    from ks_gen.config import DiskEfiPart
+
+    e = DiskEfiPart()
+    assert e.size == "1G"
+
+
+def test_disk_efi_part_rejects_T_unit():
+    from ks_gen.config import DiskEfiPart
+
+    with pytest.raises(ValidationError):
+        DiskEfiPart(size="2T")
+
+
+def _stig_layout_lvs():
+    """Helper: returns the minimal STIG LV list (used by several layout tests)."""
+    return [
+        {"name": "root", "mount": "/"},
+        {"name": "home", "mount": "/home"},
+        {"name": "tmp", "mount": "/tmp"},
+        {"name": "var", "mount": "/var"},
+        {"name": "varlog", "mount": "/var/log"},
+        {"name": "varlogaudit", "mount": "/var/log/audit"},
+        {"name": "vartmp", "mount": "/var/tmp"},
+        {"name": "swap", "fstype": "swap"},
+    ]
+
+
+def test_disk_layout_minimal_valid():
+    from ks_gen.config import DiskLayout
+
+    layout = DiskLayout.model_validate({"lvs": _stig_layout_lvs()})
+    assert layout.vg_name == "vg_root"
+    assert layout.ondisk is None
+    assert len(layout.lvs) == 8
+    assert layout.boot.size == "1G"
+    assert layout.efi.size == "1G"
+
+
+def test_disk_layout_ondisk_with_dev_prefix_rejected():
+    from ks_gen.config import DiskLayout
+
+    with pytest.raises(ValidationError):
+        DiskLayout.model_validate({"ondisk": "/dev/sda", "lvs": _stig_layout_lvs()})
+
+
+def test_disk_layout_ondisk_accepts_plain_basename():
+    from ks_gen.config import DiskLayout
+
+    layout = DiskLayout.model_validate({"ondisk": "nvme0n1", "lvs": _stig_layout_lvs()})
+    assert layout.ondisk == "nvme0n1"
+
+
+def test_disk_layout_empty_lvs_rejected():
+    from ks_gen.config import DiskLayout
+
+    with pytest.raises(ValidationError):
+        DiskLayout.model_validate({"lvs": []})
+
+
+REQUIRED_MOUNTS_FOR_PARAMETRIZE = [
+    "/",
+    "/home",
+    "/tmp",
+    "/var",
+    "/var/log",
+    "/var/log/audit",
+    "/var/tmp",
+]
+
+
+@pytest.mark.parametrize("missing_mount", REQUIRED_MOUNTS_FOR_PARAMETRIZE)
+def test_disk_layout_missing_required_mountpoint(missing_mount):
+    from ks_gen.config import DiskLayout
+
+    lvs = [lv for lv in _stig_layout_lvs() if lv.get("mount") != missing_mount]
+    with pytest.raises(
+        ValidationError,
+        match=rf"disk\.layout missing STIG-required mountpoint: {re.escape(missing_mount)}",
+    ):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_no_swap_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = [lv for lv in _stig_layout_lvs() if lv["name"] != "swap"]
+    with pytest.raises(ValidationError, match=r"exactly one swap"):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_multiple_swap_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = [*_stig_layout_lvs(), {"name": "swap2", "fstype": "swap"}]
+    with pytest.raises(ValidationError, match=r"exactly one swap"):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_duplicate_lv_name_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = _stig_layout_lvs()
+    lvs.append({"name": "root", "mount": "/extra"})  # duplicate name
+    with pytest.raises(ValidationError, match=r"duplicate LV name"):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_duplicate_lv_mount_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = _stig_layout_lvs()
+    lvs.append({"name": "extra", "mount": "/var"})  # duplicate mount
+    with pytest.raises(ValidationError, match=r"duplicate LV mount"):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_multiple_swap_lvs_without_mounts_still_caught_by_swap_cardinality():
+    # Sanity check: two swap LVs both with mount=None aren't caught by the
+    # mount-uniqueness check (mount=None is excluded) but ARE caught by
+    # the swap cardinality check.
+    from ks_gen.config import DiskLayout
+
+    lvs = [*_stig_layout_lvs(), {"name": "swap2", "fstype": "swap"}]
+    with pytest.raises(ValidationError, match=r"exactly one swap"):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_custom_mount_without_size_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = _stig_layout_lvs()
+    lvs.append({"name": "srv", "mount": "/srv"})  # custom mount, no size
+    with pytest.raises(
+        ValidationError,
+        match=r"disk\.layout\.lvs\[srv\]\.size: required for custom mountpoint /srv",
+    ):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_custom_mount_with_size_ok():
+    from ks_gen.config import DiskLayout
+
+    lvs = _stig_layout_lvs()
+    lvs.append({"name": "srv", "mount": "/srv", "size": "50G"})
+    layout = DiskLayout.model_validate({"lvs": lvs})
+    assert layout.lvs[-1].name == "srv"
+
+
+def test_disk_layout_stig_mount_without_size_ok():
+    # /var is in the defaults table -> size may be omitted
+    from ks_gen.config import DiskLayout
+
+    layout = DiskLayout.model_validate({"lvs": _stig_layout_lvs()})
+    var = next(lv for lv in layout.lvs if lv.mount == "/var")
+    assert var.size is None  # validator passes; renderer fills 10G
+
+
+def test_disk_layout_swap_with_mount_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = _stig_layout_lvs()
+    # Add a "swap" with a mount path — nonsense, must be rejected.
+    lvs.append({"name": "weird", "mount": "/foo", "fstype": "swap"})
+    with pytest.raises(ValidationError, match=r"swap LV.*mount.*null"):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_layout_non_swap_without_mount_rejected():
+    from ks_gen.config import DiskLayout
+
+    lvs = _stig_layout_lvs()
+    lvs.append({"name": "weird", "fstype": "xfs"})  # no mount, no swap
+    with pytest.raises(ValidationError, match=r"non-swap LV.*mount"):
+        DiskLayout.model_validate({"lvs": lvs})
+
+
+def test_disk_neither_defaults_to_stig_server():
+    # v0.3 backwards compat: empty `disk:` block -> preset=STIG_SERVER
+    from ks_gen.config import Disk, DiskPreset
+
+    d = Disk()
+    assert d.preset == DiskPreset.STIG_SERVER
+    assert d.layout is None
+
+
+def test_disk_preset_explicit_works():
+    from ks_gen.config import Disk, DiskPreset
+
+    d = Disk(preset=DiskPreset.MINIMAL)
+    assert d.preset == DiskPreset.MINIMAL
+    assert d.layout is None
+
+
+def test_disk_layout_only_leaves_preset_none():
+    from ks_gen.config import Disk
+
+    payload = {"layout": {"lvs": _stig_layout_lvs()}}
+    d = Disk.model_validate(payload)
+    assert d.preset is None
+    assert d.layout is not None
+
+
+def test_disk_preset_and_layout_both_set_rejected():
+    from ks_gen.config import Disk
+
+    payload = {
+        "preset": "stig_server",
+        "layout": {"lvs": _stig_layout_lvs()},
+    }
+    with pytest.raises(ValidationError, match=r"mutually exclusive"):
+        Disk.model_validate(payload)
+
+
+def test_disk_preset_custom_rejected_with_layout_message():
+    from ks_gen.config import Disk
+
+    with pytest.raises(ValidationError, match=r"disk\.layout block"):
+        Disk.model_validate({"preset": "custom"})

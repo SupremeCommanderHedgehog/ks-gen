@@ -53,18 +53,169 @@ class DiskPreset(StrEnum):
     CUSTOM = "custom"
 
 
+class DiskLvDef(StrictModel):
+    name: str = Field(..., min_length=1, pattern=r"^[a-zA-Z0-9_-]+$")
+    mount: str | None = None
+    size: str | None = Field(default=None, pattern=r"^\d+(M|G|T)$|^recommended$")
+    fstype: Literal["xfs", "ext4", "swap"] = "xfs"
+    fsoptions: str | None = None
+    encrypted: bool = False
+
+    @field_validator("encrypted")
+    @classmethod
+    def _encryption_deferred(cls, v: bool) -> bool:
+        if v:
+            raise ValueError(
+                "disk.layout.lvs[].encrypted=true requires the luks.preset "
+                "block (issue #7); not yet implemented."
+            )
+        return v
+
+
+_DEFAULT_LV_SIZES: dict[str | None, str] = {
+    "/": "15G",
+    "/home": "5G",
+    "/tmp": "3G",
+    "/var": "10G",
+    "/var/log": "5G",
+    "/var/log/audit": "3G",
+    "/var/tmp": "2G",
+    None: "recommended",  # swap LV
+}
+
+
+_DEFAULT_FSOPTIONS: dict[str, str] = {
+    "/home": "nodev,nosuid",
+    "/tmp": "nodev,nosuid,noexec",
+    "/var": "nodev",
+    "/var/log": "nodev,nosuid,noexec",
+    "/var/log/audit": "nodev,nosuid,noexec",
+    "/var/tmp": "nodev,nosuid,noexec",
+}
+
+
+_STIG_REQUIRED_LV_MOUNTPOINTS: frozenset[str] = frozenset(
+    {
+        "/",
+        "/home",
+        "/tmp",
+        "/var",
+        "/var/log",
+        "/var/log/audit",
+        "/var/tmp",
+    }
+)
+
+
+class DiskBootPart(StrictModel):
+    size: str = Field(default="1G", pattern=r"^\d+(M|G)$")
+    fstype: Literal["xfs", "ext4"] = "xfs"
+    fsoptions: str | None = "nodev,nosuid"
+
+
+class DiskEfiPart(StrictModel):
+    size: str = Field(default="1G", pattern=r"^\d+(M|G)$")
+    # fstype is always "efi" for the EFI System Partition; not configurable.
+
+
+class DiskLayout(StrictModel):
+    ondisk: str | None = Field(default=None, pattern=r"^[a-zA-Z][a-zA-Z0-9]*$")
+    boot: DiskBootPart = Field(default_factory=DiskBootPart)
+    efi: DiskEfiPart = Field(default_factory=DiskEfiPart)
+    vg_name: str = "vg_root"
+    lvs: list[DiskLvDef] = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_layout(self) -> DiskLayout:
+        lv_mounts = {lv.mount for lv in self.lvs if lv.mount is not None}
+
+        missing = _STIG_REQUIRED_LV_MOUNTPOINTS - lv_mounts
+        if missing:
+            # deterministic: report the lexicographically-first missing mount
+            # so the parametrized tests can pin a stable error message.
+            mount = sorted(missing)[0]
+            raise ValueError(f"disk.layout missing STIG-required mountpoint: {mount}")
+
+        # Per-LV swap consistency runs BEFORE the swap-cardinality check so
+        # that a swap LV with a mount path is reported as a config error on
+        # that specific LV, rather than as an opaque "found 2 swap LVs" miss.
+        for lv in self.lvs:
+            if lv.fstype == "swap" and lv.mount is not None:
+                raise ValueError(
+                    f"disk.layout.lvs[{lv.name}]: swap LV mount must be null (got {lv.mount!r})"
+                )
+            if lv.fstype != "swap" and lv.mount is None:
+                raise ValueError(f"disk.layout.lvs[{lv.name}]: non-swap LV requires a mount path")
+
+        swap_lvs = [lv for lv in self.lvs if lv.fstype == "swap"]
+        if len(swap_lvs) != 1:
+            raise ValueError(
+                f"disk.layout requires exactly one swap LV "
+                f"(fstype=swap, mount unset); found {len(swap_lvs)}"
+            )
+
+        names = [lv.name for lv in self.lvs]
+        if len(names) != len(set(names)):
+            seen: set[str] = set()
+            for n in names:
+                if n in seen:
+                    raise ValueError(f"disk.layout duplicate LV name: {n}")
+                seen.add(n)
+
+        mounts = [lv.mount for lv in self.lvs if lv.mount is not None]
+        if len(mounts) != len(set(mounts)):
+            seen_m: set[str] = set()
+            for m in mounts:
+                if m in seen_m:
+                    raise ValueError(f"disk.layout duplicate LV mount: {m}")
+                seen_m.add(m)
+
+        # Size check runs LAST so duplicate-name / duplicate-mount errors
+        # surface first when a custom-mount LV is also a duplicate.
+        for lv in self.lvs:
+            if lv.size is None and lv.mount not in _DEFAULT_LV_SIZES:
+                raise ValueError(
+                    f"disk.layout.lvs[{lv.name}].size: required for custom "
+                    f"mountpoint {lv.mount}; no default available"
+                )
+
+        return self
+
+
 class Disk(StrictModel):
-    preset: DiskPreset = DiskPreset.STIG_SERVER
+    preset: DiskPreset | None = None
+    layout: DiskLayout | None = None
     wipe: bool = True
     bootloader_password: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _preset_xor_layout(cls, data: dict[str, object]) -> dict[str, object]:
+        """Enforce preset/layout mutual exclusion and fill the v0.3 default.
+
+        ``mode='before'`` is required because StrictModel is ``frozen=True``,
+        so we cannot mutate ``self.preset`` after construction. Filling the
+        default at the dict-input layer is the only place we can apply a
+        conditional default (preset=STIG_SERVER only when layout is also
+        absent).
+        """
+        if not isinstance(data, dict):
+            return data
+        preset = data.get("preset")
+        layout = data.get("layout")
+        if preset is not None and layout is not None:
+            raise ValueError("disk.preset and disk.layout are mutually exclusive; specify one")
+        # v0.3 backwards-compat: both omitted -> default to STIG_SERVER
+        if preset is None and layout is None:
+            data["preset"] = DiskPreset.STIG_SERVER
+        return data
+
     @field_validator("preset")
     @classmethod
-    def _custom_not_yet_implemented(cls, v: DiskPreset) -> DiskPreset:
+    def _custom_not_yet_implemented(cls, v: DiskPreset | None) -> DiskPreset | None:
         if v == DiskPreset.CUSTOM:
             raise ValueError(
-                "disk.preset='custom' is reserved for v0.2 (operator-supplied layout block); "
-                "use 'stig_server' or 'minimal' in v0.1."
+                "disk.preset='custom' was reserved in v0.1-v0.3; use the disk.layout block instead."
             )
         return v
 
