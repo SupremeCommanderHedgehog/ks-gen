@@ -165,3 +165,11 @@ def test_skeleton_still_renders_preset_partial_when_preset_set():
     out = render_skeleton(cfg, post_blocks=[])
     # The existing stig_server partial has aligned-column whitespace:
     assert "logvol /var/log/audit --vgname=vg_root --name=varlogaudit" in out
+
+
+def test_skeleton_jinja_env_exposes_disk_luks_helpers():
+    from ks_gen.skeleton import _env
+
+    env = _env()
+    assert "resolve_passphrase" in env.globals
+    assert "kickstart_passphrase_quoted" in env.globals

@@ -31,10 +31,16 @@ def _env() -> Environment:
         effective_size_mb,
         size_to_mb,
     )
+    from ks_gen.disk_luks import (
+        kickstart_passphrase_quoted,
+        resolve_passphrase,
+    )
 
     env.globals["effective_size_mb"] = effective_size_mb
     env.globals["effective_fsoptions"] = effective_fsoptions
     env.globals["size_to_mb"] = size_to_mb
+    env.globals["resolve_passphrase"] = resolve_passphrase
+    env.globals["kickstart_passphrase_quoted"] = kickstart_passphrase_quoted
     return env
 
 
