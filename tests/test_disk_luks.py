@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from ks_gen.config import DiskLuks
-from ks_gen.disk_luks import resolve_passphrase
+from ks_gen.disk_luks import kickstart_passphrase_quoted, resolve_passphrase
 
 
 def test_resolve_passphrase_none_preset_returns_none():
@@ -43,3 +43,26 @@ def test_resolve_passphrase_from_empty_file_raises(tmp_path: Path):
     luks = DiskLuks.model_validate({"preset": "partial", "passphrase_file": str(keyfile)})
     with pytest.raises(ValueError, match=r"empty after whitespace strip"):
         resolve_passphrase(luks)
+
+
+def test_kickstart_passphrase_quoted_simple():
+    assert kickstart_passphrase_quoted("hunter2") == '"hunter2"'
+
+
+def test_kickstart_passphrase_quoted_escapes_backslash():
+    assert kickstart_passphrase_quoted("a\\b") == '"a\\\\b"'
+
+
+def test_kickstart_passphrase_quoted_escapes_double_quote():
+    assert kickstart_passphrase_quoted('he"llo') == '"he\\"llo"'
+
+
+def test_kickstart_passphrase_quoted_handles_unicode():
+    # Anaconda accepts UTF-8 in --passphrase=
+    assert kickstart_passphrase_quoted("pássphráse") == '"pássphráse"'
+
+
+def test_kickstart_passphrase_quoted_escapes_both():
+    # The order matters: escape backslash FIRST, then double-quote.
+    # Otherwise the backslash from escaping " would itself get escaped.
+    assert kickstart_passphrase_quoted('a"\\b') == '"a\\"\\\\b"'

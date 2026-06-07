@@ -22,3 +22,13 @@ def resolve_passphrase(luks: DiskLuks) -> str | None:
     if not content:
         raise ValueError(f"disk.luks.passphrase_file '{p}' is empty after whitespace strip")
     return content
+
+
+def kickstart_passphrase_quoted(passphrase: str) -> str:
+    """Escape and double-quote for kickstart's --passphrase= flag.
+
+    Backslash and double-quote are the only chars needing escape.
+    Order matters: escape backslash first, then double-quote.
+    """
+    escaped = passphrase.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
