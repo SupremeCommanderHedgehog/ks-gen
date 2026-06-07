@@ -25,8 +25,13 @@ class CollectedArfs:
 def probe_sudo(host: str, user: str, *, ssh_extra_opts: list[str]) -> None:
     result = ssh_exec(host, user, "sudo -n true", extra_opts=ssh_extra_opts)
     if result.exit_code != 0:
+        # exit_code != 0 from `sudo -n true` can mean: (a) sudo wants a password,
+        # (b) user is not in sudoers, or (c) sudo binary missing. We can't reliably
+        # distinguish without parsing stderr, so the message names the dominant
+        # cause and leaves the exit code for the operator to consult.
         raise SudoPromptError(
-            f"sudo prompt detected on {host} as {user}: passwordless sudo is required"
+            f"sudo -n true failed (exit {result.exit_code}) on {host} as {user}: "
+            f"passwordless sudo is required"
         )
 
 
