@@ -143,6 +143,22 @@ class DiskLayout(StrictModel):
                 f"(fstype=swap, mount unset); found {len(swap_lvs)}"
             )
 
+        names = [lv.name for lv in self.lvs]
+        if len(names) != len(set(names)):
+            seen: set[str] = set()
+            for n in names:
+                if n in seen:
+                    raise ValueError(f"disk.layout duplicate LV name: {n}")
+                seen.add(n)
+
+        mounts = [lv.mount for lv in self.lvs if lv.mount is not None]
+        if len(mounts) != len(set(mounts)):
+            seen_m: set[str] = set()
+            for m in mounts:
+                if m in seen_m:
+                    raise ValueError(f"disk.layout duplicate LV mount: {m}")
+                seen_m.add(m)
+
         return self
 
 
