@@ -1,0 +1,24 @@
+name: Documentation issue
+description: Report a documentation problem or gap
+title: "docs: <one-line summary>"
+labels: ["type:docs", "status:triage"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Affected document and section
+      placeholder: "MANUAL.md §3.2, README.md Quickstart, ..."
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: What's confusing, wrong, or missing?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix (optional)
+    validations:
+      required: false
