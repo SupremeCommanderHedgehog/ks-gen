@@ -926,8 +926,9 @@ verify host=h1.example.com user=ops at=2026-06-07T12:00:00Z
   ...
 ```
 
-Column widths are dynamic. `--format json` emits the same data as a
-JSON document.
+Column widths are dynamic. The `EXP` column is `yes` when the rule
+appears in the host's declared exceptions (so a failure is allowed),
+`no` otherwise. `--format json` emits the same data as a JSON document.
 
 #### Drift comparison
 
@@ -951,15 +952,17 @@ entirely (compliance-only mode).
 
 | Code | Meaning |
 |---|---|
-| 0 | All evaluated rules pass; no drift detected. |
+| 0 | All rules pass or are accounted for by declared exceptions (`expected_fail`); no `new_fail` or `regression`. |
 | 1 | Bad `--format` value (usage error). |
 | 2 | `host.yaml` invalid. |
 | 5 | `ssh` or `scp` not on `PATH`. |
 | 6 | At least one rule fails on the live host (`new_fail` or `regression`). |
 | 7 | Transport failure: ssh unreachable, sudo prompt, oscap not runnable, ARF parse error. |
 
-CI scripts can branch on these; code 6 in particular means the host is
-live but non-compliant — actionable for a remediation pass.
+Codes 3 and 4 are never emitted by `verify` (they're `gen`/`lint`-only —
+see §5.7 for the global table). CI scripts can branch on these; code 6
+in particular means the host is live but non-compliant — actionable for
+a remediation pass.
 
 #### Out of scope (v0.3)
 

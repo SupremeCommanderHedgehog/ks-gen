@@ -302,8 +302,10 @@ in Step 8.
 Expected: exit 0 and a summary line ending with `— CLEAN`. Any
 `new_fail` or `regression` rows mean the install didn't fully apply
 the intended state, or the host has drifted from the install-time
-baseline. See `MANUAL.md` §8.5 for exit codes and how to interpret
-each category.
+baseline. Action: rerun `ks-gen gen` against an updated `host.yaml`,
+reinstall, and re-verify; or, if a failure is intentional, add it to
+`host.yaml`'s `exceptions:` block. See `MANUAL.md` §8.5 for exit codes
+and how to interpret each category.
 
 ## Cleanup
 
