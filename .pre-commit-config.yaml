@@ -1,0 +1,42 @@
+# Local hook chain mirroring the CI workflow at .github/workflows/ci.yml.
+# Install once per checkout:  pre-commit install
+# Run on demand:               pre-commit run --all-files
+#
+# The ruff/mypy hooks shell out to the venv's installed binaries
+# (language: system), so what pre-commit runs is exactly what CI runs.
+# This requires the contributor to have run `pip install -e ".[dev]"`
+# in the active environment before committing.
+#
+# Mutating hooks (end-of-file-fixer, trailing-whitespace,
+# mixed-line-ending) are deliberately omitted — they want to rewrite
+# the tree on Windows CRLF checkouts, and CI doesn't auto-fix either.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff check
+        entry: ruff check src tests
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: ruff-format
+        name: ruff format --check
+        entry: ruff format --check src tests
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        pass_filenames: false
+        types: [python]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
