@@ -66,8 +66,7 @@ class DiskLvDef(StrictModel):
     def _encryption_deferred(cls, v: bool) -> bool:
         if v:
             raise ValueError(
-                "disk.layout.lvs[].encrypted=true requires the luks.preset "
-                "block (issue #7); not yet implemented."
+                "per-LV encryption is not supported; use disk.luks.preset for PV-level LUKS"
             )
         return v
 
@@ -255,6 +254,7 @@ class DiskLuks(StrictModel):
 class Disk(StrictModel):
     preset: DiskPreset | None = None
     layout: DiskLayout | None = None
+    luks: DiskLuks = Field(default_factory=DiskLuks)
     wipe: bool = True
     bootloader_password: str | None = None
 
@@ -545,5 +545,14 @@ class HostConfig(StrictModel):
                 "user.admin.sudo=nopasswd_yes: without a password, "
                 "password-required sudo cannot be satisfied, leaving the "
                 "admin unable to escalate privileges."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _minimal_preset_rejects_luks(self) -> HostConfig:
+        if self.disk.preset == DiskPreset.MINIMAL and self.disk.luks.preset != LuksPreset.NONE:
+            raise ValueError(
+                "disk.preset='minimal' has no LVM PV; disk.luks "
+                "requires disk.preset='stig_server' or disk.layout"
             )
         return self

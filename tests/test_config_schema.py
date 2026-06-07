@@ -460,13 +460,6 @@ def test_disk_lv_def_size_accepts_omitted():
     assert lv.size is None
 
 
-def test_disk_lv_def_encrypted_true_rejected():
-    from ks_gen.config import DiskLvDef
-
-    with pytest.raises(ValidationError, match=r"luks\.preset.*#7"):
-        DiskLvDef(name="root", mount="/", size="15G", encrypted=True)
-
-
 def test_disk_boot_part_defaults():
     from ks_gen.config import DiskBootPart
 
@@ -897,3 +890,101 @@ def test_disk_luks_tang_with_passphrase_ok():
     assert d.preset == LuksPreset.TANG
     assert d.tang is not None
     assert len(d.tang.servers) == 2
+
+
+def test_disk_default_has_luks_none():
+    from ks_gen.config import Disk, LuksPreset
+
+    d = Disk()
+    assert d.luks.preset == LuksPreset.NONE
+
+
+def test_disk_minimal_plus_luks_partial_rejected():
+    payload = {
+        "system": {"hostname": "x"},
+        "user": {
+            "admin": {
+                "name": "ops",
+                "authorized_keys": ["ssh-ed25519 A a@b"],
+                "sudo": "nopasswd_yes",
+            }
+        },
+        "disk": {
+            "preset": "minimal",
+            "luks": {"preset": "partial", "passphrase": "x"},
+        },
+    }
+    with pytest.raises(ValidationError, match=r"disk\.preset='minimal' has no LVM PV"):
+        HostConfig.model_validate(payload)
+
+
+def test_disk_minimal_plus_luks_tang_rejected():
+    payload = {
+        "system": {"hostname": "x"},
+        "user": {
+            "admin": {
+                "name": "ops",
+                "authorized_keys": ["ssh-ed25519 A a@b"],
+                "sudo": "nopasswd_yes",
+            }
+        },
+        "disk": {
+            "preset": "minimal",
+            "luks": {
+                "preset": "tang",
+                "passphrase": "fallback",
+                "tang": {"servers": _tang_server_dict(1)},
+            },
+        },
+    }
+    with pytest.raises(ValidationError, match=r"disk\.preset='minimal' has no LVM PV"):
+        HostConfig.model_validate(payload)
+
+
+def test_disk_stig_server_plus_luks_partial_ok():
+    payload = {
+        "system": {"hostname": "x"},
+        "user": {
+            "admin": {
+                "name": "ops",
+                "authorized_keys": ["ssh-ed25519 A a@b"],
+                "sudo": "nopasswd_yes",
+            }
+        },
+        "disk": {
+            "preset": "stig_server",
+            "luks": {"preset": "partial", "passphrase": "hunter2"},
+        },
+    }
+    cfg = HostConfig.model_validate(payload)
+    assert cfg.disk.luks.preset.value == "partial"
+
+
+def test_disk_layout_plus_luks_partial_ok():
+    payload = {
+        "system": {"hostname": "x"},
+        "user": {
+            "admin": {
+                "name": "ops",
+                "authorized_keys": ["ssh-ed25519 A a@b"],
+                "sudo": "nopasswd_yes",
+            }
+        },
+        "disk": {
+            "layout": {"lvs": _stig_layout_lvs()},
+            "luks": {"preset": "partial", "passphrase": "hunter2"},
+        },
+    }
+    cfg = HostConfig.model_validate(payload)
+    assert cfg.disk.luks.preset.value == "partial"
+    assert cfg.disk.layout is not None
+
+
+def test_disk_lv_def_encrypted_true_rejected_with_pv_level_message():
+    from ks_gen.config import DiskLvDef
+
+    with pytest.raises(
+        ValidationError,
+        match=r"per-LV encryption is not supported; use disk\.luks\.preset",
+    ):
+        DiskLvDef(name="root", mount="/", size="15G", encrypted=True)
