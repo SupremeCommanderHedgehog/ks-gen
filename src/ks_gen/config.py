@@ -94,6 +94,19 @@ _DEFAULT_FSOPTIONS: dict[str, str] = {
 }
 
 
+_STIG_REQUIRED_LV_MOUNTPOINTS: frozenset[str] = frozenset(
+    {
+        "/",
+        "/home",
+        "/tmp",
+        "/var",
+        "/var/log",
+        "/var/log/audit",
+        "/var/tmp",
+    }
+)
+
+
 class DiskBootPart(StrictModel):
     size: str = Field(default="1G", pattern=r"^\d+(M|G)$")
     fstype: Literal["xfs", "ext4"] = "xfs"
@@ -111,6 +124,24 @@ class DiskLayout(StrictModel):
     efi: DiskEfiPart = Field(default_factory=DiskEfiPart)
     vg_name: str = "vg_root"
     lvs: list[DiskLvDef] = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_layout(self) -> DiskLayout:
+        lv_mounts = {lv.mount for lv in self.lvs if lv.mount is not None}
+
+        missing = _STIG_REQUIRED_LV_MOUNTPOINTS - lv_mounts
+        if missing:
+            mount = sorted(missing)[0]
+            raise ValueError(f"disk.layout missing STIG-required mountpoint: {mount}")
+
+        swap_lvs = [lv for lv in self.lvs if lv.fstype == "swap"]
+        if len(swap_lvs) != 1:
+            raise ValueError(
+                f"disk.layout requires exactly one swap LV "
+                f"(fstype=swap, mount unset); found {len(swap_lvs)}"
+            )
+
+        return self
 
 
 class Disk(StrictModel):
