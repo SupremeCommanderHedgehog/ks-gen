@@ -72,6 +72,18 @@ class DiskLvDef(StrictModel):
         return v
 
 
+_DEFAULT_LV_SIZES: dict[str | None, str] = {
+    "/": "15G",
+    "/home": "5G",
+    "/tmp": "3G",
+    "/var": "10G",
+    "/var/log": "5G",
+    "/var/log/audit": "3G",
+    "/var/tmp": "2G",
+    None: "recommended",  # swap LV
+}
+
+
 class Disk(StrictModel):
     preset: DiskPreset = DiskPreset.STIG_SERVER
     wipe: bool = True
