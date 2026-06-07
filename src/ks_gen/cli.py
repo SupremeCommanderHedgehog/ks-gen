@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json as _json
+import shlex
+import tempfile
 from pathlib import Path
 
 import typer
@@ -10,6 +12,10 @@ from ks_gen.iso import IsoBuildError, build_iso
 from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
 from ks_gen.registry import load_rules
+from ks_gen.verify import run_verify
+from ks_gen.verify.errors import VerifyError
+from ks_gen.verify.report import render_json, render_table
+from ks_gen.verify.ssh import check_tools
 from ks_gen.wizard import WizardError, run_wizard, write_initial
 from ks_gen.writer import build_bundle, write_bundle
 
@@ -138,6 +144,73 @@ def iso_cmd(
         typer.echo(str(e), err=True)
         raise typer.Exit(code=int(ExitCode.TOOL_MISSING)) from None
     typer.echo(f"Wrote {out}")
+
+
+@app.command(
+    name="verify",
+    help="Re-run oscap on a deployed host and reconcile against host.yaml.",
+)
+def verify_cmd(
+    host: str = typer.Option(..., "--host"),
+    config: Path = typer.Option(  # noqa: B008
+        ..., "--config", "-c", exists=True, dir_okay=False, readable=True
+    ),
+    user: str | None = typer.Option(None, "--user"),
+    ssh_opts: str = typer.Option("", "--ssh-opts"),
+    format_: str = typer.Option("table", "--format"),
+    arf_out: Path | None = typer.Option(  # noqa: B008
+        None, "--arf-out", file_okay=False
+    ),
+    keep_arf: bool = typer.Option(False, "--keep-arf"),
+    no_drift: bool = typer.Option(False, "--no-drift"),
+    timeout: int = typer.Option(600, "--timeout"),
+) -> None:
+    try:
+        cfg = load_host_config(config, sets=[])
+    except ConfigError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=int(e.exit_code)) from None
+
+    try:
+        check_tools()
+    except VerifyError as e:
+        typer.echo(f"ks-gen verify: {e}", err=True)
+        raise typer.Exit(code=int(e.exit_code)) from None
+
+    resolved_user = user or cfg.user.admin.name
+    extra_opts = shlex.split(ssh_opts) if ssh_opts else []
+
+    def _do(workdir: Path) -> None:
+        try:
+            report = run_verify(
+                cfg=cfg,
+                host=host,
+                user=resolved_user,
+                workdir=workdir,
+                no_drift=no_drift,
+                ssh_extra_opts=extra_opts,
+                timeout=timeout,
+            )
+        except VerifyError as e:
+            label = type(e).__name__.removesuffix("Error").lower()
+            typer.echo(f"ks-gen verify: transport failure: {label}: {e}", err=True)
+            raise typer.Exit(code=int(e.exit_code)) from None
+
+        if format_ == "json":
+            typer.echo(render_json(report))
+        else:
+            typer.echo(render_table(report))
+
+        if not report.is_clean:
+            raise typer.Exit(code=int(ExitCode.VERIFY_FAIL))
+
+    if arf_out is not None or keep_arf:
+        target = arf_out or Path(tempfile.mkdtemp(prefix="ksgen-verify-"))
+        target.mkdir(parents=True, exist_ok=True)
+        _do(target)
+    else:
+        with tempfile.TemporaryDirectory(prefix="ksgen-verify-") as tmpdir:
+            _do(Path(tmpdir))
 
 
 if __name__ == "__main__":
