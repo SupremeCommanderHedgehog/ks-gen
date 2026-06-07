@@ -368,8 +368,8 @@ STIG-required mountpoints (`/`, `/home`, `/tmp`, `/var`, `/var/log`,
 `/var/log/audit`, `/var/tmp`) are enforced at config-load — a layout
 missing any of them fails with a specific error.
 
-Encryption is not yet supported via the layout block (issue #7 will
-add LUKS presets).
+Per-LV encryption (`lvs[].encrypted: true`) is not supported — use the
+`disk.luks` block below for PV-level LUKS that covers all LVs.
 
 #### `disk.luks` (PV-level LUKS encryption)
 
