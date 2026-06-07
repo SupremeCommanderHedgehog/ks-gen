@@ -23,6 +23,7 @@ zerombr
 clearpart --all --initlabel
 {% endif -%}
 
+{# TODO(Task 13): cfg.disk.preset is now Optional — guard with {% if cfg.disk.layout %} else preset path. Without the guard, layout-only configs AttributeError here. #}
 {% include 'partials/partitioning_' ~ cfg.disk.preset.value ~ '.j2' %}
 
 services --enabled=chronyd,firewalld,auditd,rsyslog,sshd
