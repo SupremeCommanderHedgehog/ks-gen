@@ -173,3 +173,51 @@ def test_skeleton_jinja_env_exposes_disk_luks_helpers():
     env = _env()
     assert "resolve_passphrase" in env.globals
     assert "kickstart_passphrase_quoted" in env.globals
+
+
+def test_skeleton_luks_macro_none_emits_empty():
+    from ks_gen.config import AdminUser, HostConfig, System, User
+    from ks_gen.skeleton import _env
+
+    cfg = HostConfig(
+        system=System(hostname="x"),
+        user=User(
+            admin=AdminUser(
+                name="ops",
+                authorized_keys=["ssh-ed25519 A a@b"],
+                sudo="nopasswd_yes",
+            )
+        ),
+    )
+    env = _env()
+    tmpl = env.from_string(
+        "{% from 'partials/_luks_flags.j2' import luks_pv_flags %}"
+        "BEFORE{{ luks_pv_flags(cfg) }}AFTER"
+    )
+    assert tmpl.render(cfg=cfg) == "BEFOREAFTER"
+
+
+def test_skeleton_luks_macro_partial_emits_flags():
+    from ks_gen.config import AdminUser, Disk, DiskLuks, HostConfig, System, User
+    from ks_gen.skeleton import _env
+
+    cfg = HostConfig(
+        system=System(hostname="x"),
+        user=User(
+            admin=AdminUser(
+                name="ops",
+                authorized_keys=["ssh-ed25519 A a@b"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        disk=Disk(luks=DiskLuks.model_validate({"preset": "partial", "passphrase": "hunter2"})),
+    )
+    env = _env()
+    tmpl = env.from_string(
+        "{% from 'partials/_luks_flags.j2' import luks_pv_flags %}"
+        "BEFORE{{ luks_pv_flags(cfg) }}AFTER"
+    )
+    assert (
+        tmpl.render(cfg=cfg)
+        == 'BEFORE --encrypted --luks-version=luks2 --passphrase="hunter2"AFTER'
+    )
