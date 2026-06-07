@@ -408,3 +408,57 @@ def test_reboot_window_with_only_monthly_allowed():
     }
     cfg = HostConfig.model_validate(payload)
     assert cfg.overrides.unattended_updates.reboot_window.enable is True
+
+
+def test_disk_lv_def_minimal_valid():
+    from ks_gen.config import DiskLvDef
+
+    lv = DiskLvDef(name="root", mount="/", size="15G")
+    assert lv.name == "root"
+    assert lv.mount == "/"
+    assert lv.size == "15G"
+    assert lv.fstype == "xfs"
+    assert lv.fsoptions is None
+    assert lv.encrypted is False
+
+
+def test_disk_lv_def_name_rejects_special_chars():
+    from ks_gen.config import DiskLvDef
+
+    with pytest.raises(ValidationError):
+        DiskLvDef(name="root/path", mount="/", size="15G")
+
+
+def test_disk_lv_def_size_rejects_bare_number():
+    from ks_gen.config import DiskLvDef
+
+    with pytest.raises(ValidationError):
+        DiskLvDef(name="root", mount="/", size="15")
+
+
+def test_disk_lv_def_size_rejects_unknown_unit():
+    from ks_gen.config import DiskLvDef
+
+    with pytest.raises(ValidationError):
+        DiskLvDef(name="root", mount="/", size="15K")
+
+
+def test_disk_lv_def_size_accepts_recommended():
+    from ks_gen.config import DiskLvDef
+
+    lv = DiskLvDef(name="swap", size="recommended", fstype="swap")
+    assert lv.size == "recommended"
+
+
+def test_disk_lv_def_size_accepts_omitted():
+    from ks_gen.config import DiskLvDef
+
+    lv = DiskLvDef(name="root", mount="/")
+    assert lv.size is None
+
+
+def test_disk_lv_def_encrypted_true_rejected():
+    from ks_gen.config import DiskLvDef
+
+    with pytest.raises(ValidationError, match=r"luks\.preset.*#7"):
+        DiskLvDef(name="root", mount="/", size="15G", encrypted=True)

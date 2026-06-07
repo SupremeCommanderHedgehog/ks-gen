@@ -53,6 +53,25 @@ class DiskPreset(StrEnum):
     CUSTOM = "custom"
 
 
+class DiskLvDef(StrictModel):
+    name: str = Field(..., min_length=1, pattern=r"^[a-zA-Z0-9_-]+$")
+    mount: str | None = None
+    size: str | None = Field(default=None, pattern=r"^\d+(M|G|T)$|^recommended$")
+    fstype: Literal["xfs", "ext4", "swap"] = "xfs"
+    fsoptions: str | None = None
+    encrypted: bool = False
+
+    @field_validator("encrypted")
+    @classmethod
+    def _encryption_deferred(cls, v: bool) -> bool:
+        if v:
+            raise ValueError(
+                "disk.layout.lvs[].encrypted=true requires the luks.preset "
+                "block (issue #7); not yet implemented."
+            )
+        return v
+
+
 class Disk(StrictModel):
     preset: DiskPreset = DiskPreset.STIG_SERVER
     wipe: bool = True
