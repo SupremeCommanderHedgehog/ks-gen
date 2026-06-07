@@ -1,0 +1,19 @@
+system:
+  hostname: layout01.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYlayout ops@bastion"
+    sudo: nopasswd_yes
+disk:
+  layout:
+    lvs:
+      - {name: root, mount: /}
+      - {name: home, mount: /home}
+      - {name: tmp, mount: /tmp}
+      - {name: var, mount: /var}
+      - {name: varlog, mount: /var/log}
+      - {name: varlogaudit, mount: /var/log/audit}
+      - {name: vartmp, mount: /var/tmp}
+      - {name: swap, fstype: swap}
