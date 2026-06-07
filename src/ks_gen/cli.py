@@ -155,22 +155,44 @@ def verify_cmd(
     config: Path = typer.Option(  # noqa: B008
         ..., "--config", "-c", exists=True, dir_okay=False, readable=True
     ),
-    user: str | None = typer.Option(None, "--user"),
-    ssh_opts: str = typer.Option("", "--ssh-opts"),
-    format_: str = typer.Option("table", "--format"),
-    arf_out: Path | None = typer.Option(  # noqa: B008
-        None, "--arf-out", file_okay=False
+    user: str | None = typer.Option(
+        None, "--user", help="SSH login user; defaults to cfg.user.admin.name."
     ),
-    keep_arf: bool = typer.Option(False, "--keep-arf"),
-    no_drift: bool = typer.Option(False, "--no-drift"),
-    timeout: int = typer.Option(600, "--timeout"),
+    ssh_opts: str = typer.Option(
+        "",
+        "--ssh-opts",
+        help="Extra args appended to every ssh/scp invocation (shell-quoted).",
+    ),
+    format_: str = typer.Option("table", "--format", help="Output format: table | json."),
+    arf_out: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--arf-out",
+        file_okay=False,
+        help="Persist pulled ARFs in this directory.",
+    ),
+    keep_arf: bool = typer.Option(
+        False,
+        "--keep-arf",
+        help="Persist pulled ARFs in a new system temp directory (path is echoed).",
+    ),
+    no_drift: bool = typer.Option(
+        False, "--no-drift", help="Skip the install-time ARF probe; compliance-only."
+    ),
+    timeout: int = typer.Option(600, "--timeout", help="oscap run timeout in seconds."),
 ) -> None:
+    if format_ not in ("table", "json"):
+        typer.echo(f"--format must be 'table' or 'json', got: {format_!r}", err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE))
+
     try:
         cfg = load_host_config(config, sets=[])
     except ConfigError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(code=int(e.exit_code)) from None
 
+    # ToolMissingError (exit_code=TOOL_MISSING=5) is caught here so it doesn't
+    # fall through to the transport-failure handler inside _do. Don't fold this
+    # handler into _do — that would relabel "ssh not on PATH" as transport.
     try:
         check_tools()
     except VerifyError as e:
@@ -192,6 +214,9 @@ def verify_cmd(
                 timeout=timeout,
             )
         except VerifyError as e:
+            # Only transport-class errors reach this handler (ToolMissingError
+            # was caught earlier). Keep the "transport failure:" prefix
+            # consistent so operator scripts can grep for it.
             label = type(e).__name__.removesuffix("Error").lower()
             typer.echo(f"ks-gen verify: transport failure: {label}: {e}", err=True)
             raise typer.Exit(code=int(e.exit_code)) from None
@@ -207,6 +232,8 @@ def verify_cmd(
     if arf_out is not None or keep_arf:
         target = arf_out or Path(tempfile.mkdtemp(prefix="ksgen-verify-"))
         target.mkdir(parents=True, exist_ok=True)
+        if arf_out is None:
+            typer.echo(f"ks-gen verify: ARFs persisted under {target}", err=True)
         _do(target)
     else:
         with tempfile.TemporaryDirectory(prefix="ksgen-verify-") as tmpdir:
