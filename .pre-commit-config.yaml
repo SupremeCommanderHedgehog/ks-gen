@@ -2,28 +2,35 @@
 # Install once per checkout:  pre-commit install
 # Run on demand:               pre-commit run --all-files
 #
-# Hooks here are deliberately non-mutating to avoid surprise tree-wide
-# rewrites on Windows checkouts (CRLF line endings). The CI workflow
-# also does not auto-fix; if you want trailing-whitespace and EOL
-# fixes locally, run them via your editor.
+# The ruff/mypy hooks shell out to the venv's installed binaries
+# (language: system), so what pre-commit runs is exactly what CI runs.
+# This requires the contributor to have run `pip install -e ".[dev]"`
+# in the active environment before committing.
+#
+# Mutating hooks (end-of-file-fixer, trailing-whitespace,
+# mixed-line-ending) are deliberately omitted — they want to rewrite
+# the tree on Windows CRLF checkouts, and CI doesn't auto-fix either.
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.7.4
+  - repo: local
     hooks:
       - id: ruff
-        args: [src, tests]
-      - id: ruff-format
-        args: [--check, src, tests]
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
-    hooks:
-      - id: mypy
-        args: [--config-file=pyproject.toml]
-        additional_dependencies:
-          - pydantic>=2.6
-          - types-PyYAML
-          - typer>=0.12
+        name: ruff check
+        entry: ruff check src tests
+        language: system
         pass_filenames: false
+        types: [python]
+      - id: ruff-format
+        name: ruff format --check
+        entry: ruff format --check src tests
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        pass_filenames: false
+        types: [python]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
