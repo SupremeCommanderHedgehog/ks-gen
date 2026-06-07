@@ -36,15 +36,22 @@ def render_table(report: VerifyReport) -> str:
         return "\n".join(lines) + "\n"
 
     rule_w = max(len(r.rule_id) for r in visible)
-    cat_w = max(len(r.category) for r in visible)
+    cat_w = max(len("CATEGORY"), max(len(r.category) for r in visible))
+    cur_w = max(len("CURRENT"), max(len(r.current) for r in visible))
+    inst_w = max(
+        len("INSTALL"),
+        max(len(r.install) if r.install is not None else 1 for r in visible),
+    )
     lines.append("")
-    lines.append(f"  {'CATEGORY':<{cat_w}}  {'CURRENT':<8}  {'INSTALL':<8}  EXP  RULE")
+    lines.append(f"  {'CATEGORY':<{cat_w}}  {'CURRENT':<{cur_w}}  {'INSTALL':<{inst_w}}  EXP  RULE")
     for r in visible:
         inst = r.install if r.install is not None else "-"
         exp = "yes" if r.expected else "no "
-        lines.append(
-            f"  {r.category:<{cat_w}}  {r.current:<8}  {inst:<8}  {exp}  {r.rule_id:<{rule_w}}"
-        )
+        cat = f"{r.category:<{cat_w}}"
+        cur = f"{r.current:<{cur_w}}"
+        instc = f"{inst:<{inst_w}}"
+        rule = f"{r.rule_id:<{rule_w}}"
+        lines.append(f"  {cat}  {cur}  {instc}  {exp}  {rule}")
     return "\n".join(lines) + "\n"
 
 

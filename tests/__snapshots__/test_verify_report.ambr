@@ -13,8 +13,8 @@
     NOTE: drift comparison skipped — install-time ARF not present on host
     summary: clean=0 expected_fail=0 new_fail=1 regression=0 incomplete=0 — FAILURES
   
-    CATEGORY  CURRENT   INSTALL   EXP  RULE
-    new_fail  fail      -         no   xccdf_org.ssgproject.content_rule_a
+    CATEGORY  CURRENT  INSTALL  EXP  RULE
+    new_fail  fail     -        no   xccdf_org.ssgproject.content_rule_a
   
   '''
 # ---
@@ -23,11 +23,11 @@
   verify host=h1.example.com user=opsadmin at=2026-06-07T12:00:00Z
     summary: clean=1 expected_fail=1 new_fail=1 regression=1 incomplete=1 — FAILURES
   
-    CATEGORY       CURRENT   INSTALL   EXP  RULE
-    new_fail       fail      fail      no   xccdf_org.ssgproject.content_rule_b
-    regression     fail      pass      no   xccdf_org.ssgproject.content_rule_c
-    expected_fail  fail      pass      yes  xccdf_org.ssgproject.content_rule_d
-    incomplete     error     pass      no   xccdf_org.ssgproject.content_rule_e
+    CATEGORY       CURRENT  INSTALL  EXP  RULE
+    new_fail       fail     fail     no   xccdf_org.ssgproject.content_rule_b
+    regression     fail     pass     no   xccdf_org.ssgproject.content_rule_c
+    expected_fail  fail     pass     yes  xccdf_org.ssgproject.content_rule_d
+    incomplete     error    pass     no   xccdf_org.ssgproject.content_rule_e
   
   '''
 # ---
