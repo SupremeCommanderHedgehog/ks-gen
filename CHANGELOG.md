@@ -10,7 +10,7 @@ the catalog drives the audit story.
   chrooted `oscap xccdf eval --remediate` invocation now passes
   `--fetch-remote-resources`, so STIG rules whose OVAL definitions
   reference the AlmaLinux CVE feed
-  (`security.almalinux.org/oval/org.almalinux.alsa-9.xml.bz2`) run
+  (`https://security.almalinux.org/oval/org.almalinux.alsa-9.xml.bz2`) run
   at install time instead of silently skipping. Air-gapped
   (`hd:LABEL=`) installs will log a failed fetch but complete
   normally; OVAL-dependent rules skip cleanly. See MANUAL.md §10.

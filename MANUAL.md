@@ -960,7 +960,7 @@ sudo firewall-cmd --list-all          # confirm the port is in the zone
 
 ### "ks-gen lint failed on my ks.cfg"
 
-The four most common lint failures:
+Common lint failures:
 
 - **`missing: authorized_keys write in %post`** — Something stripped
   the admin user block. Either your `custom_post` overwrites it, or
@@ -1027,9 +1027,10 @@ install-time network access, that fetch fails — the eval wrapper
 the affected OVAL-dependent rules skip the same way they did in
 v0.1.
 
-If you need CVE-tied coverage on an air-gapped install, the rules
-fire on the first post-install run against an updated SSG content
-package — there is no installer-side workaround in v0.2.
+If you need CVE-tied coverage on an air-gapped install, re-run
+`oscap xccdf eval` manually after the system boots with network
+access and an updated SSG content package — there is no
+installer-side workaround in v0.2.
 
 If the failed fetch appears on an install that DOES have network
 access (HTTP delivery, working DNS, no egress filtering of
