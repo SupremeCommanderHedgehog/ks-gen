@@ -115,3 +115,24 @@ def test_lint_detects_missing_hd_cp_line(tmp_path):
     report = lint_kickstart(ks)
     assert not report.ok
     assert any("hd: cp from /run/install/repo in oscap fetch case" in f for f in report.failures)
+
+
+def test_lint_detects_missing_fetch_remote_resources(tmp_path):
+    out = _generate(tmp_path)
+    ks = out / "ks.cfg"
+    text = ks.read_text(encoding="utf-8")
+    # Delete the --fetch-remote-resources continuation line so the eval
+    # invocation no longer pulls OVAL CVE feeds at install time.
+    text = text.replace(
+        "  --fetch-remote-resources \\\n",
+        "",
+    )
+    assert "--fetch-remote-resources" not in text, (
+        "replace was a no-op; template indentation may have changed"
+    )
+    ks.write_text(text, encoding="utf-8")
+    report = lint_kickstart(ks)
+    assert not report.ok
+    assert any(
+        "missing: --fetch-remote-resources flag in %post oscap block" in f for f in report.failures
+    )
