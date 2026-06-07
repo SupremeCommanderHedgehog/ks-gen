@@ -1,0 +1,29 @@
+system:
+  hostname: luks03.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYluks3 ops@bastion"
+    sudo: nopasswd_yes
+disk:
+  layout:
+    lvs:
+      - {name: root, mount: /}
+      - {name: home, mount: /home}
+      - {name: tmp, mount: /tmp}
+      - {name: var, mount: /var}
+      - {name: varlog, mount: /var/log}
+      - {name: varlogaudit, mount: /var/log/audit}
+      - {name: vartmp, mount: /var/tmp}
+      - {name: swap, fstype: swap}
+  luks:
+    preset: tang
+    passphrase: fallback
+    tang:
+      servers:
+        - url: https://tang1.example.com
+          thumbprint: xK3HFGm-AVOaJVlA8oFAo7uMcrJBhFCdwq8WX8gqXJU
+        - url: https://tang2.example.com
+          thumbprint: yL4IGHn-BWPbKWmA9pBp8vNdsKChiGDexr9XY9hrYKV
+      threshold: 1

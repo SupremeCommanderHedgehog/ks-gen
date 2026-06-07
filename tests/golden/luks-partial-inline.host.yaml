@@ -1,0 +1,13 @@
+system:
+  hostname: luks01.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYluks ops@bastion"
+    sudo: nopasswd_yes
+disk:
+  preset: stig_server
+  luks:
+    preset: partial
+    passphrase: hunter2
