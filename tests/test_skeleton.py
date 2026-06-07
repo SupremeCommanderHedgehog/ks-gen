@@ -100,3 +100,12 @@ def test_skeleton_emits_oscap_post_block(minimal_cfg):
         "missing SSG datastream path"
     )
     assert oscap_body.count("%end") == 2, "exactly two %end markers (fetch and eval blocks)"
+
+
+def test_skeleton_jinja_env_exposes_disk_layout_helpers():
+    from ks_gen.skeleton import _env
+
+    env = _env()
+    assert "effective_size_mb" in env.globals
+    assert "effective_fsoptions" in env.globals
+    assert "size_to_mb" in env.globals
