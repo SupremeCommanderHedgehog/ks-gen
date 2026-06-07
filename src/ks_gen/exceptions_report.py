@@ -7,6 +7,30 @@ from ks_gen.config import HostConfig
 from ks_gen.rules._types import Rule
 
 
+def expected_failure_rule_ids(cfg: HostConfig) -> set[str]:
+    """Return the set of XCCDF rule ids tailored out by host.yaml.
+
+    Sources: each applicable rule's exception_entry().stig_rules_disabled,
+    plus every declared exception in cfg.exceptions. Used by both the
+    exceptions.md renderer and `ks-gen verify` (to know which oscap failures
+    are expected vs. actionable).
+    """
+    from ks_gen.registry import load_rules
+    from ks_gen.topo import topo_sort
+
+    ids: set[str] = set()
+    for r in topo_sort(load_rules()):
+        if not r.applies(cfg):
+            continue
+        entry = r.exception_entry(cfg)
+        if entry is None:
+            continue
+        ids.update(entry.stig_rules_disabled)
+    for ex in cfg.exceptions:
+        ids.update(ex.stig_rules_disabled)
+    return ids
+
+
 def render_exceptions_md(cfg: HostConfig, rules: Iterable[Rule]) -> str:
     rules_list = list(rules)
     entries = [(r, r.exception_entry(cfg)) for r in rules_list]
