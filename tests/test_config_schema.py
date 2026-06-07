@@ -709,3 +709,90 @@ def test_disk_preset_custom_rejected_with_layout_message():
 
     with pytest.raises(ValidationError, match=r"disk\.layout block"):
         Disk.model_validate({"preset": "custom"})
+
+
+def test_luks_preset_values():
+    from ks_gen.config import LuksPreset
+
+    assert LuksPreset.NONE.value == "none"
+    assert LuksPreset.PARTIAL.value == "partial"
+    assert LuksPreset.TANG.value == "tang"
+
+
+def test_tang_server_valid():
+    from ks_gen.config import TangServer
+
+    s = TangServer(
+        url="https://tang1.example.com",
+        thumbprint="xK3HFGm-AVOaJVlA8oFAo7uMcrJBhFCdwq8WX8gqXJU",
+    )
+    assert s.url == "https://tang1.example.com"
+
+
+def test_tang_server_rejects_non_http_url():
+    from ks_gen.config import TangServer
+
+    with pytest.raises(ValidationError):
+        TangServer(
+            url="ftp://tang1.example.com",
+            thumbprint="xK3HFGm-AVOaJVlA8oFAo7uMcrJBhFCdwq8WX8gqXJU",
+        )
+
+
+def test_tang_server_thumbprint_too_short_rejected():
+    from ks_gen.config import TangServer
+
+    with pytest.raises(ValidationError):
+        TangServer(url="https://tang1.example.com", thumbprint="short")
+
+
+def test_tang_server_thumbprint_invalid_chars_rejected():
+    from ks_gen.config import TangServer
+
+    with pytest.raises(ValidationError):
+        TangServer(
+            url="https://tang1.example.com",
+            thumbprint="invalid!@#chars in thumbprint here xx",
+        )
+
+
+def _tang_server_dict(n: int = 1) -> list[dict]:
+    """Helper: returns n valid tang server dicts."""
+    return [
+        {
+            "url": f"https://tang{i}.example.com",
+            "thumbprint": "xK3HFGm-AVOaJVlA8oFAo7uMcrJBhFCdwq8WX8gqXJ" + chr(ord("A") + i),
+        }
+        for i in range(n)
+    ]
+
+
+def test_tang_default_threshold_is_one():
+    from ks_gen.config import Tang
+
+    t = Tang.model_validate({"servers": _tang_server_dict(2)})
+    assert t.threshold == 1
+
+
+def test_tang_rejects_empty_servers():
+    from ks_gen.config import Tang
+
+    with pytest.raises(ValidationError):
+        Tang.model_validate({"servers": []})
+
+
+def test_tang_threshold_exceeds_servers_rejected():
+    from ks_gen.config import Tang
+
+    with pytest.raises(
+        ValidationError,
+        match=r"threshold \(2\) exceeds servers count \(1\)",
+    ):
+        Tang.model_validate({"servers": _tang_server_dict(1), "threshold": 2})
+
+
+def test_tang_threshold_equal_servers_ok():
+    from ks_gen.config import Tang
+
+    t = Tang.model_validate({"servers": _tang_server_dict(2), "threshold": 2})
+    assert t.threshold == 2
