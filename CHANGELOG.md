@@ -3,6 +3,53 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.4.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.3.0...v0.4.0) (2026-06-07)
+
+
+### Features
+
+* **config:** add DiskBootPart and DiskEfiPart models ([efb5ac7](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/efb5ac730ffc91818b1978979572471929a2de21)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **config:** add DiskLayout basic schema ([1422ffd](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1422ffd2219059878788a7f63fafbe96a8b71d9e)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **config:** add DiskLvDef model ([0ab7d36](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/0ab7d36196d2892a76eb3c38fbf7016023a6ef4a)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **config:** Disk.preset becomes Optional, mutually exclusive with layout ([5ac9892](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/5ac989296d37a28c5d5aef8225d9103a2b8c6e8d)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **config:** DiskLayout rejects duplicate LV names and mounts ([87b7c07](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/87b7c07d20c0ca7eaeba435a17d1be023b98bff0)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **config:** DiskLayout validates required mountpoints + swap cardinality ([ddf4351](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/ddf435149591d08197059799d9c80b167bb71913)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **config:** DiskLayout validates swap consistency and custom-mount sizes ([17d95ee](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/17d95ee5fa94252444814e384a65ace812ee3e65)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **disk_layout:** effective_fsoptions helper + STIG defaults ([108a170](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/108a170f1480d6927c493cafb45e889f8eb3b225)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **disk_layout:** effective_size_mb helper + LV size defaults ([fd08e24](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/fd08e24c12991530cfe21bdd2ff139816bdce72a)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **disk_layout:** size_to_mb helper ([1608e9f](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1608e9fa5e1cd8b13778b5fdc47c119a65778f49)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **skeleton:** register disk_layout helpers as Jinja globals ([f362df5](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/f362df544ed769eb475b35ff27ba96d2ffb4d9a3)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **templates:** partitioning_layout.j2 partial + selector ([19ab934](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/19ab9348126631cd57ee5f8831c592a6c7405903)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+
+
+### Bug Fixes
+
+* **templates:** preserve newlines between logvol lines in partitioning_layout.j2 ([0a33ec1](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/0a33ec176054570bfce9cc1b75550d1c948bf4df)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+
+
+### Refactoring
+
+* **disk_layout:** delegate effective_size_mb to size_to_mb, lift T unit ([6daa983](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/6daa9837e0f9bf764acf456468ded23d0cc37687)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+
+
+### Documentation
+
+* add SECURITY, CONTRIBUTING, CODE_OF_CONDUCT ([c015ac1](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/c015ac1a779be26a86a9b759e70ee58c8f71a61d))
+* **config:** explain mode='before' rationale + breadcrumb for Task 13 ([d8bb5ba](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/d8bb5baeaa41c6a0adc3161516be33249692fe6d)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* fix going-public.md trigger-line count for CodeQL activation ([7b3cd9e](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/7b3cd9e8075d5edf924d28157f4f2caa9628aecf))
+* **github:** add issue forms and PR template ([2b31cd2](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/2b31cd27ef64f995d10318c03eee2946c439360a))
+* going-public runbook for the visibility flip ([6a28a6e](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/6a28a6e724f432eadbd14e577ec94913c8288f04))
+* **going-public:** note Code Scanning prereq for codeql smoke-test ([bcbcfbf](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/bcbcfbfbef9aa347f57380566cff1e827063cb44))
+* **manual:** document disk.layout block ([14f246b](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/14f246ba74993c13b07951e8912274e7a640239f)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **manual:** nest disk.layout under §4.4 as H4 ([75f49c9](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/75f49c9a273d09591e7267839e2324d48512e8e1)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* note Integration-actor bypass limit on personal-account repos ([a002171](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/a0021716b32e6250431ec294e5540f1b370c2098))
+* **plan:** github-setup implementation plan (PR-A foundation + PR-B automation) ([771c8dc](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/771c8dcb3c3d20c5965d827a6a06f9ca7afeee25))
+* **plans:** disk.layout block implementation plan ([e552392](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/e552392054b83132787f400f34c45bec6c3840d0)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **readme:** add CI, license, Python, release, issues badges ([f0fae1f](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/f0fae1f95be067a7c13427e07bb0e66d9e1326b6))
+* **spec:** github setup — public-readiness, security, automation ([e26d3cd](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/e26d3cd56913fe3c1dcdb91e702c1d722838904a))
+* **specs:** disk.layout block design ([dd69aec](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/dd69aec9869d6d294bea1d587828767167f70f32)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+* **templates:** explain the trim_blocks workaround + drop unused snapshot arg ([613ab13](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/613ab13c59d8ff1870c1c5799c0bd71086c781c9)), closes [#8](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/8)
+
 ## [Unreleased]
 
 ### Added
