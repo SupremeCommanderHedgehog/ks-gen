@@ -499,3 +499,49 @@ def test_disk_efi_part_rejects_T_unit():
 
     with pytest.raises(ValidationError):
         DiskEfiPart(size="2T")
+
+
+def _stig_layout_lvs():
+    """Helper: returns the minimal STIG LV list (used by several layout tests)."""
+    return [
+        {"name": "root", "mount": "/"},
+        {"name": "home", "mount": "/home"},
+        {"name": "tmp", "mount": "/tmp"},
+        {"name": "var", "mount": "/var"},
+        {"name": "varlog", "mount": "/var/log"},
+        {"name": "varlogaudit", "mount": "/var/log/audit"},
+        {"name": "vartmp", "mount": "/var/tmp"},
+        {"name": "swap", "fstype": "swap"},
+    ]
+
+
+def test_disk_layout_minimal_valid():
+    from ks_gen.config import DiskLayout
+
+    layout = DiskLayout.model_validate({"lvs": _stig_layout_lvs()})
+    assert layout.vg_name == "vg_root"
+    assert layout.ondisk is None
+    assert len(layout.lvs) == 8
+    assert layout.boot.size == "1G"
+    assert layout.efi.size == "1G"
+
+
+def test_disk_layout_ondisk_with_dev_prefix_rejected():
+    from ks_gen.config import DiskLayout
+
+    with pytest.raises(ValidationError):
+        DiskLayout.model_validate({"ondisk": "/dev/sda", "lvs": _stig_layout_lvs()})
+
+
+def test_disk_layout_ondisk_accepts_plain_basename():
+    from ks_gen.config import DiskLayout
+
+    layout = DiskLayout.model_validate({"ondisk": "nvme0n1", "lvs": _stig_layout_lvs()})
+    assert layout.ondisk == "nvme0n1"
+
+
+def test_disk_layout_empty_lvs_rejected():
+    from ks_gen.config import DiskLayout
+
+    with pytest.raises(ValidationError):
+        DiskLayout.model_validate({"lvs": []})
