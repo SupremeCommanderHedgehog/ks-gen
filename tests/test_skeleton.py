@@ -90,6 +90,9 @@ def test_skeleton_emits_oscap_post_block(minimal_cfg):
         "missing xml sentinel check in eval block"
     )
     assert "oscap xccdf eval --remediate" in eval_body, "missing oscap remediation invocation"
+    assert "--fetch-remote-resources" in eval_body, (
+        "oscap eval must fetch remote OVAL resources at install time"
+    )
     assert "--tailoring-file /root/tailoring.xml" in eval_body, (
         "oscap must consume the fetched tailoring"
     )
