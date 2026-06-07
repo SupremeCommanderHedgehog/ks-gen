@@ -3,6 +3,20 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.3.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.3.0...v0.3.1) (2026-06-07)
+
+
+### Documentation
+
+* add SECURITY, CONTRIBUTING, CODE_OF_CONDUCT ([c015ac1](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/c015ac1a779be26a86a9b759e70ee58c8f71a61d))
+* fix going-public.md trigger-line count for CodeQL activation ([7b3cd9e](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/7b3cd9e8075d5edf924d28157f4f2caa9628aecf))
+* **github:** add issue forms and PR template ([2b31cd2](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/2b31cd27ef64f995d10318c03eee2946c439360a))
+* going-public runbook for the visibility flip ([6a28a6e](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/6a28a6e724f432eadbd14e577ec94913c8288f04))
+* note Integration-actor bypass limit on personal-account repos ([a002171](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/a0021716b32e6250431ec294e5540f1b370c2098))
+* **plan:** github-setup implementation plan (PR-A foundation + PR-B automation) ([771c8dc](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/771c8dcb3c3d20c5965d827a6a06f9ca7afeee25))
+* **readme:** add CI, license, Python, release, issues badges ([f0fae1f](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/f0fae1f95be067a7c13427e07bb0e66d9e1326b6))
+* **spec:** github setup — public-readiness, security, automation ([e26d3cd](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/e26d3cd56913fe3c1dcdb91e702c1d722838904a))
+
 ## [Unreleased]
 
 ### Added
