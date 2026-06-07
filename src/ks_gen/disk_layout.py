@@ -4,12 +4,15 @@ from ks_gen.config import _DEFAULT_LV_SIZES, DiskLvDef
 
 
 def size_to_mb(size_str: str) -> int:
-    """Convert size string like '15G' or '500M' to MB integer.
+    """Convert size string like '15G', '500M', or '2T' to MB integer.
 
-    Used for /boot and /boot/efi where 'recommended' isn't valid.
+    Used by /boot and /boot/efi (which only allow M/G via DiskBootPart /
+    DiskEfiPart) and by effective_size_mb after the 'recommended'
+    short-circuit. The 'recommended' literal is NOT valid here — callers
+    must handle it before calling.
     """
     n, unit = int(size_str[:-1]), size_str[-1]
-    return n * {"M": 1, "G": 1024}[unit]
+    return n * {"M": 1, "G": 1024, "T": 1024 * 1024}[unit]
 
 
 def effective_size_mb(lv: DiskLvDef) -> int | str:
@@ -20,5 +23,4 @@ def effective_size_mb(lv: DiskLvDef) -> int | str:
     s = lv.size if lv.size is not None else _DEFAULT_LV_SIZES[lv.mount]
     if s == "recommended":
         return "recommended"
-    n, unit = int(s[:-1]), s[-1]
-    return n * {"M": 1, "G": 1024, "T": 1024 * 1024}[unit]
+    return size_to_mb(s)

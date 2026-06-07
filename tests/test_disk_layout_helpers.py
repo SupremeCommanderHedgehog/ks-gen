@@ -14,6 +14,10 @@ def test_size_to_mb_one_gigabyte():
     assert size_to_mb("1G") == 1024
 
 
+def test_size_to_mb_terabytes():
+    assert size_to_mb("1T") == 1024 * 1024
+
+
 def test_effective_size_mb_explicit():
     lv = DiskLvDef(name="data", mount="/data", size="20G")
     assert effective_size_mb(lv) == 20480
