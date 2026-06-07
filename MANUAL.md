@@ -319,7 +319,7 @@ collapses non-`/` mounts into root.
 `bootloader_password` is STIG-required. `null` means "left unset by
 ks-gen" — supply a value or accept the resulting STIG finding.
 
-### `disk.layout` (alternative to `disk.preset`)
+#### `disk.layout` (alternative to `disk.preset`)
 
 For operators who need to customize partition sizes or add extra
 mountpoints, `disk.layout` accepts a structured LVM definition. It is
