@@ -10,7 +10,11 @@ class VerifyError(Exception):
 
 
 class SshConnectError(VerifyError):
-    """ssh exit 255 — host unreachable, key rejected, kex failure."""
+    """ssh/scp transport failure.
+
+    Covers ssh exit 255 (host unreachable, key rejected, kex failure), scp
+    transfer errors (any nonzero scp exit), and transport-layer timeouts.
+    """
 
 
 class SudoPromptError(VerifyError):

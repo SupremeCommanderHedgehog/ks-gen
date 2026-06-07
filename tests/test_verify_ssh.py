@@ -32,6 +32,17 @@ def test_check_tools_raises_when_ssh_missing() -> None:
         check_tools()
 
 
+def test_check_tools_raises_when_scp_missing() -> None:
+    def which(tool: str) -> str | None:
+        return None if tool == "scp" else f"/usr/bin/{tool}"
+
+    with (
+        patch("ks_gen.verify.ssh.shutil.which", side_effect=which),
+        pytest.raises(ToolMissingError, match="scp"),
+    ):
+        check_tools()
+
+
 def test_ssh_exec_returns_result_on_zero_exit() -> None:
     with patch("ks_gen.verify.ssh.subprocess.run", return_value=_completed(0, "out", "")) as run:
         result = ssh_exec("host", "user", "ls /", extra_opts=["-o", "StrictHostKeyChecking=yes"])
@@ -85,6 +96,7 @@ def test_scp_pull_invokes_scp_with_user_host_remote_target(tmp_path: Path) -> No
         scp_pull("host", "user", "/root/file.xml", local, extra_opts=["-q"])
     args = run.call_args.args[0]
     assert args[0] == "scp"
+    assert "-o" in args and "BatchMode=yes" in args
     assert "-q" in args
     assert "user@host:/root/file.xml" in args
     assert str(local) in args
