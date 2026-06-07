@@ -8,5 +8,5 @@ part /boot --fstype={{ cfg.disk.layout.boot.fstype }} --size={{ size_to_mb(cfg.d
 part pv.01 --grow --size=1{{ OND }}
 volgroup {{ cfg.disk.layout.vg_name }} pv.01
 {% for lv in cfg.disk.layout.lvs -%}
-logvol {{ lv.mount or 'swap' }} --vgname={{ cfg.disk.layout.vg_name }} --name={{ lv.name }} --fstype={{ lv.fstype }} {% set sz = effective_size_mb(lv) %}{% if sz == 'recommended' %}--recommended{% else %}--size={{ sz }}{% endif %}{% set fso = effective_fsoptions(lv) %}{% if fso %} --fsoptions="{{ fso }}"{% endif %}
+logvol {{ lv.mount or 'swap' }} --vgname={{ cfg.disk.layout.vg_name }} --name={{ lv.name }} --fstype={{ lv.fstype }} {% set sz = effective_size_mb(lv) %}{% if sz == 'recommended' %}--recommended{% else %}--size={{ sz }}{% endif %}{% set fso = effective_fsoptions(lv) %}{% if fso %} --fsoptions="{{ fso }}"{% endif %}{{ "" }}
 {% endfor %}
