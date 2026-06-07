@@ -94,6 +94,17 @@ _DEFAULT_FSOPTIONS: dict[str, str] = {
 }
 
 
+class DiskBootPart(StrictModel):
+    size: str = Field(default="1G", pattern=r"^\d+(M|G)$")
+    fstype: Literal["xfs", "ext4"] = "xfs"
+    fsoptions: str | None = "nodev,nosuid"
+
+
+class DiskEfiPart(StrictModel):
+    size: str = Field(default="1G", pattern=r"^\d+(M|G)$")
+    # fstype is always "efi" for the EFI System Partition; not configurable.
+
+
 class Disk(StrictModel):
     preset: DiskPreset = DiskPreset.STIG_SERVER
     wipe: bool = True

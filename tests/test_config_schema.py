@@ -462,3 +462,40 @@ def test_disk_lv_def_encrypted_true_rejected():
 
     with pytest.raises(ValidationError, match=r"luks\.preset.*#7"):
         DiskLvDef(name="root", mount="/", size="15G", encrypted=True)
+
+
+def test_disk_boot_part_defaults():
+    from ks_gen.config import DiskBootPart
+
+    b = DiskBootPart()
+    assert b.size == "1G"
+    assert b.fstype == "xfs"
+    assert b.fsoptions == "nodev,nosuid"
+
+
+def test_disk_boot_part_rejects_T_unit():
+    from ks_gen.config import DiskBootPart
+
+    with pytest.raises(ValidationError):
+        DiskBootPart(size="2T")
+
+
+def test_disk_boot_part_accepts_M_and_G_units():
+    from ks_gen.config import DiskBootPart
+
+    assert DiskBootPart(size="500M").size == "500M"
+    assert DiskBootPart(size="2G").size == "2G"
+
+
+def test_disk_efi_part_defaults():
+    from ks_gen.config import DiskEfiPart
+
+    e = DiskEfiPart()
+    assert e.size == "1G"
+
+
+def test_disk_efi_part_rejects_T_unit():
+    from ks_gen.config import DiskEfiPart
+
+    with pytest.raises(ValidationError):
+        DiskEfiPart(size="2T")
