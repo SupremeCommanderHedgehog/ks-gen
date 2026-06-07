@@ -208,6 +208,50 @@ class Tang(StrictModel):
         return self
 
 
+class DiskLuks(StrictModel):
+    preset: LuksPreset = LuksPreset.NONE
+    passphrase: str | None = None
+    passphrase_file: str | None = None
+    tang: Tang | None = None
+
+    @model_validator(mode="after")
+    def _validate_luks(self) -> DiskLuks:
+        other_fields_set = (
+            self.passphrase is not None or self.passphrase_file is not None or self.tang is not None
+        )
+
+        if self.preset == LuksPreset.NONE:
+            if other_fields_set:
+                raise ValueError(
+                    "disk.luks.preset='none' rejects passphrase, "
+                    "passphrase_file, and tang fields; set preset to "
+                    "'partial' or 'tang'"
+                )
+            return self
+
+        # preset != none from here on
+        if self.passphrase is not None and self.passphrase_file is not None:
+            raise ValueError(
+                "disk.luks: passphrase and passphrase_file are mutually exclusive; specify one"
+            )
+        if self.passphrase is None and self.passphrase_file is None:
+            raise ValueError(
+                f"disk.luks.preset='{self.preset.value}' requires passphrase or passphrase_file"
+            )
+
+        if self.preset == LuksPreset.TANG and self.tang is None:
+            raise ValueError(
+                "disk.luks.preset='tang' requires disk.luks.tang block with at least one server"
+            )
+        if self.preset != LuksPreset.TANG and self.tang is not None:
+            raise ValueError(
+                f"disk.luks.preset='{self.preset.value}' rejects tang "
+                f"block; tang is only valid with preset='tang'"
+            )
+
+        return self
+
+
 class Disk(StrictModel):
     preset: DiskPreset | None = None
     layout: DiskLayout | None = None
