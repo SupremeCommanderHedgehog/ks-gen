@@ -175,6 +175,7 @@
   # critical state, so don't abort the install on a non-zero oscap exit.
   oscap xccdf eval --remediate \
     --profile xccdf_org.ssgproject.content_profile_stig \
+    --fetch-remote-resources \
     --tailoring-file /root/tailoring.xml \
     --results-arf /root/oscap-remediation-results.xml \
     --report /root/oscap-remediation-report.html \
