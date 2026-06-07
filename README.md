@@ -38,10 +38,11 @@ Both run oscap remediation at install time; see `MANUAL.md` §5.4.
 | `ks-gen iso` | Repackage the AlmaLinux DVD ISO with kickstart embedded |
 | `ks-gen rules` | List the override rule catalog |
 | `ks-gen schema` | Emit JSON Schema for `host.yaml` |
+| `ks-gen verify --host <addr> --config <host.yaml>` | Re-run oscap on a deployed host, reconcile failures against `host.yaml`, report compliance + drift. Exits 0 on clean, 6 on failures, 7 on transport error. |
 
 ## Exit codes
 
-`0` success · `1` usage · `2` config invalid · `3` rule conflict · `4` lint failure · `5` external tool missing.
+`0` success · `1` usage · `2` config invalid · `3` rule conflict · `4` lint failure · `5` external tool missing · `6` verify failures · `7` verify transport error.
 
 ## v0.1 known limitations
 
