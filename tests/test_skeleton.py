@@ -109,3 +109,59 @@ def test_skeleton_jinja_env_exposes_disk_layout_helpers():
     assert "effective_size_mb" in env.globals
     assert "effective_fsoptions" in env.globals
     assert "size_to_mb" in env.globals
+
+
+def test_skeleton_renders_layout_partial_when_layout_set():
+    from ks_gen.config import (
+        AdminUser,
+        Disk,
+        DiskLayout,
+        DiskLvDef,
+        HostConfig,
+        System,
+        User,
+    )
+    from ks_gen.skeleton import render_skeleton
+
+    admin = AdminUser(name="ops", authorized_keys=["ssh-ed25519 A a@b"], sudo="nopasswd_yes")
+    cfg = HostConfig(
+        system=System(hostname="x"),
+        user=User(admin=admin),
+        disk=Disk(
+            layout=DiskLayout(
+                lvs=[
+                    DiskLvDef(name="root", mount="/"),
+                    DiskLvDef(name="home", mount="/home"),
+                    DiskLvDef(name="tmp", mount="/tmp"),
+                    DiskLvDef(name="var", mount="/var"),
+                    DiskLvDef(name="varlog", mount="/var/log"),
+                    DiskLvDef(name="varlogaudit", mount="/var/log/audit"),
+                    DiskLvDef(name="vartmp", mount="/var/tmp"),
+                    DiskLvDef(name="swap", fstype="swap"),
+                ]
+            )
+        ),
+    )
+    out = render_skeleton(cfg, post_blocks=[])
+    assert "part /boot/efi --fstype=efi" in out
+    assert "volgroup vg_root pv.01" in out
+    assert "logvol / --vgname=vg_root --name=root --fstype=xfs --size=15360" in out
+    assert "logvol swap --vgname=vg_root --name=swap --fstype=swap --recommended" in out
+    # Load-bearing exact-substring assertion (>100 chars by design — verifies
+    # the layout partial renders fsoptions for STIG-default mountpoints).
+    expected_audit_lv = 'logvol /var/log/audit --vgname=vg_root --name=varlogaudit --fstype=xfs --size=3072 --fsoptions="nodev,nosuid,noexec"'  # noqa: E501
+    assert expected_audit_lv in out
+
+
+def test_skeleton_still_renders_preset_partial_when_preset_set():
+    from ks_gen.config import AdminUser, HostConfig, System, User
+    from ks_gen.skeleton import render_skeleton
+
+    admin = AdminUser(name="ops", authorized_keys=["ssh-ed25519 A a@b"], sudo="nopasswd_yes")
+    cfg = HostConfig(
+        system=System(hostname="x"),
+        user=User(admin=admin),
+    )
+    out = render_skeleton(cfg, post_blocks=[])
+    # The existing stig_server partial has aligned-column whitespace:
+    assert "logvol /var/log/audit --vgname=vg_root --name=varlogaudit" in out

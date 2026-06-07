@@ -1,0 +1,12 @@
+{# Layout-driven partitioning. PV grows to fill remaining disk; LVs are
+   fixed-size, leaving free VG space for operator extension. ondisk
+   (when set) applies to /boot/efi, /boot, and the PV so the whole
+   install lands on the named disk in multi-disk hosts. #}
+{% set OND = (' --ondisk=' ~ cfg.disk.layout.ondisk) if cfg.disk.layout.ondisk else '' -%}
+part /boot/efi --fstype=efi --size={{ size_to_mb(cfg.disk.layout.efi.size) }} --asprimary{{ OND }}
+part /boot --fstype={{ cfg.disk.layout.boot.fstype }} --size={{ size_to_mb(cfg.disk.layout.boot.size) }}{% if cfg.disk.layout.boot.fsoptions %} --fsoptions="{{ cfg.disk.layout.boot.fsoptions }}"{% endif %} --asprimary{{ OND }}
+part pv.01 --grow --size=1{{ OND }}
+volgroup {{ cfg.disk.layout.vg_name }} pv.01
+{% for lv in cfg.disk.layout.lvs -%}
+logvol {{ lv.mount or 'swap' }} --vgname={{ cfg.disk.layout.vg_name }} --name={{ lv.name }} --fstype={{ lv.fstype }} {% set sz = effective_size_mb(lv) %}{% if sz == 'recommended' %}--recommended{% else %}--size={{ sz }}{% endif %}{% set fso = effective_fsoptions(lv) %}{% if fso %} --fsoptions="{{ fso }}"{% endif %}
+{% endfor %}
