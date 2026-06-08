@@ -702,17 +702,12 @@ ks-gen iso \
   --volid ALMA9            # default
 ```
 
-**v0.1 limitation:** the wrapper places the files at the ISO root
-but does NOT rewrite `isolinux/isolinux.cfg` or
-`EFI/BOOT/grub.cfg`. At the Anaconda boot prompt you must press
-**Tab** (BIOS) or **e** (UEFI) and append:
-
-```
-inst.ks=hd:LABEL=ALMA9:/ks.cfg
-```
-
-Bootloader rewriting for fully unattended installs is tracked for
-v0.2.
+**Unattended boot:** the wrapper rewrites `isolinux/isolinux.cfg` and
+`EFI/BOOT/grub.cfg` to add a top-level "Unattended STIG install
+(ks-gen)" entry, set it as the default, and shorten the timeout to
+5 seconds. The original "Install AlmaLinux 9" entry is preserved
+below as a fallback — arrow-down to recover the interactive flow.
+Both BIOS (isolinux) and UEFI (grub) paths are rewritten.
 
 **How `tailoring.xml` gets to oscap:** the generated `ks.cfg` opens
 with a `%post --nochroot` block that runs in the Anaconda installer
@@ -934,25 +929,20 @@ umount /mnt
 Boot the target from the standard AlmaLinux ISO with the USB
 plugged in. No kernel cmdline edit required.
 
-### 8.3 Embedded in a custom ISO (v0.1 limitation)
+### 8.3 Embedded in a custom ISO
 
 ```bash
 ks-gen iso \
   --src AlmaLinux-9-latest-x86_64-dvd.iso \
-  --ks build/web01/ks.cfg \
-  --tailoring build/web01/tailoring.xml \
+  --ks dist/web01/ks.cfg \
+  --tailoring dist/web01/tailoring.xml \
   --out web01-installer.iso
 ```
 
-At the Anaconda boot prompt:
-
-- **BIOS:** press Tab on the highlighted entry, append
-  `inst.ks=hd:LABEL=ALMA9:/ks.cfg`, press Enter.
-- **UEFI:** press `e`, find the `linux` (or `linuxefi`) line, append
-  `inst.ks=hd:LABEL=ALMA9:/ks.cfg`, press Ctrl-X.
-
-v0.2 will rewrite the bootloader configs so the kickstarted entry
-becomes the unattended default.
+Boot the resulting ISO and the unattended STIG install runs by
+default after a 5-second timeout. If you need to recover the
+interactive Anaconda flow, arrow-down to "Install AlmaLinux 9" within
+the timeout window.
 
 ### 8.4 First-boot verification
 
