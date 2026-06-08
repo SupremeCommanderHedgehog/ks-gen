@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ks_gen.iso.bootloader import rewrite_grub, rewrite_isolinux
+import pytest
+
+from ks_gen.iso.bootloader import BootloaderRewriteError, rewrite_grub, rewrite_isolinux
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "alma9-bootloader"
 
@@ -33,3 +35,13 @@ def test_rewrite_grub_idempotent():
     once = rewrite_grub(original, volid="ALMA9")
     twice = rewrite_grub(once, volid="ALMA9")
     assert once == twice
+
+
+def test_rewrite_isolinux_no_label_raises():
+    with pytest.raises(BootloaderRewriteError, match="label"):
+        rewrite_isolinux("default vesamenu.c32\ntimeout 600\n", volid="ALMA9")
+
+
+def test_rewrite_grub_no_menuentry_raises():
+    with pytest.raises(BootloaderRewriteError, match="menuentry"):
+        rewrite_grub("set timeout=60\n", volid="ALMA9")
