@@ -8,7 +8,7 @@
 operator can produce a complete `host.yaml` covering disk layout,
 network configuration, and the ks-gen-owned override matrix without
 ever hand-editing the YAML. Close the v0.1 limitation called out in
-`MANUAL.md` §3.3.
+`MANUAL.md` §5.1.
 
 ## Background
 
@@ -325,7 +325,7 @@ mypy --strict and ruff stay clean.
 
 ## Docs to update in the same PR
 
-- `MANUAL.md` §3.3 — replace the v0.1 limitation note ("wizard only
+- `MANUAL.md` §5.1 — replace the v0.1 limitation note ("wizard only
   prompts for system/user/SSH/crypto") with the new walkthrough.
   Cover the group selector, each new section, and the explicit
   "still hand-edit" list (`disk.layout`, `bootloader_password`,
@@ -350,7 +350,7 @@ mypy --strict and ruff stay clean.
 4. `tests/test_wizard.py` exists; every public-ish function in
    `wizard/` has at least one positive and one negative test.
    mypy --strict + ruff stay clean.
-5. `MANUAL.md` §3.3 no longer mentions the v0.1 wizard limitation.
+5. `MANUAL.md` §5.1 no longer mentions the v0.1 wizard limitation.
 6. `_OVERRIDE_TOGGLES` consistency test fails if a cfg block is
    renamed or removed from `Overrides`.
 7. CI green on 3.11/3.12/3.13. Local CI parity chain
