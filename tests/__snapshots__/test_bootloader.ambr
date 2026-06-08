@@ -1,0 +1,39 @@
+# serializer version: 1
+# name: test_rewrite_isolinux_happy_path
+  '''
+  default vesamenu.c32
+  timeout 50
+  display boot.msg
+  
+  menu background splash.png
+  menu title AlmaLinux 9.6
+  menu vshift 8
+  menu rows 18
+  menu margin 8
+  
+  # ks-gen unattended entry — do not edit
+  label ksgen-unattended
+    menu label ^Unattended STIG install (ks-gen)
+    menu default
+    kernel vmlinuz
+    append initrd=initrd.img inst.stage2=hd:LABEL=ALMA9 inst.ks=hd:LABEL=ALMA9:/ks.cfg quiet
+  
+  label linux
+    menu label ^Install AlmaLinux 9.6
+    kernel vmlinuz
+    append initrd=initrd.img inst.stage2=hd:LABEL=AlmaLinux-9-6-x86_64-dvd quiet
+  
+  label check
+    menu label Test this ^media & install AlmaLinux 9.6
+    kernel vmlinuz
+    append initrd=initrd.img inst.stage2=hd:LABEL=AlmaLinux-9-6-x86_64-dvd rd.live.check quiet
+  
+  menu separator
+  
+  label rescue
+    menu label ^Rescue an AlmaLinux system
+    kernel vmlinuz
+    append initrd=initrd.img inst.stage2=hd:LABEL=AlmaLinux-9-6-x86_64-dvd rescue
+  
+  '''
+# ---
