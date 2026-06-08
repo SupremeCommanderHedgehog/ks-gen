@@ -12,8 +12,8 @@ def test_build_iso_calls_xorriso(tmp_path):
     tail.write_text("<x/>", encoding="utf-8")
     out = tmp_path / "out.iso"
     with (
-        patch("ks_gen.iso.shutil.which", return_value="/usr/bin/xorriso"),
-        patch("ks_gen.iso.subprocess.run") as run,
+        patch("ks_gen.iso.builder.shutil.which", return_value="/usr/bin/xorriso"),
+        patch("ks_gen.iso.builder.subprocess.run") as run,
     ):
         run.return_value.returncode = 0
         run.return_value.stderr = ""
@@ -32,7 +32,7 @@ def test_build_iso_missing_xorriso_raises(tmp_path):
     tail = tmp_path / "t.xml"
     tail.write_text("x", encoding="utf-8")
     out = tmp_path / "out.iso"
-    with patch("ks_gen.iso.shutil.which", return_value=None):
+    with patch("ks_gen.iso.builder.shutil.which", return_value=None):
         try:
             build_iso(src, ks, tail, out, volid="ALMA9")
         except IsoBuildError as e:
