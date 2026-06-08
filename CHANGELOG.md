@@ -3,6 +3,28 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.6.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.5.0...v0.6.0) (2026-06-08)
+
+
+### Features
+
+* **iso:** add unattended boot entry templates ([3a1dcd8](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/3a1dcd862d31f7779491aeb621c36acc5aa2517b))
+* **iso:** rewrite_grub pure rewriter + golden snapshot ([925a302](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/925a30224e4636c230501ba2112973300952c7ca))
+* **iso:** rewrite_isolinux pure rewriter + golden snapshot ([b90fffa](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/b90fffa978adcbd8e90d3fc5397f6ecd5b12fc14))
+* **iso:** three-pass xorriso flow (extract, rewrite, author) ([d07ff2e](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/d07ff2e23804b98488b1b11897a627ae6acebb48))
+
+
+### Refactoring
+
+* **iso:** promote iso.py to a package ([85994fc](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/85994fc1af72165bcaa0dcc4a926cf9ed5c91e32))
+
+
+### Documentation
+
+* **manual:** document unattended ISO boot, strike v0.1 limitation ([3b116ff](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/3b116ff792c9811bd5801e73634e3b0f85fa4871))
+* **plans:** ISO unattended boot implementation plan ([425b28a](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/425b28ae1e5c09bf1019c3692ff64976cba0993b))
+* **specs:** ISO unattended boot design ([3777dd1](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/3777dd1738ed16f3a620cd80f96578feec37161d))
+
 ## [0.5.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.4.0...v0.5.0) (2026-06-07)
 
 
