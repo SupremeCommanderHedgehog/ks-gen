@@ -19,3 +19,17 @@ def test_rewrite_isolinux_happy_path(snapshot):
 def test_rewrite_grub_happy_path(snapshot):
     result = rewrite_grub(_read_fixture("grub.cfg"), volid="ALMA9")
     assert result == snapshot
+
+
+def test_rewrite_isolinux_idempotent():
+    original = _read_fixture("isolinux.cfg")
+    once = rewrite_isolinux(original, volid="ALMA9")
+    twice = rewrite_isolinux(once, volid="ALMA9")
+    assert once == twice
+
+
+def test_rewrite_grub_idempotent():
+    original = _read_fixture("grub.cfg")
+    once = rewrite_grub(original, volid="ALMA9")
+    twice = rewrite_grub(once, volid="ALMA9")
+    assert once == twice
