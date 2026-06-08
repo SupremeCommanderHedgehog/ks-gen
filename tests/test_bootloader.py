@@ -45,3 +45,15 @@ def test_rewrite_isolinux_no_label_raises():
 def test_rewrite_grub_no_menuentry_raises():
     with pytest.raises(BootloaderRewriteError, match="menuentry"):
         rewrite_grub("set timeout=60\n", volid="ALMA9")
+
+
+def test_rewrite_isolinux_custom_volid():
+    result = rewrite_isolinux(_read_fixture("isolinux.cfg"), volid="WEB01")
+    assert "inst.ks=hd:LABEL=WEB01:/ks.cfg" in result
+    assert "inst.stage2=hd:LABEL=WEB01" in result
+
+
+def test_rewrite_grub_custom_volid():
+    result = rewrite_grub(_read_fixture("grub.cfg"), volid="WEB01")
+    assert "inst.ks=hd:LABEL=WEB01:/ks.cfg" in result
+    assert "inst.stage2=hd:LABEL=WEB01" in result
