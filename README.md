@@ -52,4 +52,5 @@ Both run oscap remediation at install time; see `MANUAL.md` §5.4.
 
 ## License
 
-Apache-2.0.
+GPL-3.0-or-later. See [`LICENSE`](LICENSE) for the full text. Aligned
+with `pykickstart` (GPL-2.0-or-later), which `ks-gen` links against.
