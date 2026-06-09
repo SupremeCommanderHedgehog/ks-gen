@@ -45,3 +45,15 @@ class SuggestApplyError(VerifyError):
     operator's config file content (not CLI invocation) is what needs fixing."""
 
     exit_code: ExitCode = ExitCode.CONFIG_INVALID
+
+
+class TailoringParseError(VerifyError):
+    """Tailoring XML failed to parse — malformed XML or missing <Profile>.
+
+    Exit code is VERIFY_FAIL (6); the parse failure is treated as a verify
+    failure rather than a transport failure because the bytes arrived but
+    aren't usable. Message text names which side failed (deployed vs
+    re-rendered) so the operator knows whether to suspect host tampering
+    or a ks-gen renderer regression."""
+
+    exit_code: ExitCode = ExitCode.VERIFY_FAIL
