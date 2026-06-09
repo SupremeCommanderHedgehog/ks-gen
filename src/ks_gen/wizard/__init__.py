@@ -21,18 +21,21 @@ def _ask_groups() -> set[str]:
 
 
 def run_wizard(*, interactive: bool) -> tuple[HostConfig, str]:
-    payload = _core.prompts(interactive)
-    selected: set[str] = _ask_groups() if interactive else set()
-    if "disk" in selected:
-        payload["disk"] = _disk.prompts()
-    if "network" in selected:
-        payload["network"] = _network.prompts()
-    if "overrides" in selected:
-        overrides_fragment = _overrides.prompts()
-        if overrides_fragment:  # omit empty dict so schema defaults apply
-            payload["overrides"] = overrides_fragment
-    cfg = HostConfig.model_validate(payload)
-    yaml_text = yaml.safe_dump(
-        cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False
-    )
-    return cfg, yaml_text
+    try:
+        payload = _core.prompts(interactive)
+        selected: set[str] = _ask_groups() if interactive else set()
+        if "disk" in selected:
+            payload["disk"] = _disk.prompts()
+        if "network" in selected:
+            payload["network"] = _network.prompts()
+        if "overrides" in selected:
+            overrides_fragment = _overrides.prompts()
+            if overrides_fragment:  # omit empty dict so schema defaults apply
+                payload["overrides"] = overrides_fragment
+        cfg = HostConfig.model_validate(payload)
+        yaml_text = yaml.safe_dump(
+            cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False
+        )
+        return cfg, yaml_text
+    except KeyboardInterrupt as e:
+        raise WizardError("aborted by user") from e
