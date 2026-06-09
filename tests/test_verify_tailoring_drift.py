@@ -11,6 +11,7 @@ from ks_gen.verify.tailoring_drift import (
     TailoringDriftReport,
     compare_tailorings,
     parse_tailoring_xml,
+    render_drift_section,
 )
 
 
@@ -194,3 +195,94 @@ def test_compare_results_sorted_by_rule_id() -> None:
     deployed = _parsed("p", [])
     report = compare_tailorings(expected, deployed)
     assert [op.rule_id for op in report.added] == ["rule_a", "rule_z"]
+
+
+def test_render_empty_drift_returns_empty_string() -> None:
+    report = TailoringDriftReport(
+        profile_id_expected="p",
+        profile_id_deployed="p",
+        added=[],
+        removed=[],
+        changed=[],
+    )
+    assert render_drift_section(report) == ""
+
+
+def test_render_added_only() -> None:
+    report = TailoringDriftReport(
+        profile_id_expected="p",
+        profile_id_deployed="p",
+        added=[TailoringOp("rule_x", "disable")],
+        removed=[],
+        changed=[],
+    )
+    out = render_drift_section(report)
+    assert "Tailoring drift detected" in out
+    assert "+ disable rule_x" in out
+
+
+def test_render_removed_only_uses_minus_glyph() -> None:
+    report = TailoringDriftReport(
+        profile_id_expected="p",
+        profile_id_deployed="p",
+        added=[],
+        removed=[TailoringOp("rule_y", "select")],
+        changed=[],
+    )
+    out = render_drift_section(report)
+    assert "- select rule_y" in out
+
+
+def test_render_changed_uses_tilde_with_arrow() -> None:
+    report = TailoringDriftReport(
+        profile_id_expected="p",
+        profile_id_deployed="p",
+        added=[],
+        removed=[],
+        changed=[
+            OpChange(rule_id="rule_z", action="set_value", expected_value="24", deployed_value="5")
+        ],
+    )
+    out = render_drift_section(report)
+    assert "~ rule_z: 5 → 24" in out
+
+
+def test_render_profile_mismatch_adds_profile_changed_line() -> None:
+    report = TailoringDriftReport(
+        profile_id_expected="profile_a",
+        profile_id_deployed="profile_b",
+        added=[],
+        removed=[],
+        changed=[],
+    )
+    out = render_drift_section(report)
+    assert "(profile changed: profile_b → profile_a)" in out
+
+
+def test_render_profile_mismatch_alone_is_not_empty() -> None:
+    """profile_id-only drift still produces a non-empty section."""
+    report = TailoringDriftReport(
+        profile_id_expected="profile_a",
+        profile_id_deployed="profile_b",
+        added=[],
+        removed=[],
+        changed=[],
+    )
+    assert render_drift_section(report) != ""
+
+
+def test_render_all_four_categories_present() -> None:
+    report = TailoringDriftReport(
+        profile_id_expected="p1",
+        profile_id_deployed="p2",
+        added=[TailoringOp("r_a", "disable")],
+        removed=[TailoringOp("r_r", "disable")],
+        changed=[
+            OpChange(rule_id="r_c", action="set_value", expected_value="24", deployed_value="5")
+        ],
+    )
+    out = render_drift_section(report)
+    assert "+ disable r_a" in out
+    assert "- disable r_r" in out
+    assert "~ r_c: 5 → 24" in out
+    assert "(profile changed: p2 → p1)" in out
