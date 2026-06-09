@@ -52,5 +52,9 @@ Both run oscap remediation at install time; see `MANUAL.md` §5.4.
 
 ## License
 
-GPL-3.0-or-later. See [`LICENSE`](LICENSE) for the full text. Aligned
-with `pykickstart` (GPL-2.0-or-later), which `ks-gen` links against.
+GPL-3.0-or-later, with an [output exception](LICENSE.exception) for the
+kickstart files, tailoring XML, exception reports, and installer ISOs
+that `ks-gen` produces — operators retain full discretion over how to
+license and distribute their generated artifacts. See [`LICENSE`](LICENSE)
+for the full GPL text. Aligned with `pykickstart` (GPL-2.0-or-later),
+which `ks-gen` links against.
