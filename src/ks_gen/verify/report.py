@@ -5,6 +5,7 @@ from collections import Counter
 
 from ks_gen.verify.reconcile import VerifyReport
 from ks_gen.verify.suggest import Suggestion, render_yaml
+from ks_gen.verify.tailoring_drift import render_drift_section
 
 
 def _summary(report: VerifyReport) -> dict[str, int]:
@@ -23,7 +24,10 @@ def render_table(report: VerifyReport, *, suggestions: list[Suggestion] | None =
 
     When `suggestions` is a non-None list (including empty), appends a
     rendered suggestions block via `render_yaml`. None means "operator
-    didn't ask for suggestions" and output is unchanged.
+    didn't ask for suggestions" and that section is omitted.
+
+    When `report.tailoring_drift` is populated and non-empty, appends a
+    drift section between the table and any suggestions block.
     """
     lines: list[str] = []
     lines.append(f"verify host={report.host} user={report.user} at={report.timestamp_utc}")
@@ -61,6 +65,11 @@ def render_table(report: VerifyReport, *, suggestions: list[Suggestion] | None =
             lines.append(f"  {cat}  {cur}  {instc}  {exp}  {rule}")
         base = "\n".join(lines) + "\n"
 
+    if report.tailoring_drift is not None:
+        drift_section = render_drift_section(report.tailoring_drift)
+        if drift_section:
+            base = base + "\n" + drift_section
+
     if suggestions is None:
         return base
     suggestion_block = render_yaml(suggestions, report)
@@ -92,4 +101,27 @@ def render_json(report: VerifyReport, *, suggestions: list[Suggestion] | None = 
         payload["suggested_exceptions"] = [
             {"category": s.category, "decl": s.decl.model_dump()} for s in suggestions
         ]
+    drift = report.tailoring_drift
+    if drift is not None:
+        payload["tailoring_drift"] = {
+            "profile_id_expected": drift.profile_id_expected,
+            "profile_id_deployed": drift.profile_id_deployed,
+            "added": [
+                {"action": op.action, "rule_id": op.rule_id, "value": op.value}
+                for op in drift.added
+            ],
+            "removed": [
+                {"action": op.action, "rule_id": op.rule_id, "value": op.value}
+                for op in drift.removed
+            ],
+            "changed": [
+                {
+                    "rule_id": c.rule_id,
+                    "action": c.action,
+                    "expected_value": c.expected_value,
+                    "deployed_value": c.deployed_value,
+                }
+                for c in drift.changed
+            ],
+        }
     return json.dumps(payload, indent=2)
