@@ -318,3 +318,112 @@ def test_verify_apply_on_clean_report_prints_nothing_to_apply(tmp_path: Path) ->
     assert not (tmp_path / "host.yaml.bak").exists()
     # Apply summary still confirms the operator was heard.
     assert "nothing to apply" in (result.stderr or result.output)
+
+
+def _clean_with_drift() -> VerifyReport:
+    """Clean compliance, but tailoring drift present."""
+    from ks_gen.rules._types import TailoringOp
+    from ks_gen.verify.tailoring_drift import TailoringDriftReport
+
+    drift = TailoringDriftReport(
+        profile_id_expected="p",
+        profile_id_deployed="p",
+        added=[TailoringOp("synthetic_rule", "disable")],
+        removed=[],
+        changed=[],
+    )
+    return VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(VerifyRow("rule_a", "pass", "pass", False, "clean"),),
+        install_baseline_available=True,
+        tailoring_drift=drift,
+    )
+
+
+def _failing_with_drift() -> VerifyReport:
+    """Compliance fail AND drift — compliance wins."""
+    from ks_gen.rules._types import TailoringOp
+    from ks_gen.verify.tailoring_drift import TailoringDriftReport
+
+    drift = TailoringDriftReport(
+        profile_id_expected="p",
+        profile_id_deployed="p",
+        added=[TailoringOp("synthetic_rule", "disable")],
+        removed=[],
+        changed=[],
+    )
+    return VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(VerifyRow("rule_b", "fail", "pass", False, "regression"),),
+        install_baseline_available=True,
+        tailoring_drift=drift,
+    )
+
+
+def test_verify_check_tailoring_flag_threads_through(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_verify(**kwargs: object) -> VerifyReport:
+        captured.update(kwargs)
+        return _clean_report()
+
+    with (
+        patch("ks_gen.cli.run_verify", side_effect=fake_run_verify),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(
+            app, ["verify", "--host", "h1", "--config", str(cfg), "--check-tailoring"]
+        )
+    assert result.exit_code == 0, result.output
+    assert captured["check_tailoring"] is True
+
+
+def test_verify_check_tailoring_default_false_when_flag_absent(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_verify(**kwargs: object) -> VerifyReport:
+        captured.update(kwargs)
+        return _clean_report()
+
+    with (
+        patch("ks_gen.cli.run_verify", side_effect=fake_run_verify),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(app, ["verify", "--host", "h1", "--config", str(cfg)])
+    assert result.exit_code == 0, result.output
+    assert captured["check_tailoring"] is False
+
+
+def test_verify_exits_8_on_drift_only(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.run_verify", return_value=_clean_with_drift()),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(
+            app, ["verify", "--host", "h1", "--config", str(cfg), "--check-tailoring"]
+        )
+    assert result.exit_code == 8, result.output
+
+
+def test_verify_compliance_fail_wins_over_drift(tmp_path: Path) -> None:
+    """When both compliance fail and drift, exit 6 (VERIFY_FAIL) — not 8."""
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.run_verify", return_value=_failing_with_drift()),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(
+            app, ["verify", "--host", "h1", "--config", str(cfg), "--check-tailoring"]
+        )
+    assert result.exit_code == 6, result.output

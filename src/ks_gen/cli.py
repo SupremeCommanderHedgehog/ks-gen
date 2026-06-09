@@ -224,6 +224,15 @@ def verify_cmd(
             "without --apply; the safety story is intentional."
         ),
     ),
+    check_tailoring: bool = typer.Option(
+        False,
+        "--check-tailoring",
+        help=(
+            "Re-render the expected tailoring locally and diff against the host's "
+            "/root/tailoring.xml. Reports drift as a separate section; exit 8 if "
+            "drift is detected and compliance is otherwise clean."
+        ),
+    ),
     timeout: int = typer.Option(600, "--timeout", help="oscap run timeout in seconds."),
 ) -> None:
     if format_ not in ("table", "json"):
@@ -262,6 +271,7 @@ def verify_cmd(
                 user=resolved_user,
                 workdir=workdir,
                 no_drift=no_drift,
+                check_tailoring=check_tailoring,
                 ssh_extra_opts=extra_opts,
                 timeout=timeout,
             )
@@ -298,6 +308,8 @@ def verify_cmd(
 
         if not report.is_clean:
             raise typer.Exit(code=int(ExitCode.VERIFY_FAIL))
+        if report.has_tailoring_drift:
+            raise typer.Exit(code=int(ExitCode.TAILORING_DRIFT))
 
     if arf_out is not None or keep_arf:
         target = arf_out or Path(tempfile.mkdtemp(prefix="ksgen-verify-"))
