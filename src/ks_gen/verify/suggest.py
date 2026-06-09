@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import yaml
+
 from ks_gen.config import ExceptionDecl
 from ks_gen.verify.reconcile import Category, VerifyReport
 
@@ -54,3 +56,30 @@ def build_suggestions(report: VerifyReport) -> list[Suggestion]:
         )
         suggestions.append(Suggestion(decl=decl, category=row.category))
     return suggestions
+
+
+def render_yaml(suggestions: list[Suggestion], report: VerifyReport) -> str:
+    """Paste-friendly YAML block. Empty string when suggestions=[].
+
+    Uses yaml.safe_dump with sort_keys=False so the per-decl field order
+    matches the schema (id -> reason -> stig_rules_disabled).
+    """
+    if not suggestions:
+        return ""
+    n = len(suggestions)
+    plural = "suggestion" if n == 1 else "suggestions"
+    header = (
+        "## Suggested exception entries — copy into host.yaml's `exceptions:` list\n"
+        f"## verify host={report.host} user={report.user} "
+        f"at={report.timestamp_utc} ({n} {plural})\n"
+        "\n"
+    )
+    body_parts: list[str] = []
+    for suggestion in suggestions:
+        block = yaml.safe_dump(
+            [suggestion.decl.model_dump()],
+            sort_keys=False,
+            default_flow_style=False,
+        )
+        body_parts.append(block)
+    return header + "\n".join(body_parts)
