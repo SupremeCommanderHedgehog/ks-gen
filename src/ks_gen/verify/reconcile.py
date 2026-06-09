@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ks_gen.verify.arf import RuleResult
+from ks_gen.verify.tailoring_drift import TailoringDriftReport
 
 Category = Literal["clean", "expected_fail", "new_fail", "regression", "incomplete"]
 
@@ -47,10 +48,25 @@ class VerifyReport:
     timestamp_utc: str
     rows: tuple[VerifyRow, ...]
     install_baseline_available: bool
+    tailoring_drift: TailoringDriftReport | None = None
 
     @property
     def is_clean(self) -> bool:
         return not any(r.category in ("new_fail", "regression") for r in self.rows)
+
+    @property
+    def has_tailoring_drift(self) -> bool:
+        """True iff a drift check ran AND found at least one delta.
+
+        `None` means the check didn't run (default). An empty
+        `TailoringDriftReport` with matching profile_ids returns False.
+        """
+        d = self.tailoring_drift
+        if d is None:
+            return False
+        return bool(d.added or d.removed or d.changed) or (
+            d.profile_id_expected != d.profile_id_deployed
+        )
 
 
 def build_report(
