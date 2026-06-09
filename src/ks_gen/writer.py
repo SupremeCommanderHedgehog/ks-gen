@@ -21,6 +21,23 @@ class Bundle:
     exceptions_md: str
 
 
+def render_tailoring(cfg: HostConfig) -> str:
+    """Render the tailoring.xml for `cfg` without rendering ks.cfg / exceptions.md.
+
+    Used by `build_bundle` (the full bundle path) and by `verify` (for
+    tailoring drift detection). The embedded `<xccdf:version time="...">`
+    timestamp comes from `build_tailoring_xml`'s `datetime.now(UTC)` call —
+    callers comparing two renders must strip it first.
+    """
+    rules = topo_sort(load_rules())
+    applicable = [r for r in rules if r.applies(cfg)]
+    tailoring_ops = []
+    for r in applicable:
+        tailoring_ops.extend(r.emit_tailoring(cfg))
+    profile_id = f"xccdf_org.ssgproject.content_profile_{cfg.meta.profile}"
+    return build_tailoring_xml(tailoring_ops, profile_id=profile_id)
+
+
 def build_bundle(cfg: HostConfig) -> Bundle:
     rules = topo_sort(load_rules())
     applicable = [r for r in rules if r.applies(cfg)]
