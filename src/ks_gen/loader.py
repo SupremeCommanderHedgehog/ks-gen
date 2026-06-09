@@ -19,6 +19,7 @@ class ExitCode(IntEnum):
     TOOL_MISSING = 5
     VERIFY_FAIL = 6
     TRANSPORT_FAIL = 7
+    TAILORING_DRIFT = 8
 
 
 class ConfigError(Exception):
