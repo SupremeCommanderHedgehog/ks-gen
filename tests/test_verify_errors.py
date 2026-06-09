@@ -39,3 +39,12 @@ def test_error_maps_to_exit_code(cls: type[VerifyError], expected_exit: ExitCode
 def test_verify_error_is_exception() -> None:
     with pytest.raises(VerifyError):
         raise SshConnectError("x")
+
+
+def test_tailoring_parse_error_has_verify_fail_exit_code() -> None:
+    from ks_gen.loader import ExitCode
+    from ks_gen.verify.errors import TailoringParseError, VerifyError
+
+    err = TailoringParseError("garbage")
+    assert isinstance(err, VerifyError)
+    assert err.exit_code == ExitCode.VERIFY_FAIL
