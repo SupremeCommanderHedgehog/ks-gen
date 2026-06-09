@@ -31,6 +31,12 @@ def render_table(report: VerifyReport, *, suggestions: list[Suggestion] | None =
     """
     lines: list[str] = []
     lines.append(f"verify host={report.host} user={report.user} at={report.timestamp_utc}")
+    if report.baseline is not None:
+        ts = report.baseline.captured_utc
+        if ts is not None:
+            lines.append(f"  baseline: {report.baseline.path} (captured {ts})")
+        else:
+            lines.append(f"  baseline: {report.baseline.path} (timestamp unknown)")
     if not report.install_baseline_available:
         lines.append("  NOTE: drift comparison skipped — install-time ARF not present on host")
     summary = _summary(report)
@@ -64,6 +70,14 @@ def render_table(report: VerifyReport, *, suggestions: list[Suggestion] | None =
             rule = f"{r.rule_id:<{rule_w}}"
             lines.append(f"  {cat}  {cur}  {instc}  {exp}  {rule}")
         base = "\n".join(lines) + "\n"
+
+    if report.baseline is not None and report.baseline.orphans:
+        n = len(report.baseline.orphans)
+        plural = "rule" if n == 1 else "rules"
+        base = (
+            base + f"  NOTE: {n} {plural} in baseline not present in current ARF "
+            "— baseline may be stale (SSG upgraded?)\n"
+        )
 
     if report.tailoring_drift is not None:
         drift_section = render_drift_section(report.tailoring_drift)
@@ -123,5 +137,12 @@ def render_json(report: VerifyReport, *, suggestions: list[Suggestion] | None = 
                 }
                 for c in drift.changed
             ],
+        }
+    baseline = report.baseline
+    if baseline is not None:
+        payload["baseline"] = {
+            "path": baseline.path,
+            "captured_utc": baseline.captured_utc,
+            "orphans": list(baseline.orphans),
         }
     return json.dumps(payload, indent=2)
