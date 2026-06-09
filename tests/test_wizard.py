@@ -363,3 +363,48 @@ def test_network_single_dhcp_explicit_device(monkeypatch: pytest.MonkeyPatch):
     )
     payload = _network.prompts()
     assert payload["interfaces"][0]["device"] == "eth0"
+
+
+def test_network_static_with_nameservers(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "ask_text": [
+                "ens3",  # device
+                "10.0.0.10",  # ip
+                "255.255.255.0",  # netmask
+                "10.0.0.1",  # gateway
+                "1.1.1.1",  # nameserver #1
+                "8.8.8.8",  # nameserver #2
+                "",  # blank to stop
+            ],
+            "select_one": ["static"],
+            "ask_confirm": [True, False],
+        },
+    )
+    payload = _network.prompts()
+    assert payload == {
+        "interfaces": [
+            {
+                "device": "ens3",
+                "bootproto": "static",
+                "onboot": True,
+                "ip": "10.0.0.10",
+                "netmask": "255.255.255.0",
+                "gateway": "10.0.0.1",
+                "nameservers": ["1.1.1.1", "8.8.8.8"],
+            }
+        ]
+    }
+
+
+def test_network_dotted_quad_validator_positive():
+    assert _network._is_dotted_quad("10.0.0.1") is True
+    assert _network._is_dotted_quad("255.255.255.255") is True
+
+
+def test_network_dotted_quad_validator_negative():
+    assert _network._is_dotted_quad("not-an-ip") is False
+    assert _network._is_dotted_quad("10.0.0") is False
+    assert _network._is_dotted_quad("10.0.0.0.0") is False
+    assert _network._is_dotted_quad("") is False
