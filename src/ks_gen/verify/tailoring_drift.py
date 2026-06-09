@@ -112,3 +112,54 @@ def parse_tailoring_xml(text: str) -> ParsedTailoring:
             ops.append(TailoringOp(rule_id=rule_id, action="set_value", value=value))
 
     return ParsedTailoring(profile_id=profile_id, ops=ops)
+
+
+def compare_tailorings(
+    expected: ParsedTailoring,
+    deployed: ParsedTailoring,
+) -> TailoringDriftReport:
+    """Pure diff between two parsed tailorings.
+
+    Ops are keyed by `(action, rule_id)`. Same key on both sides with a
+    different value → `OpChange` (only set_value carries a meaningful value).
+    Key in expected only → `added`. Key in deployed only → `removed`.
+
+    Returned lists are sorted by rule_id for stable rendering.
+    """
+    expected_map = {(op.action, op.rule_id): op for op in expected.ops}
+    deployed_map = {(op.action, op.rule_id): op for op in deployed.ops}
+
+    added: list[TailoringOp] = []
+    removed: list[TailoringOp] = []
+    changed: list[OpChange] = []
+
+    for key, op in expected_map.items():
+        if key not in deployed_map:
+            added.append(op)
+        else:
+            other = deployed_map[key]
+            if op.action == "set_value" and (op.value or "") != (other.value or ""):
+                changed.append(
+                    OpChange(
+                        rule_id=op.rule_id,
+                        action="set_value",
+                        expected_value=op.value or "",
+                        deployed_value=other.value or "",
+                    )
+                )
+
+    for key, op in deployed_map.items():
+        if key not in expected_map:
+            removed.append(op)
+
+    added.sort(key=lambda o: o.rule_id)
+    removed.sort(key=lambda o: o.rule_id)
+    changed.sort(key=lambda c: c.rule_id)
+
+    return TailoringDriftReport(
+        profile_id_expected=expected.profile_id,
+        profile_id_deployed=deployed.profile_id,
+        added=added,
+        removed=removed,
+        changed=changed,
+    )
