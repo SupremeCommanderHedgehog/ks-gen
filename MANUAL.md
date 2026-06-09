@@ -1148,6 +1148,46 @@ already-present `auto-<category>-<rule_id>` id is skipped (no second
 write, mtime unchanged), so verifying once and applying twice doesn't
 duplicate entries.
 
+#### Detecting tailoring drift
+
+`ks-gen verify --check-tailoring` re-renders the tailoring locally from
+the workstation `host.yaml` and diffs it against `/root/tailoring.xml`
+on the deployed host. Use this when you've edited `host.yaml` after
+install and want to confirm the change hasn't been deployed yet.
+
+Drift is reported as a per-op diff:
+
+````
+Tailoring drift detected — workstation host.yaml differs from /root/tailoring.xml.
+Re-run `ks-gen gen <host.yaml>` and redeploy to align.
+
+  + disable xccdf_org.ssgproject.content_rule_grub2_audit_argument
+  - disable xccdf_org.ssgproject.content_rule_package_telnet_removed
+  ~ xccdf_org.ssgproject.content_value_var_password_pam_unix_remember: 5 → 24
+````
+
+Glyphs: `+` op present in expected but not deployed, `-` present in
+deployed but not expected, `~` set-value differs (shown as
+`deployed → expected`).
+
+**Exit codes.** When `--check-tailoring` is set and drift is detected
+but compliance is otherwise clean, `verify` exits `8`
+(`TAILORING_DRIFT`). Compliance failures (exit `6`) take precedence —
+a host with both compliance fail and drift exits `6`. A host with no
+drift and clean compliance exits `0`.
+
+**Drift does not mean non-compliant.** The host is still being
+measured against the tailoring deployed at install time. The drift
+report is about workstation/host divergence — your intent vs the
+host's reality. The fix path is `ks-gen gen <host.yaml>` followed by
+redeploying the bundle (re-burn ISO, ship updated `tailoring.xml`, etc.
+— whatever delivery method you used originally).
+
+**JSON output.** `verify --format json --check-tailoring` adds a
+top-level `tailoring_drift` key. The key is omitted (not present) when
+the flag isn't set, so consumers can use `key in payload` to detect
+whether the check ran.
+
 ## 9. Common workflows
 
 ### 9.1 Spin up a new cloud VM
