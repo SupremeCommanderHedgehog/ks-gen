@@ -3,9 +3,11 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+import pytest
 import yaml
 from syrupy.assertion import SnapshotAssertion
 
+from ks_gen.verify.errors import SuggestApplyError
 from ks_gen.verify.reconcile import VerifyReport, VerifyRow
 from ks_gen.verify.suggest import (
     AppendResult,
@@ -307,3 +309,84 @@ def test_apply_no_op_does_not_create_backup(tmp_path: Path):
 
     backup = host_yaml.with_suffix(".yaml.bak")
     assert not backup.exists()
+
+
+# --- error path tests --------------------------------------------------------
+
+
+def test_apply_refuses_yaml_list_at_top_level(tmp_path: Path):
+    host_yaml = tmp_path / "host.yaml"
+    host_yaml.write_text("- not\n- a\n- mapping\n", encoding="utf-8")
+    suggestions = build_suggestions(_new_fail_report())
+
+    with pytest.raises(SuggestApplyError, match="not a YAML mapping"):
+        apply_to_host_yaml(
+            suggestions=suggestions,
+            host_yaml_path=host_yaml,
+            allow_regression=False,
+        )
+
+    # Original file untouched
+    assert host_yaml.read_text(encoding="utf-8") == "- not\n- a\n- mapping\n"
+    assert not (tmp_path / "host.yaml.bak").exists()
+
+
+def test_apply_refuses_invalid_yaml_syntax(tmp_path: Path):
+    host_yaml = tmp_path / "host.yaml"
+    host_yaml.write_text("key: : : ::\n  broken\n", encoding="utf-8")
+    suggestions = build_suggestions(_new_fail_report())
+
+    with pytest.raises(SuggestApplyError, match="not valid YAML"):
+        apply_to_host_yaml(
+            suggestions=suggestions,
+            host_yaml_path=host_yaml,
+            allow_regression=False,
+        )
+
+    assert not (tmp_path / "host.yaml.bak").exists()
+
+
+def test_apply_refuses_schema_rejecting_candidate(tmp_path: Path):
+    # host.yaml is loadable as YAML but violates HostConfig (no admin keys
+    # with an unset password). When we try to append, candidate validation
+    # fails. No write, no backup.
+    bad = textwrap.dedent(
+        """\
+        system: {hostname: h1}
+        user:
+          admin:
+            name: ops
+            # neither password nor authorized_keys -> pydantic rejects
+        """
+    )
+    host_yaml = _write_host_yaml(tmp_path, bad)
+    pre_content = host_yaml.read_text(encoding="utf-8")
+    suggestions = build_suggestions(_new_fail_report())
+
+    with pytest.raises(SuggestApplyError, match="would fail validation"):
+        apply_to_host_yaml(
+            suggestions=suggestions,
+            host_yaml_path=host_yaml,
+            allow_regression=False,
+        )
+
+    assert host_yaml.read_text(encoding="utf-8") == pre_content
+    assert not (tmp_path / "host.yaml.bak").exists()
+
+
+def test_apply_with_empty_host_yaml_file_treats_as_empty_mapping(tmp_path: Path):
+    host_yaml = tmp_path / "host.yaml"
+    host_yaml.write_text("", encoding="utf-8")
+    # Empty file -> data = {} -> candidate = {"exceptions": [...]}
+    # But the candidate must still satisfy HostConfig, which requires
+    # `system` and `user.admin` — so validation will reject. Verify the
+    # specific failure surfaces as SuggestApplyError, not a raw pydantic
+    # ValidationError.
+    suggestions = build_suggestions(_new_fail_report())
+
+    with pytest.raises(SuggestApplyError, match="would fail validation"):
+        apply_to_host_yaml(
+            suggestions=suggestions,
+            host_yaml_path=host_yaml,
+            allow_regression=False,
+        )
