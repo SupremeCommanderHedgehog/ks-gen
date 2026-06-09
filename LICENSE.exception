@@ -1,0 +1,37 @@
+# ks-gen output exception
+
+ks-gen is licensed under the GNU General Public License, version 3 or
+later (GPL-3.0-or-later). The full text of the GPL is in `LICENSE`.
+
+This file grants one additional permission under section 7 of the GPL.
+
+## Additional permission
+
+As a special exception, the Jinja2 template files in
+`src/ks_gen/templates/`, and the shell glue and kickstart syntax they
+emit into files produced by running `ks-gen`, do not by themselves
+cause the resulting output files to be covered by the GNU General
+Public License.
+
+Files produced by an unmodified `ks-gen` — including but not limited
+to `ks.cfg`, `tailoring.xml`, `exceptions.md`, and any installer ISO
+built by `ks-gen iso` — remain entirely at the operator's discretion
+as to licensing and distribution.
+
+The operator-authored input (`host.yaml`) is operator-owned in any
+case and is not affected by this license.
+
+## Modified versions
+
+This permission applies to outputs of unmodified ks-gen and to outputs
+of modified ks-gen distributed under the same exception. A downstream
+modifier may, at their option, remove this exception; outputs of such
+a modified version would then be governed by the GPL without this
+additional permission.
+
+## Precedent
+
+This exception mirrors the spirit of GNU Bison's parser-skeleton
+exception and the GCC Runtime Library Exception — both grant downstream
+users the freedom to license generator output without inheriting the
+generator's copyleft, while keeping the generator itself copyleft.
