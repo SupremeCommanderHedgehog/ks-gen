@@ -63,5 +63,9 @@ def prompts() -> dict[str, Any]:
         }
         return payload
 
-    # source == "file" — handled in Task 8
-    raise NotImplementedError("LUKS partial file path not yet implemented")
+    # source == "file"
+    path = _prompts.ask_text("Passphrase file path:")
+    if not path:
+        raise WizardError("passphrase_file path is empty")
+    payload["luks"] = {"preset": "partial", "passphrase_file": path}
+    return payload
