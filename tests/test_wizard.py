@@ -7,7 +7,15 @@ from typing import Any
 
 import pytest
 
-from ks_gen.wizard import WizardError, _disk, _network, _prompts, run_wizard, write_initial
+from ks_gen.wizard import (
+    WizardError,
+    _disk,
+    _network,
+    _overrides,
+    _prompts,
+    run_wizard,
+    write_initial,
+)
 from ks_gen.wizard import _core as _wizard_core
 
 
@@ -431,3 +439,30 @@ def test_network_multi_interface(monkeypatch: pytest.MonkeyPatch):
     assert len(payload["interfaces"]) == 2
     assert payload["interfaces"][0]["device"] == "eth0"
     assert payload["interfaces"][1]["device"] == "eth1"
+
+
+# --- _overrides group tests ------------------------------------------------
+
+
+def test_override_toggles_keys_are_overrides_fields():
+    """If a cfg block is renamed or removed, this fails loudly."""
+    from ks_gen.config import Overrides
+
+    for key in _overrides._OVERRIDE_TOGGLES:
+        assert key in Overrides.model_fields, (
+            f"_OVERRIDE_TOGGLES has key {key!r} that no longer exists "
+            f"on Overrides; mapping is out of sync with the schema."
+        )
+
+
+def test_override_toggles_attr_names_exist_on_cfg():
+    """Each (toggle-attr) must be a real field on the corresponding Cfg block."""
+    from ks_gen.config import Overrides
+
+    for cfg_name, (attr, _default, _label) in _overrides._OVERRIDE_TOGGLES.items():
+        cfg_field = Overrides.model_fields[cfg_name]
+        cfg_cls = cfg_field.annotation
+        assert attr in cfg_cls.model_fields, (  # type: ignore[union-attr]
+            f"_OVERRIDE_TOGGLES[{cfg_name!r}] uses attr {attr!r} that doesn't "
+            f"exist on {cfg_cls.__name__}"
+        )
