@@ -576,3 +576,20 @@ def test_run_wizard_all_groups_lints_clean(monkeypatch: pytest.MonkeyPatch, tmp_
     write_bundle(bundle, host_dir)
     report = lint_kickstart(host_dir / "ks.cfg")
     assert report.ok, f"lint failed: {report}"
+
+
+def test_run_wizard_keyboard_interrupt_becomes_wizard_error(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _stdin(
+        "host01\n\n\n\n\nssh-ed25519 AAA test@example\n\n\n\n",
+        monkeypatch,
+    )
+
+    def _raise_kbd(*_a: object, **_kw: object) -> Any:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(_prompts, "ask_checkbox", _raise_kbd)
+
+    with pytest.raises(WizardError, match="aborted"):
+        run_wizard(interactive=True)
