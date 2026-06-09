@@ -466,3 +466,47 @@ def test_override_toggles_attr_names_exist_on_cfg():
             f"_OVERRIDE_TOGGLES[{cfg_name!r}] uses attr {attr!r} that doesn't "
             f"exist on {cfg_cls.__name__}"
         )
+
+
+def test_overrides_empty_selection_returns_empty(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "ask_checkbox": [[], []],  # nothing disabled, nothing enabled
+        },
+    )
+    assert _overrides.prompts() == {}
+
+
+def test_overrides_disable_one_default_on(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "ask_checkbox": [["faillock"], []],
+        },
+    )
+    assert _overrides.prompts() == {"faillock": {"enable": False}}
+
+
+def test_overrides_enable_one_default_off(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "ask_checkbox": [[], ["dod_root_ca"]],
+        },
+    )
+    # dod_root_ca uses "install" attr, default False -> set install=True
+    assert _overrides.prompts() == {"dod_root_ca": {"install": True}}
+
+
+def test_overrides_mixed(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "ask_checkbox": [["package_purge"], ["usbguard"]],
+        },
+    )
+    assert _overrides.prompts() == {
+        "package_purge": {"enable": False},
+        "usbguard": {"enable": True},
+    }

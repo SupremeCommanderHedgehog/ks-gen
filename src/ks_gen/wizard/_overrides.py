@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ks_gen.wizard import _prompts  # noqa: F401
+from ks_gen.wizard import _prompts
 
 # cfg-field-name -> (toggle-attr, default-value, one-line operator label)
 _OVERRIDE_TOGGLES: dict[str, tuple[str, bool, str]] = {
@@ -28,5 +28,27 @@ def prompts() -> dict[str, Any]:
     Empty selections on both checkboxes return {}, omitting the overrides
     key from the final payload so schema defaults stay in effect.
     """
-    # Stub for Task 13.
-    raise NotImplementedError("override matrix prompts not yet implemented")
+    on_choices = [
+        (key, label)
+        for key, (_attr, default, label) in _OVERRIDE_TOGGLES.items()
+        if default is True
+    ]
+    off_choices = [
+        (key, label)
+        for key, (_attr, default, label) in _OVERRIDE_TOGGLES.items()
+        if default is False
+    ]
+
+    to_disable: list[str] = _prompts.ask_checkbox("Default-on rules to DISABLE:", on_choices)
+    to_enable: list[str] = _prompts.ask_checkbox("Default-off rules to ENABLE:", off_choices)
+
+    payload: dict[str, Any] = {}
+    for key in to_disable:
+        attr, default, _label = _OVERRIDE_TOGGLES[key]
+        # default=True -> set False to disable
+        payload[key] = {attr: not default}
+    for key in to_enable:
+        attr, default, _label = _OVERRIDE_TOGGLES[key]
+        # default=False -> set True to enable
+        payload[key] = {attr: not default}
+    return payload
