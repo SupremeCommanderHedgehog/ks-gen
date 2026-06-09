@@ -215,3 +215,40 @@ def test_apply_preserves_pre_existing_exceptions(tmp_path: Path):
     assert "legacy-fips-deviation" in ids
     assert "auto-new_fail-rule_d" in ids
     assert len(after["exceptions"]) == 2
+
+
+def test_apply_allow_regression_true_writes_regressions(tmp_path: Path):
+    host_yaml = _write_host_yaml(tmp_path)
+    suggestions = build_suggestions(_new_fail_report())
+
+    result = apply_to_host_yaml(
+        suggestions=suggestions,
+        host_yaml_path=host_yaml,
+        allow_regression=True,
+    )
+
+    assert result.added == ("auto-new_fail-rule_d", "auto-regression-rule_e")
+    assert result.skipped_regression == ()
+
+    after = yaml.safe_load(host_yaml.read_text(encoding="utf-8"))
+    ids = [e["id"] for e in after["exceptions"]]
+    assert ids == ["auto-new_fail-rule_d", "auto-regression-rule_e"]
+
+
+def test_apply_allow_regression_false_skips_regressions_only(tmp_path: Path):
+    host_yaml = _write_host_yaml(tmp_path)
+    suggestions = build_suggestions(_new_fail_report())
+
+    result = apply_to_host_yaml(
+        suggestions=suggestions,
+        host_yaml_path=host_yaml,
+        allow_regression=False,
+    )
+
+    # new_fail flowed through, regression was held back
+    assert result.added == ("auto-new_fail-rule_d",)
+    assert result.skipped_regression == ("auto-regression-rule_e",)
+
+    after = yaml.safe_load(host_yaml.read_text(encoding="utf-8"))
+    ids = [e["id"] for e in after["exceptions"]]
+    assert ids == ["auto-new_fail-rule_d"]
