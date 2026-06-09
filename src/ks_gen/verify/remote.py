@@ -123,3 +123,40 @@ def collect_arfs(
         except Exception:
             # Best-effort cleanup; never mask the primary error.
             pass
+
+
+def collect_deployed_tailoring(
+    *,
+    host: str,
+    user: str,
+    workdir: Path,
+    ssh_extra_opts: list[str],
+) -> str:
+    """scp-pull `/root/tailoring.xml` for drift comparison.
+
+    Sibling to `collect_arfs`. Does not share state with the ARF pull —
+    `--check-tailoring` and `--no-drift` are independent axes.
+
+    Returns the file's text contents.
+
+    Raises:
+        SudoPromptError: passwordless sudo unavailable.
+        OscapInvocationError: `/root/tailoring.xml` not readable on host.
+        ArfMissingError: scp succeeded but the pulled file is 0 bytes.
+        SshConnectError: ssh/scp transport failure.
+        ToolMissingError: ssh/scp not on PATH.
+    """
+    probe_sudo(host, user, ssh_extra_opts=ssh_extra_opts)
+
+    check = ssh_exec(host, user, f"sudo -n test -r {REMOTE_TAILORING}", extra_opts=ssh_extra_opts)
+    if check.exit_code != 0:
+        raise OscapInvocationError(
+            f"install-time tailoring not present at {REMOTE_TAILORING} "
+            f"— host may not have been provisioned by ks-gen"
+        )
+
+    local = workdir / "deployed-tailoring.xml"
+    scp_pull(host, user, REMOTE_TAILORING, local, extra_opts=ssh_extra_opts)
+    if not local.exists() or local.stat().st_size == 0:
+        raise ArfMissingError(f"pulled tailoring is empty or missing: {local}")
+    return local.read_text(encoding="utf-8")
