@@ -238,3 +238,105 @@ def test_render_json_no_tailoring_drift_key_when_field_is_none() -> None:
     )
     payload = _json.loads(render_json(report))
     assert "tailoring_drift" not in payload
+
+
+# --- baseline rendering tests ------------------------------------------------
+
+
+def test_render_table_includes_baseline_header_when_present(snapshot) -> None:
+    from ks_gen.verify.baseline import BaselineReport
+    from ks_gen.verify.reconcile import VerifyReport, VerifyRow
+    from ks_gen.verify.report import render_table
+
+    baseline = BaselineReport(
+        path="./baseline.arf.xml",
+        captured_utc="2026-06-05T09:30:00Z",
+        orphans=("xccdf_org.ssgproject.content_rule_rule_stale",),
+    )
+    report = VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(VerifyRow("rule_b", "fail", "pass", False, "regression"),),
+        install_baseline_available=True,
+        baseline=baseline,
+    )
+    out = render_table(report)
+    assert out == snapshot
+
+
+def test_render_table_baseline_header_without_timestamp(snapshot) -> None:
+    """When captured_utc is None, the parenthetical reads (timestamp unknown)."""
+    from ks_gen.verify.baseline import BaselineReport
+    from ks_gen.verify.reconcile import VerifyReport
+    from ks_gen.verify.report import render_table
+
+    baseline = BaselineReport(
+        path="./baseline.arf.xml",
+        captured_utc=None,
+        orphans=(),
+    )
+    report = VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+        baseline=baseline,
+    )
+    out = render_table(report)
+    assert out == snapshot
+
+
+def test_render_table_no_baseline_section_when_field_none() -> None:
+    from ks_gen.verify.reconcile import VerifyReport
+    from ks_gen.verify.report import render_table
+
+    report = VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+    )
+    out = render_table(report)
+    assert "baseline:" not in out
+    assert "may be stale" not in out
+
+
+def test_render_json_includes_baseline_when_present(snapshot) -> None:
+    from ks_gen.verify.baseline import BaselineReport
+    from ks_gen.verify.reconcile import VerifyReport
+    from ks_gen.verify.report import render_json
+
+    baseline = BaselineReport(
+        path="./baseline.arf.xml",
+        captured_utc="2026-06-05T09:30:00Z",
+        orphans=("xccdf_org.ssgproject.content_rule_rule_stale",),
+    )
+    report = VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+        baseline=baseline,
+    )
+    assert render_json(report) == snapshot
+
+
+def test_render_json_no_baseline_key_when_field_is_none() -> None:
+    import json as _json
+
+    from ks_gen.verify.reconcile import VerifyReport
+    from ks_gen.verify.report import render_json
+
+    report = VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+    )
+    payload = _json.loads(render_json(report))
+    assert "baseline" not in payload

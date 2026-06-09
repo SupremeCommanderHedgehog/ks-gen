@@ -1,4 +1,30 @@
 # serializer version: 1
+# name: test_render_json_includes_baseline_when_present
+  '''
+  {
+    "host": "h1",
+    "user": "ops",
+    "timestamp_utc": "2026-06-09T12:00:00Z",
+    "install_baseline_available": true,
+    "is_clean": true,
+    "summary": {
+      "clean": 0,
+      "expected_fail": 0,
+      "new_fail": 0,
+      "regression": 0,
+      "incomplete": 0
+    },
+    "rows": [],
+    "baseline": {
+      "path": "./baseline.arf.xml",
+      "captured_utc": "2026-06-05T09:30:00Z",
+      "orphans": [
+        "xccdf_org.ssgproject.content_rule_rule_stale"
+      ]
+    }
+  }
+  '''
+# ---
 # name: test_render_json_includes_tailoring_drift_when_present
   '''
   {
@@ -62,11 +88,32 @@
   
   '''
 # ---
+# name: test_render_table_baseline_header_without_timestamp
+  '''
+  verify host=h1 user=ops at=2026-06-09T12:00:00Z
+    baseline: ./baseline.arf.xml (timestamp unknown)
+    summary: clean=0 expected_fail=0 new_fail=0 regression=0 incomplete=0 — CLEAN
+    (no actionable rows)
+  
+  '''
+# ---
 # name: test_render_table_clean_report
   '''
   verify host=h1.example.com user=opsadmin at=2026-06-07T12:00:00Z
     summary: clean=1 expected_fail=0 new_fail=0 regression=0 incomplete=0 — CLEAN
     (no actionable rows)
+  
+  '''
+# ---
+# name: test_render_table_includes_baseline_header_when_present
+  '''
+  verify host=h1 user=ops at=2026-06-09T12:00:00Z
+    baseline: ./baseline.arf.xml (captured 2026-06-05T09:30:00Z)
+    summary: clean=0 expected_fail=0 new_fail=0 regression=1 incomplete=0 — FAILURES
+  
+    CATEGORY    CURRENT  INSTALL  EXP  RULE
+    regression  fail     pass     no   rule_b
+    NOTE: 1 rule in baseline not present in current ARF — baseline may be stale (SSG upgraded?)
   
   '''
 # ---
