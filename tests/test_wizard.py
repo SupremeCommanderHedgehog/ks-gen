@@ -408,3 +408,26 @@ def test_network_dotted_quad_validator_negative():
     assert _network._is_dotted_quad("10.0.0") is False
     assert _network._is_dotted_quad("10.0.0.0.0") is False
     assert _network._is_dotted_quad("") is False
+
+
+def test_network_multi_interface(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "ask_text": [
+                "eth0",
+                "eth1",  # devices for iface #1 and #2
+            ],
+            "select_one": ["dhcp", "dhcp"],
+            "ask_confirm": [
+                True,
+                True,  # onboot for #1, add-another=True
+                True,
+                False,  # onboot for #2, add-another=False
+            ],
+        },
+    )
+    payload = _network.prompts()
+    assert len(payload["interfaces"]) == 2
+    assert payload["interfaces"][0]["device"] == "eth0"
+    assert payload["interfaces"][1]["device"] == "eth1"
