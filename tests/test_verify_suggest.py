@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import textwrap
+from pathlib import Path
+
+import yaml
 from syrupy.assertion import SnapshotAssertion
 
 from ks_gen.verify.reconcile import VerifyReport, VerifyRow
-from ks_gen.verify.suggest import build_suggestions, render_yaml
+from ks_gen.verify.suggest import AppendResult, apply_to_host_yaml, build_suggestions, render_yaml
 
 
 def _report(*rows: VerifyRow, host: str = "h1") -> VerifyReport:
@@ -115,3 +119,99 @@ def test_render_yaml_header_pluralizes_count():
     )
     out = render_yaml(build_suggestions(report), report)
     assert "2 suggestions" in out
+
+
+# --- apply_to_host_yaml tests ---------------------------------------------
+
+_BASE_HOST_YAML = textwrap.dedent(
+    """\
+    system: {hostname: h1}
+    user:
+      admin:
+        name: ops
+        authorized_keys: ["ssh-ed25519 A a@b"]
+        sudo: nopasswd_yes
+    """
+)
+
+
+def _write_host_yaml(tmp_path: Path, text: str = _BASE_HOST_YAML) -> Path:
+    p = tmp_path / "host.yaml"
+    p.write_text(text, encoding="utf-8")
+    return p
+
+
+def _new_fail_report() -> VerifyReport:
+    return _report(
+        VerifyRow("rule_d", "fail", "fail", False, "new_fail"),
+        VerifyRow("rule_e", "fail", "pass", False, "regression"),
+    )
+
+
+def test_apply_appends_new_fail_to_empty_exceptions(tmp_path: Path):
+    host_yaml = _write_host_yaml(tmp_path)
+    suggestions = build_suggestions(_new_fail_report())
+
+    result = apply_to_host_yaml(
+        suggestions=suggestions,
+        host_yaml_path=host_yaml,
+        allow_regression=False,
+    )
+
+    assert isinstance(result, AppendResult)
+    assert result.added == ("auto-new_fail-rule_d",)
+    assert result.skipped_existing == ()
+    assert result.skipped_regression == ("auto-regression-rule_e",)
+    assert result.path == host_yaml
+    assert result.backup_path == host_yaml.with_suffix(".yaml.bak")
+
+    after = yaml.safe_load(host_yaml.read_text(encoding="utf-8"))
+    assert len(after["exceptions"]) == 1
+    assert after["exceptions"][0]["id"] == "auto-new_fail-rule_d"
+    assert after["exceptions"][0]["stig_rules_disabled"] == ["rule_d"]
+
+
+def test_apply_is_idempotent_when_id_already_present(tmp_path: Path):
+    host_yaml = _write_host_yaml(tmp_path)
+    suggestions = build_suggestions(_new_fail_report())
+
+    # First apply: writes one suggestion.
+    apply_to_host_yaml(suggestions=suggestions, host_yaml_path=host_yaml, allow_regression=False)
+    mtime_after_first = host_yaml.stat().st_mtime_ns
+
+    # Second apply with same suggestions: nothing to add (already present).
+    result = apply_to_host_yaml(
+        suggestions=suggestions, host_yaml_path=host_yaml, allow_regression=False
+    )
+
+    assert result.added == ()
+    assert result.skipped_existing == ("auto-new_fail-rule_d",)
+    assert result.skipped_regression == ("auto-regression-rule_e",)
+    assert host_yaml.stat().st_mtime_ns == mtime_after_first  # no second write
+
+
+def test_apply_preserves_pre_existing_exceptions(tmp_path: Path):
+    pre = textwrap.dedent(
+        """\
+        system: {hostname: h1}
+        user:
+          admin:
+            name: ops
+            authorized_keys: ["ssh-ed25519 A a@b"]
+            sudo: nopasswd_yes
+        exceptions:
+          - id: legacy-fips-deviation
+            reason: "approved by security 2026-01-01"
+            stig_rules_disabled: [rule_x]
+        """
+    )
+    host_yaml = _write_host_yaml(tmp_path, pre)
+    suggestions = build_suggestions(_new_fail_report())
+
+    apply_to_host_yaml(suggestions=suggestions, host_yaml_path=host_yaml, allow_regression=False)
+
+    after = yaml.safe_load(host_yaml.read_text(encoding="utf-8"))
+    ids = [e["id"] for e in after["exceptions"]]
+    assert "legacy-fips-deviation" in ids
+    assert "auto-new_fail-rule_d" in ids
+    assert len(after["exceptions"]) == 2
