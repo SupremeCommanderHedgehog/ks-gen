@@ -427,3 +427,99 @@ def test_verify_compliance_fail_wins_over_drift(tmp_path: Path) -> None:
             app, ["verify", "--host", "h1", "--config", str(cfg), "--check-tailoring"]
         )
     assert result.exit_code == 6, result.output
+
+
+def test_verify_capture_baseline_threads_through(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    out = tmp_path / "captured.arf"
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_verify(**kwargs: object) -> VerifyReport:
+        captured.update(kwargs)
+        return _clean_report()
+
+    with (
+        patch("ks_gen.cli.run_verify", side_effect=fake_run_verify),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(
+            app,
+            ["verify", "--host", "h1", "--config", str(cfg), "--capture-baseline", str(out)],
+        )
+    assert result.exit_code == 0, result.output
+    assert captured["capture_to"] == out
+
+
+def test_verify_baseline_threads_through(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    baseline = tmp_path / "baseline.arf"
+    baseline.write_text("<TestResult/>", encoding="utf-8")
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_verify(**kwargs: object) -> VerifyReport:
+        captured.update(kwargs)
+        return _clean_report()
+
+    with (
+        patch("ks_gen.cli.run_verify", side_effect=fake_run_verify),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(
+            app,
+            ["verify", "--host", "h1", "--config", str(cfg), "--baseline", str(baseline)],
+        )
+    assert result.exit_code == 0, result.output
+    assert captured["baseline_path"] == baseline
+
+
+def test_verify_baseline_and_capture_baseline_mutually_exclusive(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    baseline = tmp_path / "b.arf"
+    capture = tmp_path / "c.arf"
+    baseline.write_text("<TestResult/>", encoding="utf-8")
+    runner = CliRunner()
+
+    with patch("ks_gen.cli.check_tools"):
+        result = runner.invoke(
+            app,
+            [
+                "verify",
+                "--host",
+                "h1",
+                "--config",
+                str(cfg),
+                "--baseline",
+                str(baseline),
+                "--capture-baseline",
+                str(capture),
+            ],
+        )
+    assert result.exit_code == 1, result.output  # USAGE
+    assert "mutually exclusive" in result.output
+
+
+def test_verify_baseline_missing_file_exit_usage(tmp_path: Path) -> None:
+    """When the library raises ConfigError(USAGE), the CLI exits 1 with the message."""
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    missing = tmp_path / "does-not-exist.arf"
+
+    from ks_gen.loader import ConfigError, ExitCode
+
+    with (
+        patch(
+            "ks_gen.cli.run_verify",
+            side_effect=ConfigError(
+                f"--baseline path does not exist: {missing}",
+                ExitCode.USAGE,
+            ),
+        ),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(
+            app,
+            ["verify", "--host", "h1", "--config", str(cfg), "--baseline", str(missing)],
+        )
+    assert result.exit_code == 1, result.output  # USAGE
