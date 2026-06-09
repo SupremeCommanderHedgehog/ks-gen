@@ -233,6 +233,23 @@ def verify_cmd(
             "drift is detected and compliance is otherwise clean."
         ),
     ),
+    capture_baseline: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--capture-baseline",
+        help=(
+            "Write the freshly-captured ARF to this path on the workstation. "
+            "Use the saved file later via --baseline. Mutually exclusive with --baseline."
+        ),
+    ),
+    baseline: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--baseline",
+        help=(
+            "Use this workstation-side ARF as the drift baseline instead of the "
+            "host's /root/oscap-remediation-results.xml. Skips the install-ARF "
+            "pull. Mutually exclusive with --capture-baseline."
+        ),
+    ),
     timeout: int = typer.Option(600, "--timeout", help="oscap run timeout in seconds."),
 ) -> None:
     if format_ not in ("table", "json"):
@@ -244,6 +261,13 @@ def verify_cmd(
             "ks-gen verify: --allow-regression has no effect without --apply",
             err=True,
         )
+
+    if baseline is not None and capture_baseline is not None:
+        typer.echo(
+            "ks-gen verify: --baseline and --capture-baseline are mutually exclusive",
+            err=True,
+        )
+        raise typer.Exit(code=int(ExitCode.USAGE))
 
     try:
         cfg = load_host_config(config, sets=[])
@@ -272,9 +296,14 @@ def verify_cmd(
                 workdir=workdir,
                 no_drift=no_drift,
                 check_tailoring=check_tailoring,
+                baseline_path=baseline,
+                capture_to=capture_baseline,
                 ssh_extra_opts=extra_opts,
                 timeout=timeout,
             )
+        except ConfigError as e:
+            typer.echo(f"ks-gen verify: {e}", err=True)
+            raise typer.Exit(code=int(e.exit_code)) from None
         except VerifyError as e:
             # Only transport-class errors reach this handler (ToolMissingError
             # was caught earlier). Keep the "transport failure:" prefix
