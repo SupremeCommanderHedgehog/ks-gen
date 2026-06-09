@@ -111,6 +111,12 @@ def run_verify(
             ExitCode.USAGE,
         )
 
+    if capture_to is not None and not capture_to.parent.is_dir():
+        raise ConfigError(
+            f"--capture-baseline parent directory does not exist: {capture_to.parent}",
+            ExitCode.USAGE,
+        )
+
     extra_opts = ssh_extra_opts or []
 
     # Load baseline first (fail fast on missing/malformed before any SSH).
