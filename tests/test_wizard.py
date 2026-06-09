@@ -510,3 +510,26 @@ def test_overrides_mixed(monkeypatch: pytest.MonkeyPatch):
         "package_purge": {"enable": False},
         "usbguard": {"enable": True},
     }
+
+
+# --- end-to-end orchestration tests ----------------------------------------
+
+
+def test_run_wizard_disk_group_selected(monkeypatch: pytest.MonkeyPatch):
+    _stdin(
+        "host01\n\n\n\n\nssh-ed25519 AAA test@example\n\n\n\n",
+        monkeypatch,
+    )
+    monkeypatch.setattr(_prompts, "ask_checkbox", lambda *_a, **_kw: ["disk"])
+    # Inject scripted disk-group answers
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "none"],
+            "ask_confirm": [True],
+        },
+    )
+    cfg, _yaml_text = run_wizard(interactive=True)
+    assert cfg.disk.preset is not None and cfg.disk.preset.value == "stig_server"
+    assert cfg.disk.luks.preset.value == "none"
+    assert cfg.disk.wipe is True
