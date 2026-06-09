@@ -216,11 +216,25 @@ def verify_cmd(
             "suggestions require --allow-regression."
         ),
     ),
+    allow_regression: bool = typer.Option(
+        False,
+        "--allow-regression",
+        help=(
+            "Allow --apply to write regression-category suggestions. No effect "
+            "without --apply; the safety story is intentional."
+        ),
+    ),
     timeout: int = typer.Option(600, "--timeout", help="oscap run timeout in seconds."),
 ) -> None:
     if format_ not in ("table", "json"):
         typer.echo(f"--format must be 'table' or 'json', got: {format_!r}", err=True)
         raise typer.Exit(code=int(ExitCode.USAGE))
+
+    if allow_regression and not apply:
+        typer.echo(
+            "ks-gen verify: --allow-regression has no effect without --apply",
+            err=True,
+        )
 
     try:
         cfg = load_host_config(config, sets=[])
@@ -271,7 +285,7 @@ def verify_cmd(
                 apply_result = apply_to_host_yaml(
                     suggestions=suggestions,
                     host_yaml_path=config,
-                    allow_regression=False,
+                    allow_regression=allow_regression,
                 )
             except VerifyError as e:
                 typer.echo(f"ks-gen verify: apply failed: {e}", err=True)
