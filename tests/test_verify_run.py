@@ -243,3 +243,139 @@ def test_run_verify_wraps_expected_parse_failure_with_renderer_message(tmp_path:
             ssh_extra_opts=[],
             timeout=600,
         )
+
+
+def test_run_verify_capture_to_writes_current_arf(tmp_path: Path) -> None:
+    """When capture_to is set, the current ARF is written to that path."""
+    from ks_gen.verify import run_verify
+    from ks_gen.verify.remote import CollectedArfs
+
+    current = (FIXTURES / "arf-clean.xml").read_text(encoding="utf-8")
+    install = (FIXTURES / "arf-install-baseline.xml").read_text(encoding="utf-8")
+    out = tmp_path / "captured.arf.xml"
+
+    with patch(
+        "ks_gen.verify.collect_arfs",
+        return_value=CollectedArfs(current_text=current, install_text=install),
+    ):
+        report = run_verify(
+            cfg=_cfg(),
+            host="h",
+            user="ops",
+            workdir=tmp_path,
+            capture_to=out,
+            ssh_extra_opts=[],
+            timeout=600,
+        )
+
+    assert out.exists()
+    assert out.read_text(encoding="utf-8") == current
+    assert report.baseline is None  # capture mode doesn't populate baseline
+
+
+def test_run_verify_baseline_path_uses_file_instead_of_install(tmp_path: Path) -> None:
+    """When baseline_path is set, the captured file replaces install ARF and
+    collect_arfs is called with no_drift=True."""
+    from ks_gen.verify import run_verify
+    from ks_gen.verify.remote import CollectedArfs
+
+    current = (FIXTURES / "arf-mixed.xml").read_text(encoding="utf-8")
+    baseline_arf = (FIXTURES / "arf-install-baseline.xml").read_text(encoding="utf-8")
+    baseline_path = tmp_path / "baseline.arf.xml"
+    baseline_path.write_text(baseline_arf, encoding="utf-8")
+
+    captured_kwargs: dict[str, object] = {}
+
+    def fake_collect(**kwargs: object) -> CollectedArfs:
+        captured_kwargs.update(kwargs)
+        return CollectedArfs(current_text=current, install_text=None)
+
+    with patch("ks_gen.verify.collect_arfs", side_effect=fake_collect):
+        report = run_verify(
+            cfg=_cfg(),
+            host="h",
+            user="ops",
+            workdir=tmp_path,
+            baseline_path=baseline_path,
+            ssh_extra_opts=[],
+            timeout=600,
+        )
+
+    assert captured_kwargs["no_drift"] is True
+    assert report.baseline is not None
+    assert report.baseline.path == str(baseline_path)
+    # rule_e was pass in install baseline, fail in mixed → regression
+    by_id = {r.rule_id: r for r in report.rows}
+    assert by_id["xccdf_org.ssgproject.content_rule_rule_e"].category == "regression"
+
+
+def test_run_verify_baseline_path_populates_orphans(tmp_path: Path) -> None:
+    """Stale baseline: rules in baseline absent from current become orphans."""
+    from ks_gen.verify import run_verify
+    from ks_gen.verify.remote import CollectedArfs
+
+    # Build a current ARF with only rule_a; baseline has rule_a + rule_stale.
+    current_xml = (
+        '<?xml version="1.0"?>'
+        '<TestResult xmlns="http://checklists.nist.gov/xccdf/1.2">'
+        '<rule-result idref="xccdf_org.ssgproject.content_rule_rule_a">'
+        "<result>pass</result>"
+        "</rule-result>"
+        "</TestResult>"
+    )
+    baseline_xml = (
+        '<?xml version="1.0"?>'
+        '<TestResult xmlns="http://checklists.nist.gov/xccdf/1.2">'
+        '<rule-result idref="xccdf_org.ssgproject.content_rule_rule_a">'
+        "<result>pass</result>"
+        "</rule-result>"
+        '<rule-result idref="xccdf_org.ssgproject.content_rule_rule_stale">'
+        "<result>pass</result>"
+        "</rule-result>"
+        "</TestResult>"
+    )
+    baseline_path = tmp_path / "stale.arf.xml"
+    baseline_path.write_text(baseline_xml, encoding="utf-8")
+
+    with patch(
+        "ks_gen.verify.collect_arfs",
+        return_value=CollectedArfs(current_text=current_xml, install_text=None),
+    ):
+        report = run_verify(
+            cfg=_cfg(),
+            host="h",
+            user="ops",
+            workdir=tmp_path,
+            baseline_path=baseline_path,
+            ssh_extra_opts=[],
+            timeout=600,
+        )
+
+    assert report.baseline is not None
+    assert report.baseline.orphans == ("xccdf_org.ssgproject.content_rule_rule_stale",)
+
+
+def test_run_verify_baseline_path_and_capture_to_both_set_raises(tmp_path: Path) -> None:
+    """Library-layer mutual-exclusion check."""
+    import pytest
+
+    from ks_gen.loader import ConfigError, ExitCode
+    from ks_gen.verify import run_verify
+
+    baseline_path = tmp_path / "b.arf"
+    capture_to = tmp_path / "c.arf"
+    baseline_path.write_text("<TestResult/>", encoding="utf-8")
+
+    with pytest.raises(ConfigError) as exc_info:
+        run_verify(
+            cfg=_cfg(),
+            host="h",
+            user="ops",
+            workdir=tmp_path,
+            baseline_path=baseline_path,
+            capture_to=capture_to,
+            ssh_extra_opts=[],
+            timeout=600,
+        )
+    assert exc_info.value.exit_code == ExitCode.USAGE
+    assert "mutually exclusive" in str(exc_info.value)
