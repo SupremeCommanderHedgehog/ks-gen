@@ -240,3 +240,16 @@ def test_verify_report_has_tailoring_drift_true_on_profile_id_mismatch_alone() -
         tailoring_drift=drift,
     )
     assert report.has_tailoring_drift is True
+
+
+def test_verify_report_baseline_defaults_to_none() -> None:
+    from ks_gen.verify.reconcile import VerifyReport
+
+    report = VerifyReport(
+        host="h",
+        user="u",
+        timestamp_utc="2026-06-09T00:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+    )
+    assert report.baseline is None
