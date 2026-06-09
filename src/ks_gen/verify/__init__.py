@@ -43,15 +43,45 @@ def run_verify(
     the returned report. The pull happens before the compliance run so a
     missing tailoring fails fast.
 
+    Args:
+        cfg: HostConfig loaded from the operator's host.yaml. The exception
+            set is derived from cfg.exceptions + each applicable rule's
+            exception_entry().
+        host, user: SSH target.
+        workdir: scratch directory for the pulled ARFs (existing or to be
+            created by the caller). Files are not cleaned up by this
+            function — the caller decides via `tempfile.TemporaryDirectory`
+            or `--arf-out`/`--keep-arf`.
+        no_drift: skip the install-time-ARF probe and pull entirely; the
+            returned report has `install_baseline_available=False`.
+        check_tailoring: when True, pull `/root/tailoring.xml` from `host`,
+            re-render the expected tailoring from `cfg`, and attach a
+            `TailoringDriftReport` to the returned report. The pull happens
+            before the compliance run so a missing tailoring fails fast.
+        ssh_extra_opts: extra args appended to every `ssh`/`scp` invocation
+            (e.g. `["-F", "/path/to/ssh_config"]`). `None` is normalized to
+            an empty list.
+        timeout: oscap-run timeout in seconds (default 600). The ssh and
+            scp transport calls themselves are uncapped.
+
     Returns:
-        A VerifyReport. Use `report.is_clean` for compliance and
-        `report.has_tailoring_drift` for intent-vs-deployed drift.
+        A VerifyReport. Use `report.is_clean` for an at-a-glance pass/fail
+        and `report.has_tailoring_drift` for intent-vs-deployed drift.
 
     Raises:
-        SudoPromptError, OscapInvocationError, ArfMissingError, ArfParseError,
-        SshConnectError, ToolMissingError: same as v0.8.0.
+        SudoPromptError: passwordless sudo unavailable for `user` on `host`.
+        OscapInvocationError: tailoring missing, oscap exit not in {0, 2},
+            or `cfg.meta.scap_content` not installed on `host`.
+        ArfMissingError: oscap reported success but the ARF file is empty
+            or absent.
+        ArfParseError: ARF text is not well-formed XML or has no TestResult.
+        SshConnectError: ssh/scp transport failure.
+        ToolMissingError: system `ssh` or `scp` not on PATH.
         TailoringParseError: malformed deployed or re-rendered tailoring XML
-            (only when `check_tailoring=True`). Message names the side.
+            (only when `check_tailoring=True`). Message names the side
+            ("deployed tailoring at /root/tailoring.xml" or "re-rendered
+            tailoring") so the operator knows whether to suspect host
+            tampering or a ks-gen renderer regression.
     """
     extra_opts = ssh_extra_opts or []
 
