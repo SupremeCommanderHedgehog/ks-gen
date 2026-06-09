@@ -65,6 +65,19 @@ def _extract_start_time(text: str) -> str | None:
     return None
 
 
+def orphan_rule_ids(
+    baseline_results: dict[str, RuleResult],
+    current_results: dict[str, RuleResult],
+) -> tuple[str, ...]:
+    """rule_ids present in baseline but absent from current, sorted.
+
+    The 'stale baseline' signal — typically caused by an SSG upgrade
+    between capture and verify. Returns a sorted tuple for stable
+    rendering and JSON output.
+    """
+    return tuple(sorted(set(baseline_results) - set(current_results)))
+
+
 def read_baseline(path: Path) -> ReadBaseline:
     """Read and parse a captured baseline ARF from disk.
 

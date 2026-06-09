@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 from ks_gen.loader import ConfigError, ExitCode
-from ks_gen.verify.baseline import BaselineReport, ReadBaseline, read_baseline
+from ks_gen.verify.arf import RuleResult
+from ks_gen.verify.baseline import BaselineReport, ReadBaseline, orphan_rule_ids, read_baseline
 from ks_gen.verify.errors import ArfMissingError, ArfParseError
 
 
@@ -108,3 +109,39 @@ def test_read_baseline_directory_raises_config_error(tmp_path: Path) -> None:
     with pytest.raises(ConfigError) as exc_info:
         read_baseline(tmp_path)
     assert exc_info.value.exit_code == ExitCode.USAGE
+
+
+def _rr(rule_id: str, result: str = "pass") -> RuleResult:
+    return RuleResult(rule_id=rule_id, result=result)  # type: ignore[arg-type]
+
+
+def test_orphan_rule_ids_baseline_subset_of_current_returns_empty() -> None:
+    baseline = {"r1": _rr("r1"), "r2": _rr("r2")}
+    current = {"r1": _rr("r1"), "r2": _rr("r2"), "r3": _rr("r3")}
+    assert orphan_rule_ids(baseline, current) == ()
+
+
+def test_orphan_rule_ids_baseline_has_extras_returns_those() -> None:
+    baseline = {"r1": _rr("r1"), "r2": _rr("r2"), "r_stale": _rr("r_stale")}
+    current = {"r1": _rr("r1"), "r2": _rr("r2")}
+    assert orphan_rule_ids(baseline, current) == ("r_stale",)
+
+
+def test_orphan_rule_ids_sorted_alphabetically() -> None:
+    baseline = {"r_z": _rr("r_z"), "r_a": _rr("r_a"), "r_m": _rr("r_m")}
+    current: dict[str, RuleResult] = {}
+    assert orphan_rule_ids(baseline, current) == ("r_a", "r_m", "r_z")
+
+
+def test_orphan_rule_ids_empty_inputs_returns_empty() -> None:
+    assert orphan_rule_ids({}, {}) == ()
+
+
+def test_orphan_rule_ids_empty_baseline_returns_empty() -> None:
+    current = {"r1": _rr("r1")}
+    assert orphan_rule_ids({}, current) == ()
+
+
+def test_orphan_rule_ids_empty_current_returns_all_baseline() -> None:
+    baseline = {"r1": _rr("r1"), "r2": _rr("r2")}
+    assert orphan_rule_ids(baseline, {}) == ("r1", "r2")
