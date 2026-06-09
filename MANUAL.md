@@ -305,7 +305,7 @@ absence of any is a config error.
 
 ```yaml
 disk:
-  preset: stig_server              # stig_server | minimal (custom reserved for v0.2)
+  preset: stig_server              # stig_server | minimal (for custom layouts use disk.layout — see below)
   wipe: true                       # clearpart --all --initlabel
   bootloader_password: null        # null | "..."
 ```
@@ -781,17 +781,18 @@ will give you autocomplete + inline validation via:
 | 5 | External tool missing (`xorriso`, `ksvalidator`, `ssh`/`scp`) |
 | 6 | `verify`: at least one rule fails on the live host |
 | 7 | `verify`: transport failure (ssh unreachable, sudo prompt, ARF parse error) |
+| 8 | `verify --check-tailoring`: workstation `host.yaml` differs from deployed `/root/tailoring.xml` (and compliance is otherwise clean) |
 
 CI scripts can branch on these precisely. Code 3 in particular tells
 you the YAML is internally inconsistent in a way that isn't a typo —
-the generator refused to produce an unsafe kickstart. Codes 6 and 7
+the generator refused to produce an unsafe kickstart. Codes 6, 7, and 8
 are only emitted by `ks-gen verify`; see §8.5 for details.
 
 ---
 
 ## 6. The override rule catalog
 
-Twelve rules ship in v0.1. Each has its own file in
+Thirteen rules ship today. Each has its own file in
 `src/ks_gen/rules/`. Run `ks-gen rules` for the live list with
 exact XCCDF IDs.
 
@@ -1081,6 +1082,7 @@ entirely (compliance-only mode).
 | 5 | `ssh` or `scp` not on `PATH`. |
 | 6 | At least one rule fails on the live host (`new_fail` or `regression`). |
 | 7 | Transport failure: ssh unreachable, sudo prompt, oscap not runnable, ARF parse error. |
+| 8 | `--check-tailoring`: workstation `host.yaml` differs from deployed `/root/tailoring.xml`, and compliance is otherwise clean. Compliance failures (code 6) take precedence — a host with both exits 6. |
 
 Codes 3 and 4 are never emitted by `verify` (they're `gen`/`lint`-only —
 see §5.7 for the global table). CI scripts can branch on these; code 6
