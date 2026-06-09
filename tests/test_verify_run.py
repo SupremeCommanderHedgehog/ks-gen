@@ -379,3 +379,77 @@ def test_run_verify_baseline_path_and_capture_to_both_set_raises(tmp_path: Path)
         )
     assert exc_info.value.exit_code == ExitCode.USAGE
     assert "mutually exclusive" in str(exc_info.value)
+
+
+def test_run_verify_capture_to_parent_missing_raises_config_error(tmp_path: Path) -> None:
+    """capture_to with a nonexistent parent dir should raise ConfigError(USAGE)
+    before any SSH or file I/O."""
+    import pytest
+
+    from ks_gen.loader import ConfigError, ExitCode
+    from ks_gen.verify import run_verify
+
+    out = tmp_path / "does-not-exist" / "captured.arf"
+
+    with pytest.raises(ConfigError) as exc_info:
+        run_verify(
+            cfg=_cfg(),
+            host="h",
+            user="ops",
+            workdir=tmp_path,
+            capture_to=out,
+            ssh_extra_opts=[],
+            timeout=600,
+        )
+    assert exc_info.value.exit_code == ExitCode.USAGE
+    assert "parent directory" in str(exc_info.value)
+
+
+def test_run_verify_baseline_path_composes_with_check_tailoring(tmp_path: Path) -> None:
+    """When both --baseline and --check-tailoring are set, BaselineReport AND
+    TailoringDriftReport are both attached. Compliance reconcile uses the
+    captured baseline; tailoring drift compares against the host."""
+    from ks_gen.tailoring import build_tailoring_xml
+    from ks_gen.verify import run_verify
+    from ks_gen.verify.remote import CollectedArfs
+    from ks_gen.writer import render_tailoring
+
+    current = (FIXTURES / "arf-clean.xml").read_text(encoding="utf-8")
+    baseline_arf = (FIXTURES / "arf-install-baseline.xml").read_text(encoding="utf-8")
+    baseline_path = tmp_path / "b.arf.xml"
+    baseline_path.write_text(baseline_arf, encoding="utf-8")
+
+    cfg = _cfg()
+    # Synthetic deployed tailoring: matches cfg + one extra disable → drift.
+    deployed_xml = build_tailoring_xml(
+        [TailoringOp("xccdf_org.ssgproject.content_rule_synthetic_drift", "disable")],
+        profile_id="xccdf_org.ssgproject.content_profile_stig",
+    )
+    _ = render_tailoring(cfg)  # warm any deferred imports — matches existing test pattern
+
+    with (
+        patch(
+            "ks_gen.verify.collect_arfs",
+            return_value=CollectedArfs(current_text=current, install_text=None),
+        ),
+        patch(
+            "ks_gen.verify.collect_deployed_tailoring",
+            return_value=deployed_xml,
+        ),
+    ):
+        report = run_verify(
+            cfg=cfg,
+            host="h",
+            user="ops",
+            workdir=tmp_path,
+            check_tailoring=True,
+            baseline_path=baseline_path,
+            ssh_extra_opts=[],
+            timeout=600,
+        )
+
+    # Both attached.
+    assert report.baseline is not None
+    assert report.baseline.path == str(baseline_path)
+    assert report.tailoring_drift is not None
+    assert report.has_tailoring_drift is True
