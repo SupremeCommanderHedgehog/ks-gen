@@ -7,7 +7,13 @@ import yaml
 from syrupy.assertion import SnapshotAssertion
 
 from ks_gen.verify.reconcile import VerifyReport, VerifyRow
-from ks_gen.verify.suggest import AppendResult, apply_to_host_yaml, build_suggestions, render_yaml
+from ks_gen.verify.suggest import (
+    AppendResult,
+    Suggestion,
+    apply_to_host_yaml,
+    build_suggestions,
+    render_yaml,
+)
 
 
 def _report(*rows: VerifyRow, host: str = "h1") -> VerifyReport:
@@ -252,3 +258,52 @@ def test_apply_allow_regression_false_skips_regressions_only(tmp_path: Path):
     after = yaml.safe_load(host_yaml.read_text(encoding="utf-8"))
     ids = [e["id"] for e in after["exceptions"]]
     assert ids == ["auto-new_fail-rule_d"]
+
+
+# --- backup file behavior tests -------------------------------------------
+
+
+def test_apply_writes_backup_matching_pre_apply_content(tmp_path: Path):
+    host_yaml = _write_host_yaml(tmp_path)
+    pre_content = host_yaml.read_text(encoding="utf-8")
+    suggestions = build_suggestions(_new_fail_report())
+
+    apply_to_host_yaml(suggestions=suggestions, host_yaml_path=host_yaml, allow_regression=False)
+
+    backup = host_yaml.with_suffix(".yaml.bak")
+    assert backup.exists()
+    assert backup.read_text(encoding="utf-8") == pre_content
+
+
+def test_apply_overwrites_existing_backup(tmp_path: Path):
+    host_yaml = _write_host_yaml(tmp_path)
+    suggestions_v1 = build_suggestions(_new_fail_report())
+
+    # First apply creates .bak from the original
+    apply_to_host_yaml(suggestions=suggestions_v1, host_yaml_path=host_yaml, allow_regression=False)
+    # Now main has 1 entry; .bak has 0
+    backup = host_yaml.with_suffix(".yaml.bak")
+    assert "exceptions" not in yaml.safe_load(backup.read_text(encoding="utf-8")) or yaml.safe_load(
+        backup.read_text(encoding="utf-8")
+    ).get("exceptions") in (None, [])
+
+    # Second apply with a different rule overwrites .bak with the
+    # now-1-entry main
+    new_report = _report(VerifyRow("rule_f", "fail", "fail", False, "new_fail"))
+    suggestions_v2 = build_suggestions(new_report)
+    apply_to_host_yaml(suggestions=suggestions_v2, host_yaml_path=host_yaml, allow_regression=False)
+
+    backup_after = yaml.safe_load(backup.read_text(encoding="utf-8"))
+    backup_ids = [e["id"] for e in backup_after["exceptions"]]
+    assert backup_ids == ["auto-new_fail-rule_d"]  # the previous main state
+
+
+def test_apply_no_op_does_not_create_backup(tmp_path: Path):
+    host_yaml = _write_host_yaml(tmp_path)
+    # No failing rows -> no suggestions -> nothing to apply
+    suggestions: list[Suggestion] = []
+
+    apply_to_host_yaml(suggestions=suggestions, host_yaml_path=host_yaml, allow_regression=False)
+
+    backup = host_yaml.with_suffix(".yaml.bak")
+    assert not backup.exists()
