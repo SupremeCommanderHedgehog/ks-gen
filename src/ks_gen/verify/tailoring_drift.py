@@ -163,3 +163,39 @@ def compare_tailorings(
         removed=removed,
         changed=changed,
     )
+
+
+def _has_any_drift(report: TailoringDriftReport) -> bool:
+    return bool(report.added or report.removed or report.changed) or (
+        report.profile_id_expected != report.profile_id_deployed
+    )
+
+
+def render_drift_section(report: TailoringDriftReport) -> str:
+    """Human-readable drift section for the verify text report.
+
+    Returns empty string when there is no drift to render — caller doesn't
+    have to gate on `has_tailoring_drift`. Glyph legend: `+` added (expected
+    only), `-` removed (deployed only), `~` changed (set_value delta). The
+    `(profile changed: ...)` line appears only when profile_ids differ.
+    """
+    if not _has_any_drift(report):
+        return ""
+
+    lines: list[str] = [
+        "Tailoring drift detected — workstation host.yaml differs from /root/tailoring.xml.",
+        "Re-run `ks-gen gen <host.yaml>` and redeploy to align.",
+        "",
+    ]
+    for op in report.added:
+        lines.append(f"  + {op.action} {op.rule_id}")
+    for op in report.removed:
+        lines.append(f"  - {op.action} {op.rule_id}")
+    for change in report.changed:
+        lines.append(f"  ~ {change.rule_id}: {change.deployed_value} → {change.expected_value}")
+    if report.profile_id_expected != report.profile_id_deployed:
+        lines.append(
+            f"  (profile changed: {report.profile_id_deployed} → {report.profile_id_expected})"
+        )
+
+    return "\n".join(lines) + "\n"
