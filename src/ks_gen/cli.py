@@ -280,7 +280,11 @@ def verify_cmd(
         else:
             typer.echo(render_table(report, suggestions=suggestions))
 
-        if apply and suggestions:
+        # Note: `suggestions` here is guaranteed non-None when `apply` is set
+        # (we built it above via `want_suggestions`). Use `is not None` rather
+        # than a truthiness check so the "clean report + --apply" case still
+        # calls apply_to_host_yaml(), which then prints "nothing to apply".
+        if apply and suggestions is not None:
             try:
                 apply_result = apply_to_host_yaml(
                     suggestions=suggestions,
