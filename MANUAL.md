@@ -1188,6 +1188,73 @@ top-level `tailoring_drift` key. The key is omitted (not present) when
 the flag isn't set, so consumers can use `key in payload` to detect
 whether the check ran.
 
+#### Capturing and using a workstation baseline
+
+`ks-gen verify --capture-baseline <path>` runs oscap on the host as
+usual, then writes the resulting ARF to `<path>` on your workstation.
+The normal verify report still prints — capture is a side effect of a
+regular verify run, not a separate operation.
+
+`ks-gen verify --baseline <path>` uses that captured file as the drift
+baseline instead of the host's `/root/oscap-remediation-results.xml`.
+The install ARF is not pulled at all when `--baseline` is set.
+
+The two flags are mutually exclusive in a single invocation — capturing
+and using a baseline are two operator intents on two different days.
+
+**When to use this.** Two common scenarios:
+
+1. **Post-install manual review.** You finish a kickstart install, SSH
+   in, fix some failing rules by hand or accept others as exceptions
+   in `host.yaml`. You want future verify runs to treat the reviewed
+   state as ground truth, not the dirty install state. Capture the
+   baseline after review:
+
+   ````
+   ks-gen verify --capture-baseline ./baseline.arf.xml \
+       --host host.example.com --config host.yaml
+   # ... review the report ...
+   # From now on:
+   ks-gen verify --baseline ./baseline.arf.xml \
+       --host host.example.com --config host.yaml
+   ````
+
+2. **SSG upgrade staleness.** Months later, `scap-security-guide`
+   upgrades and adds/removes rules. The install ARF on the host
+   references rule IDs that no longer exist in the current SCAP
+   content. Verify can't reliably distinguish "rule passed" from "rule
+   no longer evaluated" against a stale install ARF — recapture against
+   the new SSG to refresh.
+
+**Stale-baseline warning.** When the captured baseline references rules
+that don't exist in the current ARF (typically caused by an SSG upgrade
+between capture and verify), the report shows:
+
+````
+  NOTE: 7 rules in baseline not present in current ARF — baseline may be stale (SSG upgraded?)
+````
+
+Doesn't change exit codes — pure information. The JSON output's
+`baseline.orphans` array lists the affected rule IDs.
+
+**File format.** Same XCCDF ARF that `oscap xccdf eval` produces —
+verbatim. An operator can hand-produce one with stock `oscap` (without
+ks-gen) and feed it in via `--baseline`. The capture flow simply
+relocates what's already there.
+
+**Doesn't replace `host.yaml` exceptions.** Captured baseline and
+declared exceptions are orthogonal axes:
+- `host.yaml` exceptions = "this failing rule is intentional; never
+  surface it as a problem"
+- Captured baseline = "the reconcile diff should be measured against
+  THIS state, not against install state"
+
+Use both together when appropriate.
+
+**JSON output.** `verify --format json --baseline <path>` adds a
+top-level `baseline` key with `path`, `captured_utc`, and `orphans`.
+The key is omitted when `--baseline` isn't set.
+
 ## 9. Common workflows
 
 ### 9.1 Spin up a new cloud VM
