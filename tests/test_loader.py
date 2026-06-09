@@ -56,3 +56,9 @@ def test_crypto_fips_conflict_returns_exit_3(tmp_path):
     with pytest.raises(ConfigError) as exc:
         load_host_config(f, sets=["overrides.fips_mode=true"])
     assert exc.value.exit_code == ExitCode.RULE_CONFLICT
+
+
+def test_exit_code_tailoring_drift_is_8() -> None:
+    from ks_gen.loader import ExitCode
+
+    assert int(ExitCode.TAILORING_DRIFT) == 8
