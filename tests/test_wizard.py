@@ -247,3 +247,60 @@ def test_disk_minimal_skips_luks_prompt(monkeypatch: pytest.MonkeyPatch):
     payload = _disk.prompts()
     assert payload == {"preset": "minimal", "wipe": True}
     assert "luks" not in payload
+
+
+def test_disk_luks_partial_inline_match(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "partial", "inline"],
+            "ask_confirm": [True],
+            "ask_password": ["hunter2", "hunter2"],
+        },
+    )
+    payload = _disk.prompts()
+    assert payload == {
+        "preset": "stig_server",
+        "wipe": True,
+        "luks": {"preset": "partial", "passphrase": "hunter2"},
+    }
+
+
+def test_disk_luks_partial_inline_retry_then_match(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "partial", "inline"],
+            "ask_confirm": [True],
+            # first pair mismatches, second pair matches
+            "ask_password": ["hunter2", "wrong", "hunter2", "hunter2"],
+        },
+    )
+    payload = _disk.prompts()
+    assert payload["luks"]["passphrase"] == "hunter2"
+
+
+def test_disk_luks_partial_inline_three_mismatches_raises(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "partial", "inline"],
+            "ask_confirm": [True],
+            "ask_password": ["a", "b"] * 3,
+        },
+    )
+    with pytest.raises(WizardError, match="confirmation mismatch"):
+        _disk.prompts()
+
+
+def test_disk_luks_partial_inline_empty_passphrase_raises(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "partial", "inline"],
+            "ask_confirm": [True],
+            "ask_password": ["   ", "   "],
+        },
+    )
+    with pytest.raises(WizardError, match="empty"):
+        _disk.prompts()
