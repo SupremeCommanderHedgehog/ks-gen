@@ -16,7 +16,7 @@ from ks_gen.verify import run_verify
 from ks_gen.verify.errors import VerifyError
 from ks_gen.verify.report import render_json, render_table
 from ks_gen.verify.ssh import check_tools
-from ks_gen.verify.suggest import build_suggestions
+from ks_gen.verify.suggest import AppendResult, apply_to_host_yaml, build_suggestions
 from ks_gen.wizard import WizardError, run_wizard, write_initial
 from ks_gen.writer import build_bundle, write_bundle
 
@@ -147,6 +147,29 @@ def iso_cmd(
     typer.echo(f"Wrote {out}")
 
 
+def _echo_apply_summary(result: AppendResult) -> None:
+    if result.added:
+        typer.echo(
+            f"ks-gen verify: applied {len(result.added)} suggestion(s): "
+            f"{', '.join(result.added)} (backup at {result.backup_path})",
+            err=True,
+        )
+    if result.skipped_existing:
+        typer.echo(
+            f"ks-gen verify: skipped {len(result.skipped_existing)} already-present: "
+            f"{', '.join(result.skipped_existing)}",
+            err=True,
+        )
+    if result.skipped_regression:
+        typer.echo(
+            f"ks-gen verify: skipped {len(result.skipped_regression)} regression "
+            f"(use --allow-regression to apply): {', '.join(result.skipped_regression)}",
+            err=True,
+        )
+    if not (result.added or result.skipped_existing or result.skipped_regression):
+        typer.echo("ks-gen verify: nothing to apply", err=True)
+
+
 @app.command(
     name="verify",
     help="Re-run oscap on a deployed host and reconcile against host.yaml.",
@@ -183,6 +206,15 @@ def verify_cmd(
         False,
         "--suggest-exceptions",
         help="Render ready-to-paste ExceptionDecl YAML for new_fail and regression rules.",
+    ),
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help=(
+            "Append the suggestions to host.yaml after a backup + schema "
+            "round-trip. Implies --suggest-exceptions. Regression-category "
+            "suggestions require --allow-regression."
+        ),
     ),
     timeout: int = typer.Option(600, "--timeout", help="oscap run timeout in seconds."),
 ) -> None:
@@ -227,11 +259,24 @@ def verify_cmd(
             typer.echo(f"ks-gen verify: transport failure: {label}: {e}", err=True)
             raise typer.Exit(code=int(e.exit_code)) from None
 
-        suggestions = build_suggestions(report) if suggest_exceptions else None
+        want_suggestions = suggest_exceptions or apply
+        suggestions = build_suggestions(report) if want_suggestions else None
         if format_ == "json":
             typer.echo(render_json(report, suggestions=suggestions))
         else:
             typer.echo(render_table(report, suggestions=suggestions))
+
+        if apply and suggestions:
+            try:
+                apply_result = apply_to_host_yaml(
+                    suggestions=suggestions,
+                    host_yaml_path=config,
+                    allow_regression=False,
+                )
+            except VerifyError as e:
+                typer.echo(f"ks-gen verify: apply failed: {e}", err=True)
+                raise typer.Exit(code=int(e.exit_code)) from None
+            _echo_apply_summary(apply_result)
 
         if not report.is_clean:
             raise typer.Exit(code=int(ExitCode.VERIFY_FAIL))

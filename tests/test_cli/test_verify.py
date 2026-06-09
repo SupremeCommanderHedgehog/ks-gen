@@ -215,3 +215,30 @@ def test_verify_suggest_exceptions_json_includes_array(tmp_path: Path) -> None:
     payload = _json.loads(result.stdout)
     assert "suggested_exceptions" in payload
     assert len(payload["suggested_exceptions"]) == 2
+
+
+def test_verify_apply_writes_new_fail_to_host_yaml(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.check_tools"),
+        patch("ks_gen.cli.run_verify", return_value=_new_fail_report()),
+    ):
+        result = runner.invoke(
+            app,
+            ["verify", "--host", "h1", "--config", str(cfg), "--apply"],
+        )
+
+    assert result.exit_code == int(ExitCode.VERIFY_FAIL)
+    # Suggestions also rendered because --apply implies --suggest-exceptions
+    assert "Suggested exception entries" in result.stdout
+    # host.yaml now has the new_fail exception, NOT the regression
+    import yaml as _yaml
+
+    after = _yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    ids = [e["id"] for e in after.get("exceptions", [])]
+    assert ids == ["auto-new_fail-rule_d"]
+    # Backup exists
+    assert (tmp_path / "host.yaml.bak").exists()
+    # Stderr summary mentions the regression was held back
+    assert "auto-regression-rule_e" in result.stderr or "auto-regression-rule_e" in result.output
