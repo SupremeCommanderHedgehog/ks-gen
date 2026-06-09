@@ -37,3 +37,11 @@ class ToolMissingError(VerifyError):
     """system ssh or scp not on PATH."""
 
     exit_code: ExitCode = ExitCode.TOOL_MISSING
+
+
+class SuggestApplyError(VerifyError):
+    """Apply-side failure: malformed host.yaml, schema-rejecting candidate,
+    or write/backup IO error. Exit code is CONFIG_INVALID (2) because the
+    operator's config file content (not CLI invocation) is what needs fixing."""
+
+    exit_code: ExitCode = ExitCode.CONFIG_INVALID
