@@ -10,7 +10,7 @@ from ks_gen.verify.errors import (
     OscapInvocationError,
     SudoPromptError,
 )
-from ks_gen.verify.remote import CollectedArfs, collect_arfs, probe_sudo
+from ks_gen.verify.remote import CollectedArfs, collect_arfs, collect_deployed_tailoring, probe_sudo
 from ks_gen.verify.ssh import SshResult
 
 # --- probe_sudo --------------------------------------------------------------
@@ -247,3 +247,64 @@ def test_collect_arfs_raises_when_current_arf_is_empty(tmp_path: Path) -> None:
             ssh_extra_opts=[],
             timeout=600,
         )
+
+
+# --- collect_deployed_tailoring ----------------------------------------------
+
+
+def test_collect_deployed_tailoring_pulls_and_returns_text(tmp_path: Path) -> None:
+    pulled: dict[str, object] = {}
+
+    def fake_ssh(host: str, user: str, cmd: str, **kw: object) -> SshResult:
+        if cmd == "sudo -n true":
+            return SshResult("", "", 0)
+        if cmd == "sudo -n test -r /root/tailoring.xml":
+            return SshResult("", "", 0)
+        raise AssertionError(f"unexpected ssh cmd: {cmd}")
+
+    def fake_scp(host: str, user: str, remote: str, local: Path, **kw: object) -> None:
+        pulled["remote"] = remote
+        local.write_text("<xccdf:Tailoring/>", encoding="utf-8")
+
+    with (
+        patch("ks_gen.verify.remote.ssh_exec", side_effect=fake_ssh),
+        patch("ks_gen.verify.remote.scp_pull", side_effect=fake_scp),
+    ):
+        text = collect_deployed_tailoring(host="h", user="u", workdir=tmp_path, ssh_extra_opts=[])
+
+    assert pulled["remote"] == "/root/tailoring.xml"
+    assert text == "<xccdf:Tailoring/>"
+
+
+def test_collect_deployed_tailoring_raises_when_file_missing(tmp_path: Path) -> None:
+    def fake_ssh(host: str, user: str, cmd: str, **kw: object) -> SshResult:
+        if cmd == "sudo -n true":
+            return SshResult("", "", 0)
+        if cmd == "sudo -n test -r /root/tailoring.xml":
+            return SshResult("", "", 1)
+        raise AssertionError(f"unexpected ssh cmd: {cmd}")
+
+    with (
+        patch("ks_gen.verify.remote.ssh_exec", side_effect=fake_ssh),
+        pytest.raises(OscapInvocationError, match="install-time tailoring"),
+    ):
+        collect_deployed_tailoring(host="h", user="u", workdir=tmp_path, ssh_extra_opts=[])
+
+
+def test_collect_deployed_tailoring_raises_when_pulled_file_empty(tmp_path: Path) -> None:
+    def fake_ssh(host: str, user: str, cmd: str, **kw: object) -> SshResult:
+        if cmd == "sudo -n true":
+            return SshResult("", "", 0)
+        if cmd == "sudo -n test -r /root/tailoring.xml":
+            return SshResult("", "", 0)
+        raise AssertionError(f"unexpected ssh cmd: {cmd}")
+
+    def fake_scp(host: str, user: str, remote: str, local: Path, **kw: object) -> None:
+        local.write_text("", encoding="utf-8")
+
+    with (
+        patch("ks_gen.verify.remote.ssh_exec", side_effect=fake_ssh),
+        patch("ks_gen.verify.remote.scp_pull", side_effect=fake_scp),
+        pytest.raises(ArfMissingError, match="empty"),
+    ):
+        collect_deployed_tailoring(host="h", user="u", workdir=tmp_path, ssh_extra_opts=[])
