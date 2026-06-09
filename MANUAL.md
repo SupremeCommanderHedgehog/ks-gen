@@ -630,20 +630,36 @@ All subcommands accept `--help`. Exit codes documented at §5.7.
 ### 5.1 `ks-gen new`
 
 Interactive wizard. Walks you through hostname, timezone, locale,
-admin user, SSH keys, SSH port, crypto policy. Writes the full
-4-file bundle.
+admin user, SSH keys, SSH port, and crypto policy, then offers an
+opt-in checkbox for three optional sections: disk layout, network,
+and the override matrix. Writes the full 4-file bundle.
 
 ```bash
 ks-gen new --out ./build
 # ./build/<hostname>/{host.yaml,ks.cfg,tailoring.xml,exceptions.md}
 
 ks-gen new --out ./build --non-interactive
-# Errors out unless every required field has a default
+# Errors out unless every required field has a default;
+# skips all optional sections (output matches the legacy 4-prompt run).
 ```
 
-The wizard in v0.1 covers system / user / SSH / crypto. Disk,
-network, and override-matrix tuning go through `--set` or by
-editing the produced `host.yaml` and re-running `ks-gen gen`.
+The optional sections cover:
+
+- **Disk**: preset (`stig_server` / `minimal`), wipe confirmation,
+  LUKS encryption (`none` / `partial` with inline or sidecar-file
+  passphrase). Custom `disk.layout:`, `bootloader_password`, and
+  `tang` LUKS are intentionally hand-edit only.
+- **Network**: per-interface device, bootproto (dhcp / static), and
+  for static interfaces IP / netmask / gateway / nameservers. Loops
+  to "add another?" after each interface. Bond / bridge / VLAN are
+  hand-edit only.
+- **Override matrix**: two checkbox prompts — default-on rules to
+  disable (`faillock`, `kernel_module_blacklist`, `package_purge`,
+  `unattended_updates`), and default-off rules to enable (`usbguard`,
+  `dod_root_ca`). Nested fields (e.g., `faillock.deny`,
+  `unattended_updates.nightly_security.on_calendar`) remain
+  hand-edit; same for `fips_mode`, `auditd_actions`, `ssh_keep_open`,
+  and the `exceptions:` list.
 
 ### 5.2 `ks-gen gen`
 
