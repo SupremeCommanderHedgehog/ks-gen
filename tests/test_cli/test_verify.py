@@ -242,3 +242,60 @@ def test_verify_apply_writes_new_fail_to_host_yaml(tmp_path: Path) -> None:
     assert (tmp_path / "host.yaml.bak").exists()
     # Stderr summary mentions the regression was held back
     assert "auto-regression-rule_e" in result.stderr or "auto-regression-rule_e" in result.output
+
+
+def test_verify_apply_allow_regression_writes_regression_too(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.check_tools"),
+        patch("ks_gen.cli.run_verify", return_value=_new_fail_report()),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "verify",
+                "--host",
+                "h1",
+                "--config",
+                str(cfg),
+                "--apply",
+                "--allow-regression",
+            ],
+        )
+
+    assert result.exit_code == int(ExitCode.VERIFY_FAIL)
+    import yaml as _yaml
+
+    after = _yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    ids = [e["id"] for e in after.get("exceptions", [])]
+    assert ids == ["auto-new_fail-rule_d", "auto-regression-rule_e"]
+
+
+def test_verify_allow_regression_without_apply_prints_note(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.check_tools"),
+        patch("ks_gen.cli.run_verify", return_value=_new_fail_report()),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "verify",
+                "--host",
+                "h1",
+                "--config",
+                str(cfg),
+                "--suggest-exceptions",
+                "--allow-regression",
+            ],
+        )
+
+    # host.yaml is NOT modified
+    import yaml as _yaml
+
+    after = _yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    assert "exceptions" not in after or after["exceptions"] in (None, [])
+    # The note appears on stderr
+    assert "--allow-regression has no effect without --apply" in (result.stderr or result.output)
