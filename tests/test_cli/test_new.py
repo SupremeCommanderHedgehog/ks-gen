@@ -1,4 +1,5 @@
 import textwrap
+from unittest.mock import patch
 
 from typer.testing import CliRunner
 
@@ -30,11 +31,12 @@ def test_new_runs_with_scripted_stdin(tmp_path):
         """
     )
     out_dir = tmp_path / "out"
-    result = runner.invoke(
-        app,
-        ["new", "--out", str(out_dir)],
-        input=stdin,
-    )
+    with patch("ks_gen.wizard._prompts.ask_checkbox", return_value=[]):
+        result = runner.invoke(
+            app,
+            ["new", "--out", str(out_dir)],
+            input=stdin,
+        )
     assert result.exit_code == 0, result.output
     for name in ("ks.cfg", "tailoring.xml", "host.yaml", "exceptions.md"):
         assert (out_dir / "web01.example.com" / name).is_file()
