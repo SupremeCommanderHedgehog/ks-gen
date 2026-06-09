@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from ks_gen.wizard import WizardError, _prompts, run_wizard, write_initial
+from ks_gen.wizard import WizardError, _disk, _prompts, run_wizard, write_initial
 from ks_gen.wizard import _core as _wizard_core
 
 
@@ -182,3 +183,67 @@ def test_run_wizard_empty_group_selector_matches_legacy(monkeypatch: pytest.Monk
         legacy_cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False
     )
     assert yaml_text == legacy_yaml
+
+
+# --- _disk group tests -----------------------------------------------------
+
+
+def _scripted(monkeypatch: pytest.MonkeyPatch, scripts: dict[str, list[Any]]) -> None:
+    """Replace _prompts.* functions with scripted pop-front queues.
+
+    Each key in `scripts` maps to a list of values popped per call.
+    Raises IndexError if the wizard asks more times than scripted.
+    """
+    for name, values in scripts.items():
+        queue = list(values)
+
+        def _make(q: list[Any]) -> Callable[..., Any]:
+            def _f(*_a: object, **_kw: object) -> Any:
+                return q.pop(0)
+
+            return _f
+
+        monkeypatch.setattr(_prompts, name, _make(queue))
+
+
+def test_disk_stig_server_no_luks(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "none"],
+            "ask_confirm": [True],  # wipe = true
+        },
+    )
+    payload = _disk.prompts()
+    assert payload == {
+        "preset": "stig_server",
+        "wipe": True,
+        "luks": {"preset": "none"},
+    }
+
+
+def test_disk_stig_server_no_wipe(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "none"],
+            "ask_confirm": [False],
+        },
+    )
+    payload = _disk.prompts()
+    assert payload["wipe"] is False
+
+
+def test_disk_minimal_skips_luks_prompt(monkeypatch: pytest.MonkeyPatch):
+    # Only one select_one call (preset). If LUKS were asked, the queue
+    # would underflow and IndexError would be raised.
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["minimal"],
+            "ask_confirm": [True],
+        },
+    )
+    payload = _disk.prompts()
+    assert payload == {"preset": "minimal", "wipe": True}
+    assert "luks" not in payload
