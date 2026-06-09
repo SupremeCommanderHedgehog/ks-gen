@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from ks_gen.wizard import WizardError, _disk, _prompts, run_wizard, write_initial
+from ks_gen.wizard import WizardError, _disk, _network, _prompts, run_wizard, write_initial
 from ks_gen.wizard import _core as _wizard_core
 
 
@@ -334,3 +334,32 @@ def test_disk_luks_partial_file_empty_path_raises(monkeypatch: pytest.MonkeyPatc
     )
     with pytest.raises(WizardError, match="path is empty"):
         _disk.prompts()
+
+
+# --- _network group tests --------------------------------------------------
+
+
+def test_network_single_dhcp_default_device(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "ask_text": ["link"],  # device
+            "select_one": ["dhcp"],
+            "ask_confirm": [True, False],  # onboot=True, add another=False
+        },
+    )
+    payload = _network.prompts()
+    assert payload == {"interfaces": [{"device": "link", "bootproto": "dhcp", "onboot": True}]}
+
+
+def test_network_single_dhcp_explicit_device(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "ask_text": ["eth0"],
+            "select_one": ["dhcp"],
+            "ask_confirm": [True, False],
+        },
+    )
+    payload = _network.prompts()
+    assert payload["interfaces"][0]["device"] == "eth0"
