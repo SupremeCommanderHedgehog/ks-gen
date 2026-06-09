@@ -304,3 +304,33 @@ def test_disk_luks_partial_inline_empty_passphrase_raises(monkeypatch: pytest.Mo
     )
     with pytest.raises(WizardError, match="empty"):
         _disk.prompts()
+
+
+def test_disk_luks_partial_file(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "partial", "file"],
+            "ask_confirm": [True],
+            "ask_text": ["/etc/ks-gen/luks.key"],
+        },
+    )
+    payload = _disk.prompts()
+    assert payload == {
+        "preset": "stig_server",
+        "wipe": True,
+        "luks": {"preset": "partial", "passphrase_file": "/etc/ks-gen/luks.key"},
+    }
+
+
+def test_disk_luks_partial_file_empty_path_raises(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "partial", "file"],
+            "ask_confirm": [True],
+            "ask_text": [""],
+        },
+    )
+    with pytest.raises(WizardError, match="path is empty"):
+        _disk.prompts()
