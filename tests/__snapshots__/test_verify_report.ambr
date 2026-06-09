@@ -1,4 +1,67 @@
 # serializer version: 1
+# name: test_render_json_includes_tailoring_drift_when_present
+  '''
+  {
+    "host": "h1",
+    "user": "ops",
+    "timestamp_utc": "2026-06-09T12:00:00Z",
+    "install_baseline_available": true,
+    "is_clean": true,
+    "summary": {
+      "clean": 0,
+      "expected_fail": 0,
+      "new_fail": 0,
+      "regression": 0,
+      "incomplete": 0
+    },
+    "rows": [],
+    "tailoring_drift": {
+      "profile_id_expected": "profile_a",
+      "profile_id_deployed": "profile_b",
+      "added": [
+        {
+          "action": "disable",
+          "rule_id": "rule_x",
+          "value": null
+        }
+      ],
+      "removed": [
+        {
+          "action": "select",
+          "rule_id": "rule_y",
+          "value": null
+        }
+      ],
+      "changed": [
+        {
+          "rule_id": "rule_z",
+          "action": "set_value",
+          "expected_value": "24",
+          "deployed_value": "5"
+        }
+      ]
+    }
+  }
+  '''
+# ---
+# name: test_render_table_appends_drift_section_when_present
+  '''
+  verify host=h1 user=ops at=2026-06-09T12:00:00Z
+    summary: clean=0 expected_fail=0 new_fail=0 regression=1 incomplete=0 — FAILURES
+  
+    CATEGORY    CURRENT  INSTALL  EXP  RULE
+    regression  fail     pass     no   rule_b
+  
+  Tailoring drift detected — workstation host.yaml differs from /root/tailoring.xml.
+  Re-run `ks-gen gen <host.yaml>` and redeploy to align.
+  
+    + disable rule_x
+    - select rule_y
+    ~ rule_z: 5 → 24
+    (profile changed: profile_b → profile_a)
+  
+  '''
+# ---
 # name: test_render_table_clean_report
   '''
   verify host=h1.example.com user=opsadmin at=2026-06-07T12:00:00Z

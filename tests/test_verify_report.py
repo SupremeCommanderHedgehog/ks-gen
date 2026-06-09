@@ -151,3 +151,90 @@ def test_render_json_with_empty_suggestions_includes_empty_array():
     report = _report_with_failures()
     payload = _json.loads(render_json(report, suggestions=[]))
     assert payload["suggested_exceptions"] == []
+
+
+# --- tailoring_drift rendering tests ----------------------------------------
+
+
+def test_render_table_appends_drift_section_when_present(snapshot) -> None:
+    from ks_gen.rules._types import TailoringOp
+    from ks_gen.verify.reconcile import VerifyReport, VerifyRow
+    from ks_gen.verify.report import render_table
+    from ks_gen.verify.tailoring_drift import OpChange, TailoringDriftReport
+
+    drift = TailoringDriftReport(
+        profile_id_expected="profile_a",
+        profile_id_deployed="profile_b",
+        added=[TailoringOp("rule_x", "disable")],
+        removed=[TailoringOp("rule_y", "select")],
+        changed=[
+            OpChange(rule_id="rule_z", action="set_value", expected_value="24", deployed_value="5")
+        ],
+    )
+    report = VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(VerifyRow("rule_b", "fail", "pass", False, "regression"),),
+        install_baseline_available=True,
+        tailoring_drift=drift,
+    )
+    out = render_table(report)
+    assert out == snapshot
+
+
+def test_render_table_no_drift_section_when_drift_none() -> None:
+    from ks_gen.verify.reconcile import VerifyReport
+    from ks_gen.verify.report import render_table
+
+    report = VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+    )
+    assert "Tailoring drift" not in render_table(report)
+
+
+def test_render_json_includes_tailoring_drift_when_present(snapshot) -> None:
+    from ks_gen.rules._types import TailoringOp
+    from ks_gen.verify.reconcile import VerifyReport
+    from ks_gen.verify.report import render_json
+    from ks_gen.verify.tailoring_drift import OpChange, TailoringDriftReport
+
+    drift = TailoringDriftReport(
+        profile_id_expected="profile_a",
+        profile_id_deployed="profile_b",
+        added=[TailoringOp("rule_x", "disable")],
+        removed=[TailoringOp("rule_y", "select")],
+        changed=[
+            OpChange(rule_id="rule_z", action="set_value", expected_value="24", deployed_value="5")
+        ],
+    )
+    report = VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+        tailoring_drift=drift,
+    )
+    assert render_json(report) == snapshot
+
+
+def test_render_json_no_tailoring_drift_key_when_field_is_none() -> None:
+    import json as _json
+
+    from ks_gen.verify.reconcile import VerifyReport
+    from ks_gen.verify.report import render_json
+
+    report = VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+    )
+    payload = _json.loads(render_json(report))
+    assert "tailoring_drift" not in payload
