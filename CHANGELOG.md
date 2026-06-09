@@ -3,6 +3,42 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.7.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.6.0...v0.7.0) (2026-06-09)
+
+
+### Features
+
+* **wizard:** _OVERRIDE_TOGGLES mapping + schema consistency tests ([a10f687](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/a10f6874113c2cead007ebd7ad03dc006323c9f7))
+* **wizard:** disk group LUKS partial inline passphrase + retry ([62996d1](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/62996d14090af3ca4b310360726fa56587f5a5a3))
+* **wizard:** disk group LUKS partial sidecar file ([3466998](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/3466998290931bc5a19f5b8d2a42d4e4df36b208))
+* **wizard:** disk group prompts (preset, wipe, LUKS none) ([bf65135](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/bf65135a7fb605a276901c0844acd77f3b3b715b))
+* **wizard:** map KeyboardInterrupt to WizardError("aborted by user") ([ae0da12](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/ae0da12efaedc31458afceeab499580349fdffd8))
+* **wizard:** network group single DHCP interface ([25af626](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/25af6264d55356f3cb9cbad23653b969de3d56f4))
+* **wizard:** network group static interface + dotted-quad validator ([65e82d5](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/65e82d54b068e24f91cf2fe2bfa6f02e9102e472))
+* **wizard:** override matrix checkbox prompts + payload build ([08e1e60](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/08e1e60420021b3bfb074a9582ac895ab32db256))
+* **wizard:** typed questionary adapter in wizard/_prompts.py ([bd935ea](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/bd935ea6b5567200f939a9592085a8896cc4f204))
+* **wizard:** wire disk/network/overrides groups into run_wizard ([dd915fd](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/dd915fd307c8bea98aece7af4c3f50ff36431b06))
+
+
+### Bug Fixes
+
+* **wizard:** move tang hint into partial branch + test None return ([9453bc5](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/9453bc5ca43b33b6b6d9489736b6c29de44c10f8))
+
+
+### Refactoring
+
+* **wizard:** _core.prompts() + group selector orchestration ([3e61abf](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/3e61abf5e0df0cc33b345552d4fd5bb165ea7cbc))
+* **wizard:** promote wizard.py to package (no behavior change) ([3e3add8](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/3e3add8984eeb03e52400bef0c7f5d9a4936d693))
+
+
+### Documentation
+
+* **manual:** wizard prompts disk/network/overrides — update §5.1 ([1a03a51](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1a03a51cbb5f0d346d4541aeed014097b00af33c))
+* **plans:** ks-gen new wizard disk/network/overrides implementation ([dccd362](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/dccd3627126cd80af711d47e3dd769fbe0e2b216))
+* **readme:** drop v0.1 wizard-limitation bullet (closes [#9](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/9)) ([f1ad316](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/f1ad31607a41ab9673ac67687f64aa3d96459260))
+* **specs:** fix MANUAL.md section ref in wizard design (3.3 -&gt; 5.1) ([ef32602](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/ef32602891a60fd7f30277822e814fbc0b11d379))
+* **specs:** ks-gen new wizard disk/network/overrides design ([4f212b0](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/4f212b0e0778dc9ce597939f88ed3fd62f73f6e2))
+
 ## [0.6.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.5.0...v0.6.0) (2026-06-08)
 
 
