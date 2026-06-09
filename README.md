@@ -44,7 +44,7 @@ Both run oscap remediation at install time; see `MANUAL.md` §5.4.
 | `ks-gen iso` | Repackage the AlmaLinux DVD ISO with kickstart embedded |
 | `ks-gen rules` | List the override rule catalog |
 | `ks-gen schema` | Emit JSON Schema for `host.yaml` |
-| `ks-gen verify --host <addr> --config <host.yaml>` | Re-run oscap on a deployed host, reconcile failures against `host.yaml`, report compliance + drift. Exits 0 on clean, 6 on failures, 7 on transport error. |
+| `ks-gen verify --host <addr> --config <host.yaml>` | Re-run oscap on a deployed host, reconcile failures against `host.yaml`, report compliance + drift. Exits 0 on clean, 6 on failures, 7 on transport error. Pass `--check-tailoring` to also diff the deployed `/root/tailoring.xml` against your current `host.yaml` (exit 8 if drift is detected and compliance is otherwise clean). |
 
 ## Exit codes
 
