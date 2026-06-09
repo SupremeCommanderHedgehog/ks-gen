@@ -9,6 +9,7 @@ from ks_gen.verify.tailoring_drift import (
     OpChange,
     ParsedTailoring,
     TailoringDriftReport,
+    compare_tailorings,
     parse_tailoring_xml,
 )
 
@@ -94,3 +95,102 @@ def test_parse_ignores_unknown_op_elements() -> None:
     )
     parsed = parse_tailoring_xml(xml)
     assert parsed.ops == [TailoringOp(rule_id="r1", action="select")]
+
+
+def _parsed(profile: str, ops: list[TailoringOp]) -> ParsedTailoring:
+    return ParsedTailoring(profile_id=profile, ops=ops)
+
+
+def test_compare_clean_no_drift() -> None:
+    ops = [TailoringOp("r1", "disable"), TailoringOp("r2", "select")]
+    report = compare_tailorings(_parsed("p", ops), _parsed("p", ops))
+    assert report.added == []
+    assert report.removed == []
+    assert report.changed == []
+    assert report.profile_id_expected == report.profile_id_deployed == "p"
+
+
+def test_compare_added_only() -> None:
+    expected = _parsed("p", [TailoringOp("r1", "disable"), TailoringOp("r2", "disable")])
+    deployed = _parsed("p", [TailoringOp("r1", "disable")])
+    report = compare_tailorings(expected, deployed)
+    assert report.added == [TailoringOp("r2", "disable")]
+    assert report.removed == []
+    assert report.changed == []
+
+
+def test_compare_removed_only() -> None:
+    expected = _parsed("p", [TailoringOp("r1", "disable")])
+    deployed = _parsed("p", [TailoringOp("r1", "disable"), TailoringOp("r2", "disable")])
+    report = compare_tailorings(expected, deployed)
+    assert report.added == []
+    assert report.removed == [TailoringOp("r2", "disable")]
+    assert report.changed == []
+
+
+def test_compare_changed_set_value() -> None:
+    expected = _parsed("p", [TailoringOp("r1", "set_value", "24")])
+    deployed = _parsed("p", [TailoringOp("r1", "set_value", "5")])
+    report = compare_tailorings(expected, deployed)
+    assert report.added == []
+    assert report.removed == []
+    assert report.changed == [
+        OpChange(rule_id="r1", action="set_value", expected_value="24", deployed_value="5")
+    ]
+
+
+def test_compare_select_to_disable_is_two_changes_not_one() -> None:
+    """Action is part of the op identity, so a flip surfaces as remove+add."""
+    expected = _parsed("p", [TailoringOp("r1", "select")])
+    deployed = _parsed("p", [TailoringOp("r1", "disable")])
+    report = compare_tailorings(expected, deployed)
+    assert report.added == [TailoringOp("r1", "select")]
+    assert report.removed == [TailoringOp("r1", "disable")]
+    assert report.changed == []
+
+
+def test_compare_profile_id_mismatch_with_no_op_drift() -> None:
+    ops = [TailoringOp("r1", "disable")]
+    report = compare_tailorings(_parsed("p1", ops), _parsed("p2", ops))
+    assert report.profile_id_expected == "p1"
+    assert report.profile_id_deployed == "p2"
+    assert report.added == []
+    assert report.removed == []
+    assert report.changed == []
+
+
+def test_compare_all_four_categories_simultaneously() -> None:
+    expected = _parsed(
+        "p1",
+        [
+            TailoringOp("r_added", "disable"),
+            TailoringOp("r_changed", "set_value", "24"),
+            TailoringOp("r_same", "select"),
+        ],
+    )
+    deployed = _parsed(
+        "p2",
+        [
+            TailoringOp("r_removed", "disable"),
+            TailoringOp("r_changed", "set_value", "5"),
+            TailoringOp("r_same", "select"),
+        ],
+    )
+    report = compare_tailorings(expected, deployed)
+    assert report.added == [TailoringOp("r_added", "disable")]
+    assert report.removed == [TailoringOp("r_removed", "disable")]
+    assert report.changed == [
+        OpChange(rule_id="r_changed", action="set_value", expected_value="24", deployed_value="5")
+    ]
+    assert report.profile_id_expected == "p1"
+    assert report.profile_id_deployed == "p2"
+
+
+def test_compare_results_sorted_by_rule_id() -> None:
+    expected = _parsed(
+        "p",
+        [TailoringOp("rule_z", "disable"), TailoringOp("rule_a", "disable")],
+    )
+    deployed = _parsed("p", [])
+    report = compare_tailorings(expected, deployed)
+    assert [op.rule_id for op in report.added] == ["rule_a", "rule_z"]
