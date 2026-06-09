@@ -58,9 +58,6 @@ Both run oscap remediation at install time; see `MANUAL.md` §5.4.
   unattended installs from the generated ISO land in v0.2.
 - **`disk.preset: custom`** is reserved for v0.2. Only `stig_server` and
   `minimal` are honored; selecting `custom` raises a config error.
-- **Wizard (`ks-gen new`) covers system / user / SSH / crypto only.**
-  Disk, network, and override-matrix tuning go through hand-edited
-  `host.yaml` + `ks-gen gen` for now.
 
 ## License
 
