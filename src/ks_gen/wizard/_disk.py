@@ -10,6 +10,22 @@ from __future__ import annotations
 from typing import Any
 
 from ks_gen.wizard import _prompts
+from ks_gen.wizard._core import WizardError
+
+_INLINE_RETRY_LIMIT = 3
+
+
+def _ask_inline_passphrase() -> str:
+    """Inline passphrase + confirm loop. Up to 3 mismatch retries."""
+    for _ in range(_INLINE_RETRY_LIMIT):
+        first = _prompts.ask_password("Passphrase:")
+        second = _prompts.ask_password("Confirm passphrase:")
+        if first.strip() == "" and second.strip() == "":
+            raise WizardError("passphrase is empty")
+        if first == second:
+            return first
+        print("passphrase mismatch; please try again")
+    raise WizardError(f"passphrase confirmation mismatch after {_INLINE_RETRY_LIMIT} attempts")
 
 
 def prompts() -> dict[str, Any]:
@@ -34,6 +50,18 @@ def prompts() -> dict[str, Any]:
         payload["luks"] = {"preset": "none"}
         return payload
 
-    # luks_preset == "partial" — handled by the partial helpers added in
-    # Task 7 / Task 8. Placeholder raises until those land.
-    raise NotImplementedError("LUKS partial path not yet implemented")
+    # luks_preset == "partial"
+    print(
+        "NOTE: inline passphrase will be stored in plaintext in host.yaml; "
+        "for production use the 'file' option."
+    )
+    source = _prompts.select_one("Passphrase source:", ["inline", "file"])
+    if source == "inline":
+        payload["luks"] = {
+            "preset": "partial",
+            "passphrase": _ask_inline_passphrase(),
+        }
+        return payload
+
+    # source == "file" — handled in Task 8
+    raise NotImplementedError("LUKS partial file path not yet implemented")
