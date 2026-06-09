@@ -46,3 +46,26 @@ def test_admin_user_block_precedes_sshd_in_post(tmp_path):
     ssh_idx = bundle.ks_cfg.find("# ===== ssh_config_apply =====")
     assert admin_idx != -1 and ssh_idx != -1
     assert admin_idx < ssh_idx
+
+
+def test_render_tailoring_matches_build_bundle_tailoring_xml() -> None:
+    """render_tailoring(cfg) produces the same XML as build_bundle(cfg).tailoring_xml,
+    modulo the embedded timestamp in <xccdf:version time="...">."""
+    import re
+
+    from ks_gen.config import AdminUser, HostConfig, System, User
+    from ks_gen.writer import build_bundle, render_tailoring
+
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(name="ops", authorized_keys=["ssh-ed25519 A a@b"], sudo="nopasswd_yes")
+        ),
+    )
+    bundle_xml = build_bundle(cfg).tailoring_xml
+    direct_xml = render_tailoring(cfg)
+
+    # Strip the timestamp before comparison — datetime.now(UTC) embedded in
+    # the version header differs between the two renders.
+    strip = re.compile(r'time="[^"]*"')
+    assert strip.sub('time=""', bundle_xml) == strip.sub('time=""', direct_xml)
