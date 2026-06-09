@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from ks_gen.lint import lint_kickstart
 from ks_gen.wizard import (
     WizardError,
     _disk,
@@ -17,6 +18,7 @@ from ks_gen.wizard import (
     write_initial,
 )
 from ks_gen.wizard import _core as _wizard_core
+from ks_gen.writer import build_bundle, write_bundle
 
 
 def _stdin(text: str, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -533,3 +535,44 @@ def test_run_wizard_disk_group_selected(monkeypatch: pytest.MonkeyPatch):
     assert cfg.disk.preset is not None and cfg.disk.preset.value == "stig_server"
     assert cfg.disk.luks.preset.value == "none"
     assert cfg.disk.wipe is True
+
+
+def test_run_wizard_all_groups_lints_clean(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    _stdin(
+        "host01\n\n\n\n\nssh-ed25519 AAA test@example\n\n\n\n",
+        monkeypatch,
+    )
+    # script: group selector + every group's prompts, in call order.
+    # The first ask_checkbox call is the group selector; the next two are
+    # the override matrix's disable/enable lists.
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": [
+                "stig_server",
+                "none",  # disk preset + LUKS
+                "dhcp",  # bootproto
+            ],
+            "ask_confirm": [
+                True,  # wipe
+                True,
+                False,  # onboot, add-another
+            ],
+            "ask_text": ["link"],  # device
+            "ask_checkbox": [
+                ["disk", "network", "overrides"],  # group selector
+                [],  # disable nothing
+                [],  # enable nothing
+            ],
+        },
+    )
+
+    cfg, yaml_text = run_wizard(interactive=True)
+    write_initial(tmp_path, cfg, yaml_text)
+
+    # Render the bundle and lint
+    bundle = build_bundle(cfg)
+    host_dir = tmp_path / "host01"
+    write_bundle(bundle, host_dir)
+    report = lint_kickstart(host_dir / "ks.cfg")
+    assert report.ok, f"lint failed: {report}"
