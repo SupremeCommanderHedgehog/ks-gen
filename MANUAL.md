@@ -1096,6 +1096,58 @@ separately as GitHub issues #10–#17.
 
 ---
 
+#### Auto-suggesting exception entries
+
+When `verify` reports `new_fail` or `regression` rules, three new flags
+help close the audit loop:
+
+- `--suggest-exceptions` — render one `ExceptionDecl` per failing rule
+  (`new_fail` and `regression` both), formatted for paste into
+  `host.yaml`'s `exceptions:` list. Each suggestion's `id` is
+  `auto-<category>-<rule_id>`; its `reason` starts with `TODO:` and
+  carries the verify-run context (host, date, current/install states).
+- `--apply` — append the suggestions to `host.yaml` after writing a
+  backup at `host.yaml.bak` (single rotating slot) and round-tripping
+  the candidate through `HostConfig.model_validate()`. The original
+  file is byte-identical to its pre-call state on any failure path
+  (yaml-parse error, schema-rejecting candidate, IO error). Implies
+  `--suggest-exceptions`.
+- `--allow-regression` — let `--apply` write regression-category
+  suggestions in addition to `new_fail`. The split is deliberate:
+  regressions represent rules that passed at install but now fail,
+  which is more often a real correctness drift than a legitimate new
+  exception. The two-flag dance forces an explicit operator decision.
+
+Worked example:
+
+```bash
+ks-gen verify --host web01.example.com --config build/web01/host.yaml \
+              --suggest-exceptions
+# (prints the table report, then a "## Suggested exception entries"
+# block of YAML you can paste into host.yaml's exceptions: list)
+
+ks-gen verify --host web01.example.com --config build/web01/host.yaml \
+              --apply
+# (also writes the new_fail suggestions to host.yaml; .bak preserves
+# the prior content; regression-category suggestions are skipped with
+# a stderr note)
+
+ks-gen verify --host web01.example.com --config build/web01/host.yaml \
+              --apply --allow-regression
+# (also writes regression-category suggestions)
+```
+
+**Formatting caveat.** `--apply` uses PyYAML to round-trip
+`host.yaml`. Comments and quoting style choices in the original file
+are not preserved. The `host.yaml.bak` is the recovery path. Operators
+who maintain hand-written comments in `host.yaml` should hand-paste
+the rendered suggestions instead of using `--apply`.
+
+Re-running `--apply` with the same suggestions is idempotent: each
+already-present `auto-<category>-<rule_id>` id is skipped (no second
+write, mtime unchanged), so verifying once and applying twice doesn't
+duplicate entries.
+
 ## 9. Common workflows
 
 ### 9.1 Spin up a new cloud VM
