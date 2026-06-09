@@ -3,6 +3,32 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.8.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.7.0...v0.8.0) (2026-06-09)
+
+
+### Features
+
+* **verify:** add --allow-regression flag for regression-category apply ([4de1814](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/4de1814a3fa44a5d155bc3ce877f177064ed481f))
+* **verify:** add --apply flag (writes new_fail suggestions to host.yaml) ([93e3ead](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/93e3eadc17c2cacbede89209e24c105911784424))
+* **verify:** add --suggest-exceptions flag to verify CLI ([991dc62](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/991dc629807e4e8f5cceb34fa43a1876ec5139e4))
+* **verify:** add SuggestApplyError(VerifyError) with CONFIG_INVALID exit code ([0b91c01](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/0b91c0180fc41daf3305cece45b0773fbc22bf85))
+* **verify:** apply_to_host_yaml() — validate-then-backup-then-write ([5a1508c](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/5a1508ca101b97da3c122791c6ab2a9679bb8369))
+* **verify:** build_suggestions() — pure ExceptionDecl builder for failing rows ([1abf000](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1abf00029a8cd9da801b85811e20c00391ca2397))
+* **verify:** render_table/render_json accept optional suggestions= param ([4c7d7be](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/4c7d7be164c123ea2e75ae3bd69757e6a8707ff7))
+* **verify:** render_yaml() — paste-friendly suggestion output ([1725fe3](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1725fe3269f1df5e487da4b3d88d362359b81ad3))
+
+
+### Bug Fixes
+
+* **verify:** apply on clean report + clean up orphan .tmp on replace failure ([c92f978](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/c92f9786d4e8c122f32c5a7f8c930b787ae2f5c9))
+
+
+### Documentation
+
+* **manual:** verify --suggest-exceptions / --apply / --allow-regression ([a58b077](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/a58b077f240895d8c4a1ed46aab377fa59627f1e))
+* **plans:** verify auto-suggest exceptions implementation plan ([dbabe0c](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/dbabe0c479cad815bf80bb127b95437c3c2bf68a))
+* **specs:** verify auto-suggest exceptions design ([#14](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/14)) ([4542850](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/4542850c3489e58b01fc251546b96da3ab44387b))
+
 ## [0.7.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.6.0...v0.7.0) (2026-06-09)
 
 
