@@ -1,0 +1,20 @@
+# serializer version: 1
+# name: test_render_yaml_mixed_categories
+  '''
+  ## Suggested exception entries — copy into host.yaml's `exceptions:` list
+  ## verify host=web01.example.com user=ops at=2026-06-09T12:00:00Z (2 suggestions)
+  
+  - id: auto-new_fail-xccdf_rule_d
+    reason: "TODO: explain why \u2014 auto-suggested 2026-06-09 from web01.example.com\
+      \ (current=fail, install=fail, category=new_fail)"
+    stig_rules_disabled:
+    - xccdf_rule_d
+  
+  - id: auto-regression-xccdf_rule_e
+    reason: "TODO: explain why \u2014 auto-suggested 2026-06-09 from web01.example.com\
+      \ (current=fail, install=pass, category=regression)"
+    stig_rules_disabled:
+    - xccdf_rule_e
+  
+  '''
+# ---

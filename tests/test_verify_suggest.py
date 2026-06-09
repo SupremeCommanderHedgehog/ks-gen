@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from syrupy.assertion import SnapshotAssertion
+
 from ks_gen.verify.reconcile import VerifyReport, VerifyRow
-from ks_gen.verify.suggest import build_suggestions
+from ks_gen.verify.suggest import build_suggestions, render_yaml
 
 
 def _report(*rows: VerifyRow, host: str = "h1") -> VerifyReport:
@@ -73,3 +75,43 @@ def test_build_suggestions_order_matches_report_row_order():
     )
     out = build_suggestions(report)
     assert [s.decl.stig_rules_disabled[0] for s in out] == ["rule_a", "rule_b", "rule_c"]
+
+
+# --- render_yaml tests -----------------------------------------------------
+
+
+def test_render_yaml_empty_suggestions_returns_empty_string():
+    report = _report(VerifyRow("rule_a", "pass", "pass", False, "clean"))
+    assert render_yaml([], report) == ""
+
+
+def test_render_yaml_mixed_categories(snapshot: SnapshotAssertion):
+    report = _report(
+        VerifyRow("xccdf_rule_d", "fail", "fail", False, "new_fail"),
+        VerifyRow("xccdf_rule_e", "fail", "pass", False, "regression"),
+        host="web01.example.com",
+    )
+    suggestions = build_suggestions(report)
+    assert render_yaml(suggestions, report) == snapshot
+
+
+def test_render_yaml_header_includes_run_context():
+    report = _report(
+        VerifyRow("rule_d", "fail", "fail", False, "new_fail"),
+        host="web01.example.com",
+    )
+    suggestions = build_suggestions(report)
+    out = render_yaml(suggestions, report)
+    assert out.startswith("## Suggested exception entries")
+    assert "web01.example.com" in out
+    assert "2026-06-09T12:00:00Z" in out
+    assert "1 suggestion" in out  # singular
+
+
+def test_render_yaml_header_pluralizes_count():
+    report = _report(
+        VerifyRow("rule_d", "fail", "fail", False, "new_fail"),
+        VerifyRow("rule_e", "fail", "pass", False, "regression"),
+    )
+    out = render_yaml(build_suggestions(report), report)
+    assert "2 suggestions" in out
