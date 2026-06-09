@@ -299,3 +299,22 @@ def test_verify_allow_regression_without_apply_prints_note(tmp_path: Path) -> No
     assert "exceptions" not in after or after["exceptions"] in (None, [])
     # The note appears on stderr
     assert "--allow-regression has no effect without --apply" in (result.stderr or result.output)
+
+
+def test_verify_apply_on_clean_report_prints_nothing_to_apply(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.check_tools"),
+        patch("ks_gen.cli.run_verify", return_value=_clean_report()),
+    ):
+        result = runner.invoke(
+            app,
+            ["verify", "--host", "h1", "--config", str(cfg), "--apply"],
+        )
+
+    # Clean report -> exit 0, no host.yaml mutation, no .bak
+    assert result.exit_code == 0
+    assert not (tmp_path / "host.yaml.bak").exists()
+    # Apply summary still confirms the operator was heard.
+    assert "nothing to apply" in (result.stderr or result.output)

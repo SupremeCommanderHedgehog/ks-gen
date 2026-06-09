@@ -187,17 +187,22 @@ def apply_to_host_yaml(
             f"cannot write backup {backup_path}: {e}; original untouched."
         ) from e
 
-    # Step 8: atomic write
+    # Step 8: atomic write. tmp.replace() consumes the tmp file on success;
+    # on failure (cross-device, permission, etc.) we must not leave an
+    # orphan .tmp next to host.yaml.
     tmp = host_yaml_path.with_suffix(host_yaml_path.suffix + ".tmp")
     try:
-        tmp.write_text(
-            yaml.safe_dump(candidate, sort_keys=False, default_flow_style=False),
-            encoding="utf-8",
-            newline="\n",
-        )
-        tmp.replace(host_yaml_path)
-    except OSError as e:
-        raise SuggestApplyError(f"cannot write {host_yaml_path}: {e}") from e
+        try:
+            tmp.write_text(
+                yaml.safe_dump(candidate, sort_keys=False, default_flow_style=False),
+                encoding="utf-8",
+                newline="\n",
+            )
+            tmp.replace(host_yaml_path)
+        except OSError as e:
+            raise SuggestApplyError(f"cannot write {host_yaml_path}: {e}") from e
+    finally:
+        tmp.unlink(missing_ok=True)
 
     return AppendResult(
         added=tuple(s.decl.id for s in to_apply),
