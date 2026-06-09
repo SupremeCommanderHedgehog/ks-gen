@@ -158,3 +158,85 @@ def test_verify_report_is_immutable_tuple_of_rows() -> None:
     assert isinstance(report.rows, tuple)
     with pytest.raises(FrozenInstanceError):
         report.rows = (VerifyRow("r", "pass", None, False, "clean"),)  # type: ignore[misc]
+
+
+def test_verify_report_tailoring_drift_defaults_to_none() -> None:
+    from ks_gen.verify.reconcile import VerifyReport
+
+    report = VerifyReport(
+        host="h",
+        user="u",
+        timestamp_utc="2026-06-09T00:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+    )
+    assert report.tailoring_drift is None
+    assert report.has_tailoring_drift is False
+
+
+def test_verify_report_has_tailoring_drift_false_when_empty_drift_attached() -> None:
+    from ks_gen.verify.reconcile import VerifyReport
+    from ks_gen.verify.tailoring_drift import TailoringDriftReport
+
+    drift = TailoringDriftReport(
+        profile_id_expected="p",
+        profile_id_deployed="p",
+        added=[],
+        removed=[],
+        changed=[],
+    )
+    report = VerifyReport(
+        host="h",
+        user="u",
+        timestamp_utc="2026-06-09T00:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+        tailoring_drift=drift,
+    )
+    assert report.tailoring_drift is drift
+    assert report.has_tailoring_drift is False
+
+
+def test_verify_report_has_tailoring_drift_true_when_changes_present() -> None:
+    from ks_gen.rules._types import TailoringOp
+    from ks_gen.verify.reconcile import VerifyReport
+    from ks_gen.verify.tailoring_drift import TailoringDriftReport
+
+    drift = TailoringDriftReport(
+        profile_id_expected="p",
+        profile_id_deployed="p",
+        added=[TailoringOp("r1", "disable")],
+        removed=[],
+        changed=[],
+    )
+    report = VerifyReport(
+        host="h",
+        user="u",
+        timestamp_utc="2026-06-09T00:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+        tailoring_drift=drift,
+    )
+    assert report.has_tailoring_drift is True
+
+
+def test_verify_report_has_tailoring_drift_true_on_profile_id_mismatch_alone() -> None:
+    from ks_gen.verify.reconcile import VerifyReport
+    from ks_gen.verify.tailoring_drift import TailoringDriftReport
+
+    drift = TailoringDriftReport(
+        profile_id_expected="p1",
+        profile_id_deployed="p2",
+        added=[],
+        removed=[],
+        changed=[],
+    )
+    report = VerifyReport(
+        host="h",
+        user="u",
+        timestamp_utc="2026-06-09T00:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+        tailoring_drift=drift,
+    )
+    assert report.has_tailoring_drift is True
