@@ -142,6 +142,15 @@ def test_select_one_keyboard_interrupt_propagates(monkeypatch: pytest.MonkeyPatc
         _prompts.select_one("x", ["a", "b"])
 
 
+def test_select_one_none_return_raises_keyboard_interrupt(monkeypatch: pytest.MonkeyPatch):
+    # questionary returns None (not raises) when stdin is non-interactive.
+    # The adapter must turn that into KeyboardInterrupt so the orchestrator
+    # can map it to WizardError("aborted by user").
+    _stub_questionary(monkeypatch, "select", None)
+    with pytest.raises(KeyboardInterrupt):
+        _prompts.select_one("x", ["a", "b"])
+
+
 # --- group-selector + orchestration tests -----------------------------------
 
 

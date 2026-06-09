@@ -42,15 +42,15 @@ def prompts() -> dict[str, Any]:
         return payload
 
     luks_preset = _prompts.select_one("LUKS encryption:", ["none", "partial"])
-    print(
-        "(LUKS tang preset is hand-edit only — needs URLs, thumbprints, "
-        "and threshold. See MANUAL.md §5.1.)"
-    )
     if luks_preset == "none":
         payload["luks"] = {"preset": "none"}
         return payload
 
     # luks_preset == "partial"
+    print(
+        "(LUKS tang preset is hand-edit only — needs URLs, thumbprints, "
+        "and threshold. See MANUAL.md §5.1.)"
+    )
     print(
         "NOTE: inline passphrase will be stored in plaintext in host.yaml; "
         "for production use the 'file' option."
