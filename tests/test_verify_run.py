@@ -172,3 +172,74 @@ def test_run_verify_check_tailoring_true_clean_when_matching(tmp_path: Path) -> 
 
     assert report.tailoring_drift is not None
     assert report.has_tailoring_drift is False
+
+
+def test_run_verify_wraps_deployed_parse_failure_with_side_name(tmp_path: Path) -> None:
+    """When the deployed XML fails to parse, the raised TailoringParseError
+    names the deployed side so the operator knows where to look."""
+    import pytest
+
+    from ks_gen.verify.errors import TailoringParseError
+
+    cfg = _cfg()
+
+    with (
+        patch(
+            "ks_gen.verify.collect_arfs",
+            return_value=CollectedArfs(current_text="<TestResult/>", install_text=None),
+        ),
+        patch(
+            "ks_gen.verify.collect_deployed_tailoring",
+            return_value="<not-xml",  # garbage; parse_tailoring_xml will raise
+        ),
+        pytest.raises(TailoringParseError, match=r"deployed tailoring at /root/tailoring\.xml"),
+    ):
+        run_verify(
+            cfg=cfg,
+            host="h",
+            user="ops",
+            workdir=tmp_path,
+            no_drift=True,
+            check_tailoring=True,
+            ssh_extra_opts=[],
+            timeout=600,
+        )
+
+
+def test_run_verify_wraps_expected_parse_failure_with_renderer_message(tmp_path: Path) -> None:
+    """When the re-rendered XML fails to parse (renderer bug), the raised
+    TailoringParseError names the renderer side."""
+    import pytest
+
+    from ks_gen.verify.errors import TailoringParseError
+    from ks_gen.writer import render_tailoring
+
+    cfg = _cfg()
+    # Build a valid deployed XML; corrupt the renderer output by patching it.
+    deployed_xml = render_tailoring(cfg)
+
+    with (
+        patch(
+            "ks_gen.verify.collect_arfs",
+            return_value=CollectedArfs(current_text="<TestResult/>", install_text=None),
+        ),
+        patch(
+            "ks_gen.verify.collect_deployed_tailoring",
+            return_value=deployed_xml,
+        ),
+        patch(
+            "ks_gen.verify.render_tailoring",
+            return_value="<garbage-from-renderer",
+        ),
+        pytest.raises(TailoringParseError, match="re-rendered tailoring"),
+    ):
+        run_verify(
+            cfg=cfg,
+            host="h",
+            user="ops",
+            workdir=tmp_path,
+            no_drift=True,
+            check_tailoring=True,
+            ssh_extra_opts=[],
+            timeout=600,
+        )
