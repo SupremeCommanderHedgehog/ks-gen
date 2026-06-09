@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ks_gen.verify.arf import RuleResult
+from ks_gen.verify.baseline import BaselineReport
 from ks_gen.verify.tailoring_drift import TailoringDriftReport
 
 Category = Literal["clean", "expected_fail", "new_fail", "regression", "incomplete"]
@@ -49,6 +50,7 @@ class VerifyReport:
     rows: tuple[VerifyRow, ...]
     install_baseline_available: bool
     tailoring_drift: TailoringDriftReport | None = None
+    baseline: BaselineReport | None = None
 
     @property
     def is_clean(self) -> bool:
