@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from ks_gen.wizard import WizardError, run_wizard, write_initial
+from ks_gen.wizard import WizardError, _prompts, run_wizard, write_initial
 
 
 def _stdin(text: str, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -73,3 +74,55 @@ def test_write_initial_creates_host_yaml(tmp_path: Path, monkeypatch: pytest.Mon
     host_dir = write_initial(tmp_path, cfg, yaml_text)
     assert host_dir == tmp_path / "host01"
     assert (host_dir / "host.yaml").read_text(encoding="utf-8") == yaml_text
+
+
+# --- _prompts adapter tests -------------------------------------------------
+
+
+def _stub_questionary(monkeypatch: pytest.MonkeyPatch, name: str, return_value: Any) -> None:
+    """Replace `_prompts._questionary.<name>` with a stub returning .ask() = value."""
+
+    class _Q:
+        def ask(self) -> Any:
+            return return_value
+
+    def _factory(*_a: object, **_kw: object) -> _Q:
+        return _Q()
+
+    monkeypatch.setattr(_prompts._questionary, name, _factory)
+
+
+def test_select_one_returns_choice(monkeypatch: pytest.MonkeyPatch):
+    _stub_questionary(monkeypatch, "select", "stig_server")
+    assert _prompts.select_one("Disk preset:", ["stig_server", "minimal"]) == "stig_server"
+
+
+def test_ask_text_returns_stripped_value(monkeypatch: pytest.MonkeyPatch):
+    _stub_questionary(monkeypatch, "text", "  host01  ")
+    assert _prompts.ask_text("Hostname:") == "host01"
+
+
+def test_ask_confirm_returns_bool(monkeypatch: pytest.MonkeyPatch):
+    _stub_questionary(monkeypatch, "confirm", True)
+    assert _prompts.ask_confirm("Wipe disk?", default=True) is True
+
+
+def test_ask_password_returns_value(monkeypatch: pytest.MonkeyPatch):
+    _stub_questionary(monkeypatch, "password", "hunter2")
+    assert _prompts.ask_password("Passphrase:") == "hunter2"
+
+
+def test_ask_checkbox_returns_selected_list(monkeypatch: pytest.MonkeyPatch):
+    _stub_questionary(monkeypatch, "checkbox", ["faillock", "package_purge"])
+    got = _prompts.ask_checkbox("Disable:", [("faillock", "lockout"), ("package_purge", "purge")])
+    assert got == ["faillock", "package_purge"]
+
+
+def test_select_one_keyboard_interrupt_propagates(monkeypatch: pytest.MonkeyPatch):
+    class _Q:
+        def ask(self) -> Any:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(_prompts._questionary, "select", lambda *_a, **_kw: _Q())
+    with pytest.raises(KeyboardInterrupt):
+        _prompts.select_one("x", ["a", "b"])
