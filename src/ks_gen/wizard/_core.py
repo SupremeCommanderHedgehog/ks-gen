@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from ks_gen.config import HostConfig
 
 
@@ -49,7 +47,8 @@ def _ask_keys(interactive: bool) -> list[str]:
         keys.append(line)
 
 
-def run_wizard(*, interactive: bool) -> tuple[HostConfig, str]:
+def prompts(interactive: bool) -> dict[str, Any]:
+    """Run the always-required prompts. Returns a HostConfig payload fragment."""
     hostname = _ask("Hostname", None, interactive=interactive)
     timezone = _ask("Timezone", "UTC", interactive=interactive)
     locale = _ask("Locale", "en_US.UTF-8", interactive=interactive)
@@ -61,7 +60,7 @@ def run_wizard(*, interactive: bool) -> tuple[HostConfig, str]:
     ssh_port_raw = _ask("SSH port", "22", interactive=interactive)
     crypto_policy = _ask("Crypto policy (STIG/MODERN/FUTURE)", "MODERN", interactive=interactive)
 
-    payload: dict[str, Any] = {
+    return {
         "system": {"hostname": hostname, "timezone": timezone, "locale": locale},
         "user": {
             "admin": {
@@ -73,11 +72,6 @@ def run_wizard(*, interactive: bool) -> tuple[HostConfig, str]:
         "ssh": {"port": int(ssh_port_raw)},
         "crypto": {"policy": crypto_policy},
     }
-    cfg = HostConfig.model_validate(payload)
-    yaml_text = yaml.safe_dump(
-        cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False
-    )
-    return cfg, yaml_text
 
 
 def write_initial(out_root: Path, cfg: HostConfig, yaml_text: str) -> Path:

@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from ks_gen.wizard import WizardError, _prompts, run_wizard, write_initial
+from ks_gen.wizard import _core as _wizard_core
 
 
 def _stdin(text: str, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -37,6 +38,7 @@ def test_interactive_minimal_inputs(monkeypatch: pytest.MonkeyPatch):
         "\n",  # crypto   -> default MODERN
         monkeypatch,
     )
+    monkeypatch.setattr(_prompts, "ask_checkbox", lambda *_a, **_kw: [])
     cfg, yaml_text = run_wizard(interactive=True)
     assert cfg.system.hostname == "host01"
     assert cfg.system.timezone == "UTC"
@@ -70,6 +72,7 @@ def test_write_initial_creates_host_yaml(tmp_path: Path, monkeypatch: pytest.Mon
         "host01\n\n\n\n\nssh-ed25519 AAA test@example\n\n\n\n",
         monkeypatch,
     )
+    monkeypatch.setattr(_prompts, "ask_checkbox", lambda *_a, **_kw: [])
     cfg, yaml_text = run_wizard(interactive=True)
     host_dir = write_initial(tmp_path, cfg, yaml_text)
     assert host_dir == tmp_path / "host01"
@@ -126,3 +129,56 @@ def test_select_one_keyboard_interrupt_propagates(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(_prompts._questionary, "select", lambda *_a, **_kw: _Q())
     with pytest.raises(KeyboardInterrupt):
         _prompts.select_one("x", ["a", "b"])
+
+
+# --- group-selector + orchestration tests -----------------------------------
+
+
+def test_core_prompts_non_interactive_requires_hostname():
+    with pytest.raises(WizardError, match="Hostname"):
+        _wizard_core.prompts(interactive=False)
+
+
+def test_run_wizard_non_interactive_skips_group_selector(monkeypatch: pytest.MonkeyPatch):
+    # No questionary stub is needed — non-interactive must never call it.
+    def _explode(*_a: object, **_kw: object) -> object:
+        raise AssertionError("questionary was called in non-interactive mode")
+
+    monkeypatch.setattr(_prompts, "ask_checkbox", _explode)
+
+    with pytest.raises(WizardError, match="Hostname"):
+        run_wizard(interactive=False)
+
+
+def test_run_wizard_empty_group_selector_matches_legacy(monkeypatch: pytest.MonkeyPatch):
+    """With no optional groups selected, YAML must equal today's output."""
+    _stdin(
+        "host01\n\n\n\n\nssh-ed25519 AAA test@example\n\n\n\n",
+        monkeypatch,
+    )
+    # Group selector returns empty list (no optional groups).
+    monkeypatch.setattr(_prompts, "ask_checkbox", lambda *_a, **_kw: [])
+
+    _cfg, yaml_text = run_wizard(interactive=True)
+    # Build the legacy payload from the same inputs to compare.
+    import yaml
+
+    legacy = {
+        "system": {"hostname": "host01", "timezone": "UTC", "locale": "en_US.UTF-8"},
+        "user": {
+            "admin": {
+                "name": "opsadmin",
+                "authorized_keys": ["ssh-ed25519 AAA test@example"],
+                "sudo": "nopasswd_yes",
+            }
+        },
+        "ssh": {"port": 22},
+        "crypto": {"policy": "MODERN"},
+    }
+    from ks_gen.config import HostConfig
+
+    legacy_cfg = HostConfig.model_validate(legacy)
+    legacy_yaml = yaml.safe_dump(
+        legacy_cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False
+    )
+    assert yaml_text == legacy_yaml
