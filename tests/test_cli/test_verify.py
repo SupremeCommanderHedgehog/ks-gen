@@ -8,6 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from ks_gen.cli import app
+from ks_gen.loader import ExitCode
 from ks_gen.verify.errors import (
     OscapInvocationError,
     SshConnectError,
@@ -157,3 +158,60 @@ def test_verify_user_flag_overrides_config(tmp_path: Path) -> None:
         )
     assert result.exit_code == 0
     assert captured_user == ["audit"]
+
+
+def _new_fail_report() -> VerifyReport:
+    return VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(
+            VerifyRow("rule_d", "fail", "fail", False, "new_fail"),
+            VerifyRow("rule_e", "fail", "pass", False, "regression"),
+        ),
+        install_baseline_available=True,
+    )
+
+
+def test_verify_suggest_exceptions_appends_yaml_block(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.check_tools"),
+        patch("ks_gen.cli.run_verify", return_value=_new_fail_report()),
+    ):
+        result = runner.invoke(
+            app,
+            ["verify", "--host", "h1", "--config", str(cfg), "--suggest-exceptions"],
+        )
+    assert result.exit_code == int(ExitCode.VERIFY_FAIL)
+    assert "Suggested exception entries" in result.stdout
+    assert "auto-new_fail-rule_d" in result.stdout
+    assert "auto-regression-rule_e" in result.stdout
+
+
+def test_verify_suggest_exceptions_json_includes_array(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.check_tools"),
+        patch("ks_gen.cli.run_verify", return_value=_new_fail_report()),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "verify",
+                "--host",
+                "h1",
+                "--config",
+                str(cfg),
+                "--suggest-exceptions",
+                "--format",
+                "json",
+            ],
+        )
+    import json as _json
+
+    payload = _json.loads(result.stdout)
+    assert "suggested_exceptions" in payload
+    assert len(payload["suggested_exceptions"]) == 2

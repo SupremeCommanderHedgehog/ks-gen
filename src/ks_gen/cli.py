@@ -16,6 +16,7 @@ from ks_gen.verify import run_verify
 from ks_gen.verify.errors import VerifyError
 from ks_gen.verify.report import render_json, render_table
 from ks_gen.verify.ssh import check_tools
+from ks_gen.verify.suggest import build_suggestions
 from ks_gen.wizard import WizardError, run_wizard, write_initial
 from ks_gen.writer import build_bundle, write_bundle
 
@@ -178,6 +179,11 @@ def verify_cmd(
     no_drift: bool = typer.Option(
         False, "--no-drift", help="Skip the install-time ARF probe; compliance-only."
     ),
+    suggest_exceptions: bool = typer.Option(
+        False,
+        "--suggest-exceptions",
+        help="Render ready-to-paste ExceptionDecl YAML for new_fail and regression rules.",
+    ),
     timeout: int = typer.Option(600, "--timeout", help="oscap run timeout in seconds."),
 ) -> None:
     if format_ not in ("table", "json"):
@@ -221,10 +227,11 @@ def verify_cmd(
             typer.echo(f"ks-gen verify: transport failure: {label}: {e}", err=True)
             raise typer.Exit(code=int(e.exit_code)) from None
 
+        suggestions = build_suggestions(report) if suggest_exceptions else None
         if format_ == "json":
-            typer.echo(render_json(report))
+            typer.echo(render_json(report, suggestions=suggestions))
         else:
-            typer.echo(render_table(report))
+            typer.echo(render_table(report, suggestions=suggestions))
 
         if not report.is_clean:
             raise typer.Exit(code=int(ExitCode.VERIFY_FAIL))
