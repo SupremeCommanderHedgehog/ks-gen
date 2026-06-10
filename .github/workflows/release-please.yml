@@ -21,7 +21,19 @@ jobs:
     steps:
       - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          # release-please-action talks to GitHub's REST API to query
+          # commits, manage release PRs, and create releases — that's
+          # all api.github.com. github.com is added defensively in
+          # case the action ever fetches raw content (its v5 path is
+          # API-only today). No pip/npm endpoints — the JS action is
+          # pre-bundled.
+          allowed-endpoints: >
+            agent.api.stepsecurity.io:443
+            api.github.com:443
+            github.com:443
+            prod.app-api.stepsecurity.io:443
+            results-receiver.actions.githubusercontent.com:443
       - id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
@@ -39,7 +51,22 @@ jobs:
     steps:
       - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          # sbom job needs the full pip + checkout + release-upload set.
+          # Mirrors ci.yml's 9-endpoint baseline plus uploads.github.com
+          # for softprops/action-gh-release's asset upload (the SBOM
+          # JSON file goes through the uploads host, not api.github.com).
+          allowed-endpoints: >
+            agent.api.stepsecurity.io:443
+            api.github.com:443
+            codeload.github.com:443
+            files.pythonhosted.org:443
+            github.com:443
+            objects.githubusercontent.com:443
+            prod.app-api.stepsecurity.io:443
+            pypi.org:443
+            results-receiver.actions.githubusercontent.com:443
+            uploads.github.com:443
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ needs.release.outputs.tag_name }}
