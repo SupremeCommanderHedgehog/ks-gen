@@ -25,7 +25,23 @@ jobs:
     steps:
       - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          # CodeQL's allowlist is smaller than ci.yml's because there is
+          # no `pip install` step — the CodeQL bundle ships its own
+          # Python extractor. Hosts:
+          #   - stepsecurity.io endpoints   : harden-runner telemetry
+          #   - api.github.com              : SARIF upload (code-scanning API)
+          #   - github.com / codeload.github.com : actions/checkout + CodeQL bundle release
+          #   - objects.githubusercontent.com    : CodeQL bundle blob storage
+          #   - results-receiver.actions.githubusercontent.com : actions cache/artifacts
+          allowed-endpoints: >
+            agent.api.stepsecurity.io:443
+            api.github.com:443
+            codeload.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+            prod.app-api.stepsecurity.io:443
+            results-receiver.actions.githubusercontent.com:443
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
