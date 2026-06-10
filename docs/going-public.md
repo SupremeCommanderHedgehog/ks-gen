@@ -49,26 +49,25 @@ Expected: `{"enabled":true}`.
 
 This is the channel `SECURITY.md` already points at — `https://github.com/SupremeCommanderHedgehog/ks-gen/security/advisories/new`.
 
-## 4. Activate CodeQL on push and PR
+## 4. Verify CodeQL triggers are active
 
-Edit `.github/workflows/codeql.yml` (created in PR-B). Find this block
-near the top:
+Confirm `.github/workflows/codeql.yml` has all four trigger keys
+active (not commented out):
 
 ```yaml
 on:
   workflow_dispatch:
-  # Activate at public launch — see docs/going-public.md:
-  # push:
-  #   branches: [main]
-  # pull_request:
-  #   branches: [main]
-  # schedule:
-  #   - cron: '17 7 * * 1'  # Mondays 07:17 UTC
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 7 * * 1'  # Mondays 07:17 UTC
 ```
 
-Uncomment every line in that block (six lines — the three trigger keys
-plus their three inline values). Commit on a branch, open a PR titled
-`ci(codeql): activate scheduled and PR scans`, merge.
+These were activated in the going-public sweep (commit `86753fd`,
+PR #45). If a future change reverts any of them, restore them and
+PR with `ci(codeql): re-enable scheduled and PR scans`.
 
 **Code Scanning enable.** On a public repo, Code Scanning auto-enables
 on the first successful SARIF upload from this workflow — no UI step or
@@ -88,21 +87,32 @@ gh api repos/SupremeCommanderHedgehog/ks-gen/rulesets \
   --jq '.[] | select(.name == "main protection") | .id'
 ```
 
-Edit the ruleset to remove the maintainer bypass and add a PR
-requirement. The maintainer bypass actor id was `5` (Repository admin
-role); the GitHub Actions bot bypass entry stays so release-please's
-release PRs can still merge.
+Edit the ruleset to remove ALL bypass actors (including the maintainer)
+and require PRs. Three constraints to know about before reading the JSON
+below — they are why the values look like they do:
 
-> **NOTE on the `Integration` bypass entry below.** GitHub rejects
-> `actor_type: "Integration"` bypass entries on personal-account
-> private repos with `422: must be part of the ruleset source or
-> owner organization`. The entry works once the repo is public OR if
-> the repo is owned by an organization. Until then (i.e. on this
-> private personal repo), the maintainer must manually merge each
-> release-please PR — the existing `RepositoryRole/5/always` bypass
-> covers that path. If you keep `actor_id: 15368` in the JSON below
-> and the PUT fails with that 422, drop the Integration entry and
-> rely on the manual-merge path; the rest of the runbook still applies.
+1. **Rebase-merge + `required_signatures` is a hard GitHub deadlock.**
+   Rebase produces new commits that GitHub cannot sign automatically,
+   and `required_signatures` then refuses the merge with
+   `"Base branch requires signed commits. Rebase merges cannot be
+   automatically signed by GitHub."` Neither `--admin` nor bypass
+   entries override this — it's a server-side precondition. Resolution:
+   constrain `allowed_merge_methods` to `["squash"]`. Squash commits
+   are signed by GitHub's web-flow key, which satisfies
+   `required_signatures` and preserves linear history.
+
+2. **`required_approving_review_count: 1` self-blocks a solo
+   maintainer.** GitHub will not let you approve your own PR, so a
+   1-review requirement on a solo repo locks you out of every merge.
+   Set it to `0` until a second collaborator joins.
+
+3. **`actor_type: "Integration"` bypass entries do not work on
+   personal-account repos — public OR private.** GitHub returns
+   `422: must be part of the ruleset source or owner organization` in
+   both states. (This contradicts older guidance suggesting it works
+   once the repo is public. It does not, on personal accounts.) The
+   only workable model on a personal repo is `bypass_actors: []` — the
+   maintainer goes through the same gate as everyone else.
 
 ```bash
 RULESET_ID=<id from above>
@@ -114,9 +124,7 @@ gh api -X PUT repos/SupremeCommanderHedgehog/ks-gen/rulesets/$RULESET_ID \
   "target": "branch",
   "enforcement": "active",
   "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
-  "bypass_actors": [
-    { "actor_type": "Integration", "actor_id": 15368, "bypass_mode": "pull_request" }
-  ],
+  "bypass_actors": [],
   "rules": [
     { "type": "required_status_checks",
       "parameters": {
@@ -125,7 +133,8 @@ gh api -X PUT repos/SupremeCommanderHedgehog/ks-gen/rulesets/$RULESET_ID \
           {"context": "ruff"},
           {"context": "test (3.11)"},
           {"context": "test (3.12)"},
-          {"context": "test (3.13)"}
+          {"context": "test (3.13)"},
+          {"context": "analyze (python)"}
         ]
       }
     },
@@ -135,11 +144,12 @@ gh api -X PUT repos/SupremeCommanderHedgehog/ks-gen/rulesets/$RULESET_ID \
     { "type": "non_fast_forward" },
     { "type": "pull_request",
       "parameters": {
-        "required_approving_review_count": 1,
+        "allowed_merge_methods": ["squash"],
+        "required_approving_review_count": 0,
         "dismiss_stale_reviews_on_push": true,
         "require_code_owner_review": false,
         "require_last_push_approval": false,
-        "required_review_thread_resolution": false
+        "required_review_thread_resolution": true
       }
     }
   ]
@@ -147,8 +157,11 @@ gh api -X PUT repos/SupremeCommanderHedgehog/ks-gen/rulesets/$RULESET_ID \
 JSON
 ```
 
-This removes your bypass and requires PRs with one approving review.
-You can self-approve as the owner until other collaborators exist.
+This makes every change to `main` go through a PR that passes ruff,
+the three test matrix legs, and CodeQL `analyze (python)`. All commits
+on `main` are signed (squash commits by GitHub's web-flow key, other
+commits by the contributor). Linear history is preserved. release-please
+release PRs go through the same gate — squash-merge them manually.
 
 ## 6. Reconsider Codecov / coverage
 
@@ -158,14 +171,30 @@ a step to the `test` job in `.github/workflows/ci.yml`.
 
 ## 7. Consider flipping harden-runner to `block` mode
 
-The CI workflow runs `step-security/harden-runner` in `audit` mode,
-which only logs egress. Once you have a baseline of expected egress
-destinations from past audit-mode runs, you can flip to `block` mode
-to prevent unexpected egress (e.g., a compromised dependency calling
-home). Edit each `egress-policy: audit` to `egress-policy: block`,
-then test on a branch — if a step legitimately needs egress to a host
-you haven't listed, you'll see it fail and can add the host to an
-allow-list.
+`step-security/harden-runner` starts in `audit` mode, which only logs
+egress. Once you have a baseline of expected destinations from past
+audit-mode runs, you can flip to `block` mode to prevent unexpected
+egress (e.g., a compromised dependency calling home). Edit each
+`egress-policy: audit` to `egress-policy: block`, add an
+`allowed-endpoints:` block, then test on a branch — if a step
+legitimately needs egress to an unlisted host, the run fails and you
+add the host.
+
+**State as of 2026-06-09:**
+
+- `.github/workflows/ci.yml` — flipped to `block` in PR #46. The
+  9-endpoint allowlist there (`agent.api.stepsecurity.io`,
+  `api.github.com`, `codeload.github.com`, `files.pythonhosted.org`,
+  `github.com`, `objects.githubusercontent.com`,
+  `prod.app-api.stepsecurity.io`, `pypi.org`,
+  `results-receiver.actions.githubusercontent.com`) is a reusable
+  starting point for any Python `pip install -e .[dev]` + ruff + mypy +
+  pytest job.
+- `.github/workflows/codeql.yml` — still `audit`. CodeQL needs
+  additional hosts (the CodeQL bundle CDN, `uploads.github.com` for
+  SARIF). Tighten in a separate PR.
+- `.github/workflows/release-please.yml` — still `audit`. Needs the
+  npm registry. Tighten in a separate PR.
 
 ## 8. Smoke-test CodeQL
 
