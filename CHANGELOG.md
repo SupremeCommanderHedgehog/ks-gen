@@ -3,6 +3,48 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.9.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.8.0...v0.9.0) (2026-06-10)
+
+
+### Features
+
+* **cli:** verify --capture-baseline + --baseline flags with mutual-exclusion check ([1387736](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/138773624a46183d1f3794cc543fa18ead6f799f))
+* **cli:** verify --check-tailoring flag + TAILORING_DRIFT exit code priority ([25afbdc](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/25afbdc4bc16256a5e96b74e9223aca81c7e0674))
+* **license:** relicense from Apache-2.0 to GPL-3.0-or-later ([dd73b19](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/dd73b19895254a919e60bcd237cf9a9988de422a))
+* **loader:** add ExitCode.TAILORING_DRIFT=8 ([960380f](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/960380f52008701a9219ad02bfb819922633a610))
+* **verify:** add TailoringParseError(VerifyError) with VERIFY_FAIL exit code ([7a5497d](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/7a5497d3b4b3a10b0c024d38334c4e0cec8f903b))
+* **verify:** BaselineReport + ReadBaseline dataclasses, baseline field on VerifyReport ([9a4f5b7](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/9a4f5b7d4c3140cff33d3666fdc9ca48f74c44bd))
+* **verify:** collect_deployed_tailoring — scp-pull /root/tailoring.xml ([f0a98d5](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/f0a98d5d4de5c28c4bd9dc27a5caed9458cbc03c))
+* **verify:** compare_tailorings — pure (added/removed/changed) diff ([2cfb258](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/2cfb2589f1e9b085cc93f424f5c1157b23a22058))
+* **verify:** orphan_rule_ids — set-difference for stale-baseline detection ([9209d53](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/9209d535e102b1bbd5e6acbcd912853940fe76ee))
+* **verify:** parse_tailoring_xml — round-trips build_tailoring_xml output ([66f56e9](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/66f56e9c8818f4f2cc672e4b6d6fd33762266a95))
+* **verify:** read_baseline — load captured ARF with start-time extraction ([267e405](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/267e405818b8978c3096a53a8aad2df8e90419ad))
+* **verify:** render_drift_section — text drift section for verify report ([52ab716](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/52ab716bae473b9c4391364da4966f32f1536065))
+* **verify:** render_table/render_json surface captured baseline + orphan note ([ac879d9](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/ac879d9a5e38be24849be8bdee8f48770bdd9058))
+* **verify:** render_table/render_json surface tailoring drift section ([fbaddc8](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/fbaddc8f6658e8d9ba53ffe77c65d9b69cd00036))
+* **verify:** run_verify gains baseline_path + capture_to params ([074145e](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/074145edbcaf6126d94c7c73bb6f857f278070c8))
+* **verify:** run_verify gains check_tailoring=True path ([9a4d2fa](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/9a4d2fa0b361908c7e9cb5e041e43ce794fea5cf))
+* **verify:** tailoring_drift module scaffold (ParsedTailoring, OpChange, TailoringDriftReport) ([d363efb](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/d363efb96bcaa1e33160817e12603b1fee13225f))
+* **verify:** VerifyReport gains tailoring_drift field + has_tailoring_drift ([45b7a3d](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/45b7a3dde5c39185c03634847782e717cc91ff8b))
+
+
+### Refactoring
+
+* **writer:** extract render_tailoring helper for verify reuse ([d9139e3](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/d9139e34eaf5c2ead6b2b282810101e2785f2bd0))
+
+
+### Documentation
+
+* drop v0.1 staleness from README + add exit code 8 to MANUAL ([70cea2a](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/70cea2ae716be27e61160286bea67a2158d2b603))
+* **license:** add output exception for ks-gen-generated artifacts ([cae154f](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/cae154ff402f66fde2e955d479fe6d36ad98b5c5))
+* **plans:** verify capture-baseline implementation plan ([#11](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/11)) ([05e0bfd](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/05e0bfd6ee33887f7464a6ae9a0d4f1cade96a43))
+* **plans:** verify tailoring drift implementation plan ([#12](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/12)) ([e40c537](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/e40c53739be808e9e291e8b918f058e46f0d45ad))
+* **readme:** update license badge from Apache-2.0 to GPLv3+ ([2ac725d](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/2ac725d83d00fdc1989476304f50d90dccf30e11))
+* **specs:** verify tailoring drift detection design ([#12](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/12)) ([748c4ad](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/748c4adc0dd1913cb4e418ee3d244e7b4325dd14))
+* **specs:** verify workstation-captured baseline design ([#11](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/11)) ([5dae8e4](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/5dae8e47660c8351b533feb7d4e0e15a7a40eb40))
+* verify --capture-baseline / --baseline — MANUAL §8.6 + README sentence ([48c2298](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/48c22981d26fe498c2a20472348d6015ede942f0))
+* verify --check-tailoring — MANUAL §8.5 + README sentence ([d3a8925](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/d3a8925611fab687d6db8ba41769e21b6cbc5f67))
+
 ## [0.8.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.7.0...v0.8.0) (2026-06-09)
 
 
