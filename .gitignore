@@ -30,3 +30,7 @@ out/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Claude Code local state (per-developer; do not publish)
+.claude/
+.scratch/

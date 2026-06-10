@@ -12,7 +12,8 @@ Use this as the v0.1.0 acceptance test before merging
 - Windows 11 Pro with **Hyper-V installed and the host rebooted at least once
   since enablement**. See the "Installing Hyper-V" appendix at the bottom if
   this isn't done.
-- This repo at `C:\Users\user\source\alma-linux-security`.
+- This repo cloned somewhere on disk; the snippets below abbreviate
+  that path as `<repo-root>` — substitute your actual checkout path.
 - `AlmaLinux-9-latest-x86_64-dvd.iso` present at the repo root (gitignored).
 - `.venv` populated with dev deps:
   `.venv\Scripts\python.exe -m pip install -e ".[dev]"`.
@@ -25,7 +26,7 @@ Use this as the v0.1.0 acceptance test before merging
 ## Step 1 — Generate the bundle (PowerShell window #1)
 
 ```powershell
-cd C:\Users\user\source\alma-linux-security
+cd <repo-root>
 .venv\Scripts\python.exe -m ks_gen gen `
   --config tests\golden\minimal-dhcp.host.yaml `
   --set disk.preset=minimal `
@@ -75,7 +76,7 @@ this 404s or times out, fix it before booting the VM.
 ## Step 4 — Create the VM (still window #2)
 
 ```powershell
-$ISO  = 'C:\Users\user\source\alma-linux-security\AlmaLinux-9-latest-x86_64-dvd.iso'
+$ISO  = '<repo-root>\AlmaLinux-9-latest-x86_64-dvd.iso'
 $VHDX = 'C:\Hyper-V\Virtual Hard Disks\ks-gen-web01.vhdx'
 New-Item -ItemType Directory -Force -Path (Split-Path $VHDX) | Out-Null
 
@@ -152,7 +153,7 @@ that a `ks-gen iso` bundle installs end-to-end without an HTTP server.
 ### A. Build the tailored ISO
 
 ```powershell
-cd C:\Users\user\source\alma-linux-security
+cd <repo-root>
 .venv\Scripts\python.exe -m ks_gen iso `
   --src AlmaLinux-9-latest-x86_64-dvd.iso `
   --ks  build\web01\ks.cfg `
@@ -170,7 +171,7 @@ Same `New-VM` block as Step 4, but attach the tailored ISO instead of
 the stock one:
 
 ```powershell
-$ISO  = 'C:\Users\user\source\alma-linux-security\build\web01\ks-gen-web01.iso'
+$ISO  = '<repo-root>\build\web01\ks-gen-web01.iso'
 $VHDX = 'C:\Hyper-V\Virtual Hard Disks\ks-gen-web01.vhdx'
 # ...rest of Step 4 unchanged...
 ```
