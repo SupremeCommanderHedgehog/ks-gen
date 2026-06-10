@@ -64,9 +64,6 @@ ks-gen = "ks_gen.cli:app"
 [tool.hatch.build.targets.wheel]
 packages = ["src/ks_gen"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"src/ks_gen/templates" = "ks_gen/templates"
-
 [tool.ruff]
 line-length = 100
 target-version = "py311"
