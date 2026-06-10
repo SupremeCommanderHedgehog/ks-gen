@@ -71,7 +71,7 @@ class DiskLvDef(StrictModel):
         return v
 
 
-_DEFAULT_LV_SIZES: dict[str | None, str] = {
+DEFAULT_LV_SIZES: dict[str | None, str] = {
     "/": "15G",
     "/home": "5G",
     "/tmp": "3G",
@@ -83,7 +83,7 @@ _DEFAULT_LV_SIZES: dict[str | None, str] = {
 }
 
 
-_DEFAULT_FSOPTIONS: dict[str, str] = {
+DEFAULT_FSOPTIONS: dict[str, str] = {
     "/home": "nodev,nosuid",
     "/tmp": "nodev,nosuid,noexec",
     "/var": "nodev",
@@ -172,7 +172,7 @@ class DiskLayout(StrictModel):
         # Size check runs LAST so duplicate-name / duplicate-mount errors
         # surface first when a custom-mount LV is also a duplicate.
         for lv in self.lvs:
-            if lv.size is None and lv.mount not in _DEFAULT_LV_SIZES:
+            if lv.size is None and lv.mount not in DEFAULT_LV_SIZES:
                 raise ValueError(
                     f"disk.layout.lvs[{lv.name}].size: required for custom "
                     f"mountpoint {lv.mount}; no default available"
