@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ks_gen.config import _DEFAULT_FSOPTIONS, _DEFAULT_LV_SIZES, DiskLvDef
+from ks_gen.config import DEFAULT_FSOPTIONS, DEFAULT_LV_SIZES, DiskLvDef
 
 
 def size_to_mb(size_str: str) -> int:
@@ -18,9 +18,9 @@ def size_to_mb(size_str: str) -> int:
 def effective_size_mb(lv: DiskLvDef) -> int | str:
     """Returns MB integer, or the string 'recommended' for swap-style sizing.
 
-    Falls back to _DEFAULT_LV_SIZES when lv.size is None.
+    Falls back to DEFAULT_LV_SIZES when lv.size is None.
     """
-    s = lv.size if lv.size is not None else _DEFAULT_LV_SIZES[lv.mount]
+    s = lv.size if lv.size is not None else DEFAULT_LV_SIZES[lv.mount]
     if s == "recommended":
         return "recommended"
     return size_to_mb(s)
@@ -34,4 +34,4 @@ def effective_fsoptions(lv: DiskLvDef) -> str | None:
         return lv.fsoptions
     if lv.mount is None:
         return None
-    return _DEFAULT_FSOPTIONS.get(lv.mount)
+    return DEFAULT_FSOPTIONS.get(lv.mount)
