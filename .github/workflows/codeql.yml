@@ -1,13 +1,12 @@
 name: codeql
 on:
   workflow_dispatch:
-  # Activate at public launch — see docs/going-public.md §4:
-  # push:
-  #   branches: [main]
-  # pull_request:
-  #   branches: [main]
-  # schedule:
-  #   - cron: '17 7 * * 1'  # Mondays 07:17 UTC
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 7 * * 1'  # Mondays 07:17 UTC
 
 permissions:
   actions: read
