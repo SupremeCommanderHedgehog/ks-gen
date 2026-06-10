@@ -31,8 +31,13 @@ jobs:
           # Python extractor. Hosts:
           #   - stepsecurity.io endpoints   : harden-runner telemetry
           #   - api.github.com              : SARIF upload (code-scanning API)
-          #   - github.com / codeload.github.com : actions/checkout + CodeQL bundle release
+          #   - github.com / codeload.github.com : actions/checkout + CodeQL bundle release-page redirect
           #   - objects.githubusercontent.com    : CodeQL bundle blob storage
+          #   - release-assets.githubusercontent.com : CodeQL bundle CDN
+          #     (release-asset downloads 302 from github.com to this
+          #     AWS-backed CDN; needed when runner toolcache lacks the
+          #     requested bundle version — the warm-cache hit on PR #49
+          #     masked this miss, but PR #50's runner caught it)
           #   - results-receiver.actions.githubusercontent.com : actions cache/artifacts
           allowed-endpoints: >
             agent.api.stepsecurity.io:443
@@ -41,6 +46,7 @@ jobs:
             github.com:443
             objects.githubusercontent.com:443
             prod.app-api.stepsecurity.io:443
+            release-assets.githubusercontent.com:443
             results-receiver.actions.githubusercontent.com:443
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
