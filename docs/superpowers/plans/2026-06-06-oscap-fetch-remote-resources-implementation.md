@@ -52,7 +52,7 @@ You should already be on branch `impl/v0.2.1-oscap-fetch-remote` (created when t
 
 - [ ] **Step 1: Confirm branch and working tree are clean.**
 
-Run from repo root (`C:\Users\yizshachuck\source\alma-linux-security`):
+Run from repo root (`<repo-root>`):
 
 ```powershell
 git branch --show-current

@@ -49,7 +49,7 @@
 
 - [ ] **Step 1: Run the full CI parity chain to establish a known-green baseline.**
 
-Run from repo root (`C:\Users\yizshachuck\source\alma-linux-security`):
+Run from repo root (`<repo-root>`):
 
 ```powershell
 ruff check src tests; if ($LASTEXITCODE -ne 0) { throw "ruff check" }
@@ -771,7 +771,7 @@ that a `ks-gen iso` bundle installs end-to-end without an HTTP server.
 ### A. Build the tailored ISO
 
 ```powershell
-cd C:\Users\yizshachuck\source\alma-linux-security
+cd <repo-root>
 .venv\Scripts\python.exe -m ks_gen iso `
   --src AlmaLinux-9-latest-x86_64-dvd.iso `
   --ks  build\web01\ks.cfg `
@@ -789,7 +789,7 @@ Same `New-VM` block as Step 4, but attach the tailored ISO instead of
 the stock one:
 
 ```powershell
-$ISO  = 'C:\Users\yizshachuck\source\alma-linux-security\build\web01\ks-gen-web01.iso'
+$ISO  = '<repo-root>\build\web01\ks-gen-web01.iso'
 $VHDX = 'C:\Hyper-V\Virtual Hard Disks\ks-gen-web01.vhdx'
 # ...rest of Step 4 unchanged...
 ```

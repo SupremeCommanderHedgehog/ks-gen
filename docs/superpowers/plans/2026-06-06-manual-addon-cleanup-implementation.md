@@ -40,7 +40,7 @@
 
 - [ ] **Step 1: Confirm we're on the cleanup branch.**
 
-Run from repo root (`C:\Users\yizshachuck\source\alma-linux-security`):
+Run from repo root (`<repo-root>`):
 
 ```powershell
 git branch --show-current

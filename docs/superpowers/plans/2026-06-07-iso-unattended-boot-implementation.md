@@ -902,7 +902,7 @@ git -c user.email="github.v5f9w@bitbucket.onl" -c user.signingkey=BE707B220C9954
 ## Task 12: Update project memory
 
 **Files:**
-- Modify: `C:\Users\yizshachuck\.claude\projects\C--Users-yizshachuck-source-alma-linux-security\memory\project_ks_gen.md`
+- Modify: `<claude-memory>/project_ks_gen.md` (Claude Code per-project auto-memory store)
 
 - [ ] **Step 1: Read the current memory file to understand its format**
 
