@@ -35,7 +35,9 @@ def build_iso(
         iso_grub = tmp_path / "grub.cfg"
 
         _extract(src_iso, "/isolinux/isolinux.cfg", iso_isolinux)
+        iso_isolinux.chmod(0o644)
         _extract(src_iso, "/EFI/BOOT/grub.cfg", iso_grub)
+        iso_grub.chmod(0o644)
 
         try:
             iso_isolinux.write_text(
