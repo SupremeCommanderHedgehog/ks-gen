@@ -11,10 +11,18 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# step-security/harden-runner runs in `audit` mode below — it logs every
-# egress from the runner but does not block anything. The going-public
-# runbook (docs/going-public.md) covers flipping to `block` once we have
-# a baseline of expected egress destinations.
+# step-security/harden-runner runs in `block` mode below — outbound
+# traffic is restricted to the explicit allowlist per job. The allowlist
+# was derived from what each step actually needs:
+#   - stepsecurity.io endpoints   : harden-runner telemetry
+#   - github.com / api.github.com : actions/checkout
+#   - codeload.github.com         : actions/checkout tarball fallback
+#   - objects.githubusercontent.com : setup-python binary download
+#   - pypi.org / files.pythonhosted.org : pip install
+#   - results-receiver.actions.githubusercontent.com : actions cache + upload-artifact
+# If a step fails because a host isn't allowlisted, add it here.
+# codeql.yml and release-please.yml still run in audit mode — they have
+# wider network needs and can be tightened separately.
 
 jobs:
   ruff:
@@ -28,7 +36,17 @@ jobs:
     steps:
       - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            agent.api.stepsecurity.io:443
+            api.github.com:443
+            codeload.github.com:443
+            files.pythonhosted.org:443
+            github.com:443
+            objects.githubusercontent.com:443
+            prod.app-api.stepsecurity.io:443
+            pypi.org:443
+            results-receiver.actions.githubusercontent.com:443
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
@@ -58,7 +76,17 @@ jobs:
     steps:
       - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            agent.api.stepsecurity.io:443
+            api.github.com:443
+            codeload.github.com:443
+            files.pythonhosted.org:443
+            github.com:443
+            objects.githubusercontent.com:443
+            prod.app-api.stepsecurity.io:443
+            pypi.org:443
+            results-receiver.actions.githubusercontent.com:443
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
