@@ -36,6 +36,15 @@ class _Rule:
             parts.append(_reboot_window_block(u.reboot_window.on_calendar))
         return "\n".join(parts)
 
+    def emit_packages(self, cfg: HostConfig) -> list[str]:
+        u = cfg.overrides.unattended_updates
+        pkgs: list[str] = []
+        if u.nightly_security.enable or u.monthly_full.enable:
+            pkgs.append("dnf-automatic")
+        if u.reboot_window.enable:
+            pkgs.append("dnf-utils")
+        return pkgs
+
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
         return None
 

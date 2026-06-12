@@ -161,3 +161,34 @@ def test_reboot_script_fails_loud_on_missing_needs_restarting(minimal_cfg):
     # The script must log at error level and exit non-zero rather than reboot.
     assert "needs-restarting missing" in out
     assert "exit 1" in out
+
+
+def test_emit_packages_includes_dnf_automatic_and_dnf_utils_by_default(minimal_cfg):
+    # All three sub-flags default to enabled, so both packages are required.
+    assert RULE.emit_packages(minimal_cfg) == ["dnf-automatic", "dnf-utils"]
+
+
+def test_emit_packages_drops_dnf_utils_when_reboot_window_disabled(minimal_cfg):
+    cfg = minimal_cfg.model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(reboot_window=RebootWindowCfg(enable=False))
+            )
+        }
+    )
+    assert RULE.emit_packages(cfg) == ["dnf-automatic"]
+
+
+def test_emit_packages_empty_when_all_sub_blocks_disabled(minimal_cfg):
+    cfg = minimal_cfg.model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    nightly_security=NightlySecurityCfg(enable=False),
+                    monthly_full=MonthlyFullCfg(enable=False),
+                    reboot_window=RebootWindowCfg(enable=False),
+                )
+            )
+        }
+    )
+    assert RULE.emit_packages(cfg) == []

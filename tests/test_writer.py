@@ -48,6 +48,50 @@ def test_admin_user_block_precedes_sshd_in_post(tmp_path):
     assert admin_idx < ssh_idx
 
 
+def test_rule_packages_land_in_packages_block_when_required_omits_them(tmp_path):
+    # Regression for #53: a user-supplied packages.required that omits
+    # dnf-automatic / dnf-utils must NOT silently break the unattended_updates
+    # %post block — the rule now declares its own packages.
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(
+        textwrap.dedent(
+            """\
+            system: {hostname: web01.example.com}
+            user:
+              admin:
+                name: opsadmin
+                authorized_keys: ["ssh-ed25519 AAAA a@b"]
+                sudo: nopasswd_yes
+            packages:
+              required: [scap-security-guide, openscap-scanner, aide, audit, rsyslog, chrony, firewalld, sudo, policycoreutils-python-utils]
+            """  # noqa: E501
+        ),
+        encoding="utf-8",
+    )
+    cfg = load_host_config(cfg_path, sets=[])
+    # Sanity: defaults overridden — required does NOT contain the rule's deps.
+    assert "dnf-automatic" not in cfg.packages.required
+    assert "dnf-utils" not in cfg.packages.required
+
+    bundle = build_bundle(cfg)
+    pkgs_block = bundle.ks_cfg.split("%packages", 1)[1].split("%end", 1)[0]
+    assert "\ndnf-automatic\n" in pkgs_block
+    assert "\ndnf-utils\n" in pkgs_block
+
+
+def test_rule_packages_are_deduped_against_required(tmp_path):
+    # When packages.required already contains the rule's deps, the rendered
+    # %packages block must list each package exactly once.
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(YAML, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    assert "dnf-automatic" in cfg.packages.required  # comes from defaults
+    bundle = build_bundle(cfg)
+    pkgs_block = bundle.ks_cfg.split("%packages", 1)[1].split("%end", 1)[0]
+    assert pkgs_block.count("\ndnf-automatic\n") == 1
+    assert pkgs_block.count("\ndnf-utils\n") == 1
+
+
 def test_render_tailoring_matches_build_bundle_tailoring_xml() -> None:
     """render_tailoring(cfg) produces the same XML as build_bundle(cfg).tailoring_xml,
     modulo the embedded timestamp in <xccdf:version time="...">."""

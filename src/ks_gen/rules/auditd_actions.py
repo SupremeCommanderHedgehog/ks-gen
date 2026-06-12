@@ -49,6 +49,9 @@ class _Rule:
             ]
         )
 
+    def emit_packages(self, cfg: HostConfig) -> list[str]:
+        return []
+
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
         a = cfg.overrides.auditd
         strict = (

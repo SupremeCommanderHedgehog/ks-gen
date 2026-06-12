@@ -49,6 +49,9 @@ class _Rule:
             lines.append("ssh-keygen -A")
         return "\n".join(lines) + "\n"
 
+    def emit_packages(self, cfg: HostConfig) -> list[str]:
+        return []
+
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
         if cfg.crypto.policy.value == "STIG":
             return None

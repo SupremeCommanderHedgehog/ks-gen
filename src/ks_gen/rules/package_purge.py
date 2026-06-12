@@ -28,6 +28,9 @@ class _Rule:
             f"# Remove disallowed packages (no-op if not installed)\ndnf -y remove {pkgs} || true\n"
         )
 
+    def emit_packages(self, cfg: HostConfig) -> list[str]:
+        return []
+
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
         return None
 
