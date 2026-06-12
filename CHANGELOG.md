@@ -3,6 +3,31 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.10.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.9.0...v0.10.0) (2026-06-12)
+
+
+### Features
+
+* **rules:** add emit_packages so rules contribute their own %packages deps ([#53](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/53)) ([#56](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/56)) ([630f455](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/630f455c22e7e0bc0367d0c370b075ac6241dd20))
+
+
+### Bug Fixes
+
+* **iso:** unbreak ks-gen iso end-to-end (pyproject + builder) ([#51](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/51)) ([da363ef](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/da363ef9de0a1907dd7bb6ecb306b386aaddbb8a))
+* **iso:** unlink existing --out before xorriso so `ks-gen iso` is idempotent ([#52](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/52)) ([#55](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/55)) ([9d4e903](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/9d4e9039136cdc8f4c344a2151b164eac644519a))
+
+
+### Refactoring
+
+* **config:** unprefix DEFAULT_LV_SIZES and DEFAULT_FSOPTIONS ([#43](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/43)) ([732b318](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/732b31871637bc1e23f84c4e70f9956c06a58b5d))
+
+
+### Documentation
+
+* **claude-md:** add "Debugging a generated install" section ([#54](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/54)) ([6a26564](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/6a2656448855210383d761561c3d0afe4897a411))
+* **claude-md:** note when to recommend the install-regression harness ([#58](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/58)) ([f0fb2e0](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/f0fb2e023bd0c2d4df74224a4f84224edc743bae))
+* **going-public:** fix runbook bugs found while walking it live ([#48](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/48)) ([0b06894](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/0b068946584f3d83ca4fc0e95d1d100644a3df5f))
+
 ## [0.9.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.8.0...v0.9.0) (2026-06-10)
 
 
