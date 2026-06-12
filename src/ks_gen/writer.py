@@ -44,15 +44,21 @@ def build_bundle(cfg: HostConfig) -> Bundle:
 
     post_blocks: list[PostBlock] = []
     tailoring_ops = []
+    rule_packages: list[str] = []
+    already = set(cfg.packages.required)
     for r in applicable:
         body = r.emit_post(cfg).rstrip()
         if body:
             post_blocks.append(PostBlock(rule_id=r.id, body=body))
         tailoring_ops.extend(r.emit_tailoring(cfg))
+        for pkg in r.emit_packages(cfg):
+            if pkg not in already:
+                rule_packages.append(pkg)
+                already.add(pkg)
 
     profile_id = f"xccdf_org.ssgproject.content_profile_{cfg.meta.profile}"
     tailoring_xml = build_tailoring_xml(tailoring_ops, profile_id=profile_id)
-    ks_cfg = render_skeleton(cfg, post_blocks=list(post_blocks))
+    ks_cfg = render_skeleton(cfg, post_blocks=list(post_blocks), rule_packages=rule_packages)
     host_yaml = yaml.safe_dump(
         cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False
     )

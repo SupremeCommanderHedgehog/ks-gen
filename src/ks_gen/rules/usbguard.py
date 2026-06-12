@@ -34,6 +34,9 @@ class _Rule:
     def emit_post(self, cfg: HostConfig) -> str:
         return ""
 
+    def emit_packages(self, cfg: HostConfig) -> list[str]:
+        return []
+
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
         if cfg.overrides.usbguard.enable:
             return None

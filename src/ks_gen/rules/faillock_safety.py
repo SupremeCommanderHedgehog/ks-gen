@@ -50,6 +50,9 @@ class _Rule:
             ]
         )
 
+    def emit_packages(self, cfg: HostConfig) -> list[str]:
+        return []
+
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
         f = cfg.overrides.faillock
         if f.even_deny_root and f.unlock_time == 0:
