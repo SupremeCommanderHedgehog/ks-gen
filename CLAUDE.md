@@ -31,3 +31,15 @@ pytest tests/golden/ --snapshot-update
 
 Inspect the diff before committing — a regen should change exactly what
 the rule change predicts and nothing else.
+
+## Debugging a generated install
+
+- Console login is impossible by design — root + admin both `passwd -l`, sshd
+  `PasswordAuthentication no`. Only SSH-with-key works; recovery without
+  network requires GRUB emergency shell (`rd.break=switch_root`).
+- Anaconda's "error at line N" dialog points at the `%post` block header,
+  not the failing command. Real failure is in `/mnt/sysimage/root/ks-post.log`
+  — last `+ <cmd>` line under `set -euxo pipefail`. Switch to tty2 before
+  dismissing the dialog.
+- For debug rebuilds, edit `src/ks_gen/iso/_menu.py` to drop `quiet` and add
+  `inst.text rd.info`. Don't commit it.
