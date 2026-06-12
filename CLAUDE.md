@@ -43,3 +43,31 @@ the rule change predicts and nothing else.
   dismissing the dialog.
 - For debug rebuilds, edit `src/ks_gen/iso/_menu.py` to drop `quiet` and add
   `inst.text rd.info`. Don't commit it.
+
+## Install-regression harness (`.scratch/install-regression/`)
+
+An on-demand end-to-end install regression harness lives under
+`.scratch/install-regression/` (gitignored, per-developer). It runs the
+full `ks-gen gen` → `ks-gen iso` → QEMU EFI boot → anaconda install →
+SSH-in → smoke-check pipeline. Closed issue #57 (and that issue's final
+comment) document the full local-only recipe — bootstrap the harness on
+a new machine from there. Wall-clock: ~30-90 min on TCG.
+
+**When to recommend running it.** Only when the diff plausibly affects
+what anaconda does. Specifically:
+- `src/ks_gen/iso/**` — builder, bootloader, _menu, xorriso pipeline
+- `src/ks_gen/rules/*.py` — new/changed `emit_packages`, `emit_post`,
+  or `emit_tailoring` (anything that writes shell into `%post` or
+  contributes to `%packages`)
+- `src/ks_gen/templates/ks.cfg.j2` or `templates/partials/*.j2`
+- `src/ks_gen/writer.py` bundle composition changes
+- `src/ks_gen/config.py` defaults for fields the install consumes
+  (network, disk, packages)
+
+**Do NOT recommend** for docs, CLI/typer changes that don't reach the
+generated kickstart, test-only changes, or `verify` command work. The
+30-90 min run isn't worth it for "extra confidence" — recommend it when
+a real bug class would slip through the unit tests, not as a tax.
+
+Don't run it yourself in a normal session — surface the recommendation
+and let the user decide.
