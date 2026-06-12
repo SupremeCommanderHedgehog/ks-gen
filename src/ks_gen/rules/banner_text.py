@@ -48,6 +48,9 @@ class _Rule:
             lines.append(f"chmod 644 {path}")
         return "\n".join(lines) + "\n"
 
+    def emit_packages(self, cfg: HostConfig) -> list[str]:
+        return []
+
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
         return ExceptionEntry(
             rule_id="banner_text",

@@ -37,6 +37,9 @@ __KS_GEN_EOF__
 chmod 644 /etc/chrony.conf
 """
 
+    def emit_packages(self, cfg: HostConfig) -> list[str]:
+        return []
+
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
         return None
 

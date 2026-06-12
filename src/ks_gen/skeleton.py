@@ -44,12 +44,17 @@ def _env() -> Environment:
     return env
 
 
-def render_skeleton(cfg: HostConfig, post_blocks: list[PostBlock | str]) -> str:
+def render_skeleton(
+    cfg: HostConfig,
+    post_blocks: list[PostBlock | str],
+    rule_packages: list[str] | None = None,
+) -> str:
     env = _env()
     template = env.get_template("ks.cfg.j2")
     return template.render(
         cfg=cfg,
         post_blocks=post_blocks,
+        rule_packages=rule_packages or [],
         version=__version__,
         generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )

@@ -37,6 +37,8 @@ authselect select sssd --force
 {% endfor -%}
 {% for pkg in cfg.packages.required %}{{ pkg }}
 {% endfor -%}
+{% for pkg in rule_packages %}{{ pkg }}
+{% endfor -%}
 {% for pkg in cfg.packages.extra %}{{ pkg }}
 {% endfor -%}
 {% for pkg in cfg.packages.excluded %}-{{ pkg }}
