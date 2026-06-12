@@ -53,6 +53,43 @@ def test_build_iso_calls_xorriso(tmp_path):
     assert "/tailoring.xml" in final_args
 
 
+def test_build_iso_overwrites_existing_out(tmp_path):
+    src = tmp_path / "src.iso"
+    src.write_bytes(b"\0" * 1024)
+    ks = tmp_path / "ks.cfg"
+    ks.write_text("text\n", encoding="utf-8")
+    tail = tmp_path / "tailoring.xml"
+    tail.write_text("<x/>", encoding="utf-8")
+    out = tmp_path / "out.iso"
+    out.write_bytes(b"stale" * 1024)
+
+    def fake_run(args, **kwargs):
+        if "-extract" in args:
+            idx = args.index("-extract")
+            dest = Path(args[idx + 2])
+            if "isolinux.cfg" in args[idx + 1]:
+                dest.write_text("timeout 600\nlabel linux\n  kernel vmlinuz\n", encoding="utf-8")
+            else:
+                dest.write_text(
+                    "set timeout=60\nmenuentry 'foo' { linuxefi vmlinuz\ninitrdefi initrd.img\n}\n",
+                    encoding="utf-8",
+                )
+        if "-outdev" in args:
+            # xorriso would refuse if `out` still existed with non-zero data —
+            # builder must unlink it first.
+            assert not out.exists(), "builder must unlink -outdev target before xorriso runs"
+        result = MagicMock()
+        result.returncode = 0
+        result.stderr = ""
+        return result
+
+    with (
+        patch("ks_gen.iso.builder.shutil.which", return_value="/usr/bin/xorriso"),
+        patch("ks_gen.iso.builder.subprocess.run", side_effect=fake_run),
+    ):
+        build_iso(src, ks, tail, out, volid="ALMA9")
+
+
 def test_build_iso_missing_xorriso_raises(tmp_path):
     src = tmp_path / "src.iso"
     src.write_bytes(b"\0")
