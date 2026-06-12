@@ -82,6 +82,10 @@ def _author(
     isolinux_cfg: Path,
     grub_cfg: Path,
 ) -> None:
+    # xorriso refuses `-outdev` against a non-empty file when it differs from
+    # `-indev`. We treat `--out` as a writable target, so unlink any prior ISO
+    # before authoring.
+    out_iso.unlink(missing_ok=True)
     args = [
         "xorriso",
         "-indev",
