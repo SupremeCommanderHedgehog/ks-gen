@@ -1,0 +1,7 @@
+{#- Reusable macro: emits ' --ondisk=<target>' when cfg.disk.target is
+    set, otherwise empty string. Leading space inside the if-body is
+    intentional so the macro appends cleanly after the preceding flag. -#}
+{%- macro ondisk_flag(cfg) -%}
+{%- if cfg.disk.target %} --ondisk={{ cfg.disk.target }}
+{%- endif -%}
+{%- endmacro -%}
