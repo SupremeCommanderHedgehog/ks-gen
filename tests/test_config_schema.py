@@ -9,6 +9,7 @@ from ks_gen.config import (
     AuditdMaxFileAction,
     AuditdSystemAction,
     Banner,
+    ContainerUser,
     ContainerVolume,
     Crypto,
     CryptoPolicy,
@@ -1132,3 +1133,41 @@ def test_container_volume_size_mib_not_serialized():
     dumped = v.model_dump()
     assert "size_mib" not in dumped
     assert dumped == {"size": "500M", "fsoptions": "nodev,nosuid"}
+
+
+def test_container_user_minimal():
+    u = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 AAAA u@h"])
+    assert u.name == "webapp"
+    assert u.gecos == ""
+
+
+def test_container_user_with_gecos():
+    u = ContainerUser(
+        name="webapp", gecos="Web app workloads", authorized_keys=["ssh-ed25519 AAAA u@h"]
+    )
+    assert u.gecos == "Web app workloads"
+
+
+def test_container_user_rejects_root():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="root", authorized_keys=["ssh-ed25519 AAAA u@h"])
+
+
+def test_container_user_rejects_invalid_name_uppercase():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="WebApp", authorized_keys=["ssh-ed25519 AAAA u@h"])
+
+
+def test_container_user_rejects_name_starting_with_digit():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="1webapp", authorized_keys=["ssh-ed25519 AAAA u@h"])
+
+
+def test_container_user_rejects_name_starting_with_dash():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="-webapp", authorized_keys=["ssh-ed25519 AAAA u@h"])
+
+
+def test_container_user_requires_at_least_one_authorized_key():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="webapp", authorized_keys=[])

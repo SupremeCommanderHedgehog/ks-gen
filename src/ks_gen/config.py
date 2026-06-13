@@ -394,6 +394,19 @@ class ContainerVolume(StrictModel):
         return n * 1024 * 1024
 
 
+class ContainerUser(StrictModel):
+    name: str = Field(..., pattern=r"^[a-z_][a-z0-9_-]{0,31}$")
+    gecos: str = ""
+    authorized_keys: list[str] = Field(..., min_length=1)
+
+    @field_validator("name")
+    @classmethod
+    def _not_root(cls, v: str) -> str:
+        if v == "root":
+            raise ValueError("containers.users[].name cannot be 'root'")
+        return v
+
+
 class PackagesPreset(StrEnum):
     STANDARD = "standard"
     LEAN = "lean"
