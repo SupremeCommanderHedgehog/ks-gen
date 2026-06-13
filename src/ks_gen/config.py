@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import Literal
 
@@ -366,6 +367,65 @@ class Crypto(StrictModel):
     policy: CryptoPolicy = CryptoPolicy.MODERN
 
 
+class ContainerVolume(StrictModel):
+    size: str = Field(default="20G", pattern=r"^\d+(M|G|T)$")
+    fsoptions: str = "nodev,nosuid"
+
+    @field_validator("fsoptions")
+    @classmethod
+    def _reject_noexec(cls, v: str) -> str:
+        tokens = [t for t in re.split(r"[,\s]+", v) if t]
+        if "noexec" in tokens:
+            raise ValueError(
+                "containers.volume.fsoptions: noexec is incompatible with "
+                "container image execution; remove it"
+            )
+        return v
+
+    @property
+    def size_mib(self) -> int:
+        unit = self.size[-1]
+        n = int(self.size[:-1])
+        if unit == "M":
+            return n
+        if unit == "G":
+            return n * 1024
+        # unit == "T" — pattern guarantees one of M|G|T
+        return n * 1024 * 1024
+
+
+class ContainerUser(StrictModel):
+    name: str = Field(..., pattern=r"^[a-z_][a-z0-9_-]{0,31}$")
+    gecos: str = ""
+    authorized_keys: list[str] = Field(..., min_length=1)
+
+    @field_validator("name")
+    @classmethod
+    def _not_root(cls, v: str) -> str:
+        if v == "root":
+            raise ValueError("containers.users[].name cannot be 'root'")
+        return v
+
+
+class Containers(StrictModel):
+    enabled: bool = False
+    users: list[ContainerUser] = Field(default_factory=list)
+    volume: ContainerVolume = Field(default_factory=ContainerVolume)
+
+    @model_validator(mode="after")
+    def _validate_users_distinct(self) -> Containers:
+        if not self.enabled:
+            return self
+        names = [u.name for u in self.users]
+        if len(names) != len(set(names)):
+            seen: set[str] = set()
+            for n in names:
+                if n in seen:
+                    raise ValueError(f"containers.users duplicate name: {n}")
+                seen.add(n)
+        return self
+
+
 class PackagesPreset(StrEnum):
     STANDARD = "standard"
     LEAN = "lean"
@@ -553,6 +613,7 @@ class HostConfig(StrictModel):
     overrides: Overrides = Field(default_factory=Overrides)
     custom_post: list[str] = Field(default_factory=list)
     exceptions: list[ExceptionDecl] = Field(default_factory=list)
+    containers: Containers = Field(default_factory=Containers)
 
     @model_validator(mode="after")
     def _crypto_fips_mutex(self) -> HostConfig:
@@ -583,4 +644,37 @@ class HostConfig(StrictModel):
                 "disk.preset='minimal' has no LVM PV; disk.luks "
                 "requires disk.preset='stig_server' or disk.layout"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _minimal_preset_rejects_containers(self) -> HostConfig:
+        if self.disk.preset == DiskPreset.MINIMAL and self.containers.enabled:
+            raise ValueError(
+                "disk.preset='minimal' has no LVM VG; containers.enabled "
+                "auto-injects an LV at /srv/containers which requires "
+                "disk.preset='stig_server' or disk.layout"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_containers_integration(self) -> HostConfig:
+        if not self.containers.enabled:
+            return self
+
+        admin_name = self.user.admin.name
+        for u in self.containers.users:
+            if u.name == admin_name:
+                raise ValueError(
+                    f"containers.users[].name {u.name!r} collides with "
+                    f"user.admin.name; admin user and container users must be distinct"
+                )
+
+        if self.disk.layout is not None:
+            for lv in self.disk.layout.lvs:
+                if lv.mount == "/srv/containers":
+                    raise ValueError(
+                        "containers.enabled=True conflicts with disk.layout LV mounted at "
+                        "/srv/containers; the container-host preset auto-injects this LV"
+                    )
+
         return self
