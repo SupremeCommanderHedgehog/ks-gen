@@ -1,0 +1,62 @@
+# Container-host server profile (see MANUAL.md §4.11)
+#
+# Worked example combining:
+#   - packages.preset: lean    — drops @standard, adds the STIG-required
+#                                compensating packages (logrotate, postfix,
+#                                cronie, crontabs, parted). Cuts ~75 packages
+#                                off the install footprint. See MANUAL.md §4.10.
+#   - containers.enabled: true — auto-injects an XFS /srv/containers logvol,
+#                                installs the rootless-podman stack, drops the
+#                                operator-friendly /root/create-rootless-user.sh,
+#                                writes /etc/containers/storage.conf, and
+#                                provisions each configured container user via
+#                                the same script. See MANUAL.md §4.11.
+#
+# To use:
+#   1. Replace every "ssh-ed25519 AAAA... <comment>" line with a real public key.
+#   2. Set system.hostname to your host's actual hostname.
+#   3. Decide on container users — each one gets SSH login + per-user rootless
+#      storage under /srv/containers/<name>/storage.
+#   4. ks-gen gen --config host-container.yaml --out bundle/
+#   5. ks-gen iso --config host-container.yaml ...   (or HTTP-serve bundle/)
+#
+# Disk-size note: the default disk.preset (stig_server) reserves ~44 GiB for
+# fixed LVs plus swap + EFI + /boot. The default containers.volume.size of 20G
+# pushes the minimum disk to ~70 GiB. On smaller disks, shrink volume.size or
+# move the container LV onto a separate physical disk via disk.layout.
+
+system:
+  hostname: webapp01.example.com
+
+network:
+  interfaces:
+    - device: eth0
+      bootproto: dhcp
+      onboot: true
+
+user:
+  admin:
+    name: stigops
+    gecos: "STIG admin"
+    authorized_keys:
+      - "ssh-ed25519 AAAA... stigops@bastion"
+    sudo: nopasswd_yes
+
+packages:
+  preset: lean
+
+containers:
+  enabled: true
+  users:
+    - name: webapp
+      gecos: "Web application workloads"
+      authorized_keys:
+        - "ssh-ed25519 AAAA... webapp@bastion"
+        # Add a second key here if multiple operators manage this user
+    - name: dbproxy
+      gecos: "Database connection proxy"
+      authorized_keys:
+        - "ssh-ed25519 AAAA... dbproxy@bastion"
+  volume:
+    size: "20G"
+    fsoptions: "nodev,nosuid"  # noexec is rejected (container layers must execute)

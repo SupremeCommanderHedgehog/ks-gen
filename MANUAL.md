@@ -567,6 +567,10 @@ opt out of that part of the lean preset's STIG-compliance guarantee.
 
 ### 4.11 `containers` — rootless container host preset
 
+A complete worked example combining this preset with `packages.preset: lean`
+lives at [`examples/host-container.yaml`](examples/host-container.yaml) — copy
+it, swap in your hostname and SSH keys, and run `ks-gen gen`.
+
 ```yaml
 containers:
   enabled: true                  # default false
