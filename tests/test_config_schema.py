@@ -1120,3 +1120,15 @@ def test_container_volume_rejects_noexec_with_spaces():
 def test_container_volume_accepts_other_options():
     v = ContainerVolume(fsoptions="nodev,nosuid,noatime")
     assert v.fsoptions == "nodev,nosuid,noatime"
+
+
+def test_container_volume_size_mib_not_serialized():
+    """Pin the plain-@property (not @computed_field) choice.
+
+    If size_mib ever leaks into model_dump(), host.yaml round-trips change
+    shape and downstream golden snapshots will silently drift.
+    """
+    v = ContainerVolume(size="500M")
+    dumped = v.model_dump()
+    assert "size_mib" not in dumped
+    assert dumped == {"size": "500M", "fsoptions": "nodev,nosuid"}
