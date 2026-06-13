@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import Literal
 
@@ -364,6 +365,33 @@ class CryptoPolicy(StrEnum):
 
 class Crypto(StrictModel):
     policy: CryptoPolicy = CryptoPolicy.MODERN
+
+
+class ContainerVolume(StrictModel):
+    size: str = Field(default="20G", pattern=r"^\d+(M|G|T)$")
+    fsoptions: str = "nodev,nosuid"
+
+    @field_validator("fsoptions")
+    @classmethod
+    def _reject_noexec(cls, v: str) -> str:
+        tokens = [t for t in re.split(r"[,\s]+", v) if t]
+        if "noexec" in tokens:
+            raise ValueError(
+                "containers.volume.fsoptions: noexec is incompatible with "
+                "container image execution; remove it"
+            )
+        return v
+
+    @property
+    def size_mib(self) -> int:
+        unit = self.size[-1]
+        n = int(self.size[:-1])
+        if unit == "M":
+            return n
+        if unit == "G":
+            return n * 1024
+        # unit == "T" — pattern guarantees one of M|G|T
+        return n * 1024 * 1024
 
 
 class PackagesPreset(StrEnum):

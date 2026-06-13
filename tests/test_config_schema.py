@@ -9,6 +9,7 @@ from ks_gen.config import (
     AuditdMaxFileAction,
     AuditdSystemAction,
     Banner,
+    ContainerVolume,
     Crypto,
     CryptoPolicy,
     Disk,
@@ -1082,3 +1083,40 @@ def test_effective_properties_are_not_serialized():
     dumped = p.model_dump()
     assert "effective_base_groups" not in dumped
     assert "effective_required" not in dumped
+
+
+def test_container_volume_defaults():
+    v = ContainerVolume()
+    assert v.size == "20G"
+    assert v.fsoptions == "nodev,nosuid"
+    assert v.size_mib == 20480
+
+
+def test_container_volume_size_mib_megabytes():
+    assert ContainerVolume(size="500M").size_mib == 500
+
+
+def test_container_volume_size_mib_terabytes():
+    assert ContainerVolume(size="1T").size_mib == 1048576
+
+
+def test_container_volume_rejects_invalid_size_pattern():
+    with pytest.raises(ValidationError):
+        ContainerVolume(size="20GB")  # only M|G|T allowed, no double-letter
+    with pytest.raises(ValidationError):
+        ContainerVolume(size="big")
+
+
+def test_container_volume_rejects_noexec_fsoption():
+    with pytest.raises(ValidationError):
+        ContainerVolume(fsoptions="nodev,nosuid,noexec")
+
+
+def test_container_volume_rejects_noexec_with_spaces():
+    with pytest.raises(ValidationError):
+        ContainerVolume(fsoptions="nodev, noexec , nosuid")
+
+
+def test_container_volume_accepts_other_options():
+    v = ContainerVolume(fsoptions="nodev,nosuid,noatime")
+    assert v.fsoptions == "nodev,nosuid,noatime"
