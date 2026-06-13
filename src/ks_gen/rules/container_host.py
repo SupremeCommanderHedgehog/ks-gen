@@ -83,6 +83,10 @@ class _Rule:
             "fuse-overlayfs",
             "containers-common",
             "podman-plugins",
+            # Provides semanage(8), used by create-rootless-user.sh for the
+            # SELinux fcontext equivalence rule. Already in Packages.required
+            # defaults; declaring it here makes the dependency rule-local.
+            "policycoreutils-python-utils",
         ]
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:

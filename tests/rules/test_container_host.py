@@ -24,6 +24,8 @@ def test_container_host_emit_packages_returns_podman_stack(minimal_cfg):
     assert "fuse-overlayfs" in pkgs
     assert "containers-common" in pkgs
     assert "podman-plugins" in pkgs
+    # semanage(8) for SELinux fcontext setup by the helper script
+    assert "policycoreutils-python-utils" in pkgs
 
 
 def test_container_host_emit_tailoring_is_empty(minimal_cfg):
