@@ -560,6 +560,11 @@ The preset is purely additive over `required` — explicitly listing any
 of the lean compensating packages in `required` is safe; they are
 deduped, not double-added.
 
+`excluded` wins over the preset. If you set `preset: lean` and also
+list one of the compensating packages (e.g. `postfix`) in `excluded`,
+the package is excluded from `%packages` and purged in `%post` — you
+opt out of that part of the lean preset's STIG-compliance guarantee.
+
 ### 4.11 `overrides` — the conflict-point matrix
 
 Each knob has a safe-by-default value. You override to either tighten
