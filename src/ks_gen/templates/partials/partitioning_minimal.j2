@@ -1,4 +1,5 @@
-part /boot/efi --fstype=efi --size=1024 --asprimary
-part /boot --fstype=xfs --size=1024 --fsoptions="nodev,nosuid" --asprimary
-part / --fstype=xfs --grow --size=8192
-part swap --recommended
+{% from 'partials/_ondisk.j2' import ondisk_flag -%}
+part /boot/efi --fstype=efi --size=1024 --asprimary{{ ondisk_flag(cfg) }}
+part /boot --fstype=xfs --size=1024 --fsoptions="nodev,nosuid" --asprimary{{ ondisk_flag(cfg) }}
+part / --fstype=xfs --grow --size=8192{{ ondisk_flag(cfg) }}
+part swap --recommended{{ ondisk_flag(cfg) }}

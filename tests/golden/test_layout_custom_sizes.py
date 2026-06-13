@@ -20,7 +20,7 @@ def test_layout_custom_sizes(snapshot):
     assert _normalize(bundle.ks_cfg) == snapshot(name="ks.cfg")
 
 
-def test_layout_custom_sizes_ondisk_emitted_on_all_three_partitions():
+def test_layout_custom_sizes_target_emitted_on_all_three_partitions():
     yaml_path = Path(__file__).parent / "layout-custom-sizes.host.yaml"
     bundle = build_bundle(load_host_config(yaml_path, sets=[]))
     ks = bundle.ks_cfg

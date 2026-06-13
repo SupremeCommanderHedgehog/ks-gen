@@ -1,7 +1,7 @@
 {#- Reusable macro: emits ' --encrypted --luks-version=luks2 --passphrase=...'
     when LUKS is enabled, or empty string when preset=none. The leading
     space inside the if-body is intentional so the macro appends cleanly
-    after --size=1 (or --ondisk=sda from the layout partial). -#}
+    after --size=1 (or --ondisk=sda from the _ondisk.j2 macro). -#}
 {%- macro luks_pv_flags(cfg) -%}
 {%- if cfg.disk.luks.preset.value != 'none' %} --encrypted --luks-version=luks2 --passphrase={{ kickstart_passphrase_quoted(resolve_passphrase(cfg.disk.luks)) }}
 {%- endif -%}

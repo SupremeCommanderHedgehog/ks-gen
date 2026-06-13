@@ -1,7 +1,8 @@
 {% from 'partials/_luks_flags.j2' import luks_pv_flags -%}
-part /boot/efi --fstype=efi --size=1024 --asprimary
-part /boot --fstype=xfs --size=1024 --fsoptions="nodev,nosuid" --asprimary
-part pv.01 --grow --size=1{{ luks_pv_flags(cfg) }}
+{% from 'partials/_ondisk.j2' import ondisk_flag -%}
+part /boot/efi --fstype=efi --size=1024 --asprimary{{ ondisk_flag(cfg) }}
+part /boot --fstype=xfs --size=1024 --fsoptions="nodev,nosuid" --asprimary{{ ondisk_flag(cfg) }}
+part pv.01 --grow --size=1{{ ondisk_flag(cfg) }}{{ luks_pv_flags(cfg) }}
 volgroup vg_root pv.01
 logvol /             --vgname=vg_root --name=root     --fstype=xfs --size=15360
 logvol /home         --vgname=vg_root --name=home     --fstype=xfs --size=5120  --fsoptions="nodev,nosuid"

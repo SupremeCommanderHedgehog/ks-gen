@@ -7,8 +7,8 @@ user:
       - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYlayoutcustom ops@bastion"
     sudo: nopasswd_yes
 disk:
+  target: sda
   layout:
-    ondisk: sda
     lvs:
       - {name: root, mount: /}
       - {name: home, mount: /home}
