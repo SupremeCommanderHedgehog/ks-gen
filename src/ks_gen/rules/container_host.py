@@ -14,6 +14,49 @@ if TYPE_CHECKING:
 _SCRIPT = files("ks_gen.assets").joinpath("create-rootless-user.sh").read_text(encoding="utf-8")
 
 
+def _emit(cfg: HostConfig) -> str:
+    parts: list[str] = []
+
+    # Drop the helper script to /root for operator post-install use
+    parts.append("# Install the rootless-container-user helper at /root for post-install use")
+    parts.append("cat > /root/create-rootless-user.sh <<'__KS_GEN_EOF__'")
+    parts.append(_SCRIPT.rstrip())
+    parts.append("__KS_GEN_EOF__")
+    parts.append("chown root:root /root/create-rootless-user.sh")
+    parts.append("chmod 0550 /root/create-rootless-user.sh")
+    parts.append("")
+
+    # System-wide storage.conf: pin rootless graphroot under the mirror
+    parts.append(
+        "# System-wide storage.conf -- pins rootless graphroot to the /srv/containers mirror"
+    )
+    parts.append("install -d -m 0755 /etc/containers")
+    parts.append("cat > /etc/containers/storage.conf <<'__KS_GEN_EOF__'")
+    parts.append("[storage]")
+    parts.append('driver = "overlay"')
+    parts.append('rootless_storage_path = "/srv/containers/$USER/storage"')
+    parts.append("__KS_GEN_EOF__")
+    parts.append("chmod 0644 /etc/containers/storage.conf")
+
+    # Provision each configured container user via the same script the
+    # operator will use post-install. -l (linger) always on; -q (Quadlet
+    # scaffold) intentionally off for kickstart-time creation.
+    for u in cfg.containers.users:
+        gecos = u.gecos or u.name
+        parts.append("")
+        parts.append(f"# Provision container user: {u.name}")
+        parts.append(f'/root/create-rootless-user.sh -l -c "{gecos}" {u.name}')
+        parts.append(f"install -d -m 0700 -o {u.name} -g {u.name} /home/{u.name}/.ssh")
+        parts.append(f"cat > /home/{u.name}/.ssh/authorized_keys <<'__KS_GEN_EOF__'")
+        parts.extend(u.authorized_keys)
+        parts.append("__KS_GEN_EOF__")
+        parts.append(f"chown {u.name}:{u.name} /home/{u.name}/.ssh/authorized_keys")
+        parts.append(f"chmod 0600 /home/{u.name}/.ssh/authorized_keys")
+        parts.append(f"restorecon -R /home/{u.name}/.ssh")
+
+    return "\n".join(parts) + "\n"
+
+
 @dataclass(frozen=True)
 class _Rule:
     id: str = "container_host"
@@ -30,9 +73,7 @@ class _Rule:
         return []
 
     def emit_post(self, cfg: HostConfig) -> str:
-        # Task 6 fills this in. For now, return empty — rule still applies()
-        # and shows up in the catalog, but the %post block is empty.
-        return ""
+        return _emit(cfg)
 
     def emit_packages(self, cfg: HostConfig) -> list[str]:
         return [
