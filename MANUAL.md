@@ -625,6 +625,7 @@ The script is idempotent — re-running it on an existing user is safe and will 
 - Container users' names must be distinct from `user.admin.name` (container users are for rootless workloads; admins manage the host).
 - If you're using `disk.layout` (not `disk.preset`), don't add a `/srv/containers` LV yourself — the container-host preset auto-injects it.
 - `volume.fsoptions` rejects `noexec`. Container image layers must execute.
+- **Disk-size budget.** With `disk.preset: stig_server`, the fixed STIG LVs already consume ~44 GiB (`/` 15, `/var` 10, `/home` 5, `/var/log` 5, `/var/log/audit` 3, `/var/tmp` 2, `/tmp` 3) plus `--recommended` swap and `/boot` + EFI. The default `volume.size: 20G` for `/srv/containers` therefore needs a disk of roughly **70 GiB or larger** to install cleanly. On smaller disks, shrink `volume.size` accordingly or move the container LV onto a separate disk via `disk.layout`.
 
 ### 4.12 `overrides` — the conflict-point matrix
 
