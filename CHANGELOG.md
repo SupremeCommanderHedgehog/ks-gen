@@ -3,6 +3,14 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.12.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.11.0...v0.12.0) (2026-06-13)
+
+
+### Features
+
+* **containers:** add container-host preset with /srv/containers and rootless user provisioning ([#70](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/70)) ([03afcb9](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/03afcb9342fe068e72ce0022e12c8a813fdc5b8c))
+* **packages:** add packages.preset (standard | lean) ([#68](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/68)) ([7f3694f](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/7f3694fdc82428408092fcfff126bbf1ab4dcdf3))
+
 ## [0.11.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.10.0...v0.11.0) (2026-06-13)
 
 
