@@ -327,8 +327,10 @@ mutually exclusive with `disk.preset`.
 
 ```yaml
 disk:
+  target: sda             # optional; confines install (ignoredisk +
+                          # clearpart --drives + bootloader --boot-drive +
+                          # part --ondisk) to this disk in multi-disk hosts
   layout:
-    ondisk: sda           # optional, hints anaconda to use this disk
     lvs:
       - {name: root, mount: /}
       - {name: home, mount: /home}
