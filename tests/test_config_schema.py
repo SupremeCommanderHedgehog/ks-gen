@@ -15,6 +15,8 @@ from ks_gen.config import (
     Crypto,
     CryptoPolicy,
     Disk,
+    DiskLayout,
+    DiskLvDef,
     DiskPreset,
     ExceptionDecl,
     HostConfig,
@@ -1205,3 +1207,116 @@ def test_containers_allows_duplicate_user_names_when_disabled():
 
 def test_hostconfig_containers_defaults_disabled(minimal_cfg):
     assert minimal_cfg.containers.enabled is False
+
+
+def test_hostconfig_rejects_container_user_matching_admin_name():
+    with pytest.raises(ValidationError) as exc_info:
+        HostConfig(
+            system=System(hostname="h"),
+            user=User(
+                admin=AdminUser(
+                    name="opsadmin",
+                    authorized_keys=["ssh-ed25519 K admin@h"],
+                    sudo="nopasswd_yes",
+                )
+            ),
+            containers=Containers(
+                enabled=True,
+                users=[ContainerUser(name="opsadmin", authorized_keys=["ssh-ed25519 K x@h"])],
+            ),
+        )
+    assert "user.admin" in str(exc_info.value)
+
+
+def test_hostconfig_allows_distinct_container_and_admin_names():
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(
+                name="opsadmin",
+                authorized_keys=["ssh-ed25519 K admin@h"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        containers=Containers(
+            enabled=True,
+            users=[ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K w@h"])],
+        ),
+    )
+    assert cfg.containers.users[0].name == "webapp"
+
+
+def test_hostconfig_rejects_layout_with_srv_containers_when_containers_enabled():
+    with pytest.raises(ValidationError) as exc_info:
+        HostConfig(
+            system=System(hostname="h"),
+            user=User(
+                admin=AdminUser(
+                    name="opsadmin",
+                    authorized_keys=["ssh-ed25519 K admin@h"],
+                    sudo="nopasswd_yes",
+                )
+            ),
+            disk=Disk(
+                layout=DiskLayout(
+                    lvs=[
+                        DiskLvDef(name="root", mount="/", size="15G"),
+                        DiskLvDef(name="home", mount="/home", size="5G"),
+                        DiskLvDef(name="tmp", mount="/tmp", size="3G"),
+                        DiskLvDef(name="var", mount="/var", size="10G"),
+                        DiskLvDef(name="varlog", mount="/var/log", size="5G"),
+                        DiskLvDef(name="varlogaudit", mount="/var/log/audit", size="3G"),
+                        DiskLvDef(name="vartmp", mount="/var/tmp", size="2G"),
+                        DiskLvDef(name="containers", mount="/srv/containers", size="20G"),
+                        DiskLvDef(name="swap", fstype="swap"),
+                    ],
+                )
+            ),
+            containers=Containers(enabled=True),
+        )
+    assert "/srv/containers" in str(exc_info.value)
+
+
+def test_hostconfig_allows_layout_without_srv_containers_when_containers_enabled():
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(
+                name="opsadmin",
+                authorized_keys=["ssh-ed25519 K admin@h"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        disk=Disk(
+            layout=DiskLayout(
+                lvs=[
+                    DiskLvDef(name="root", mount="/", size="15G"),
+                    DiskLvDef(name="home", mount="/home", size="5G"),
+                    DiskLvDef(name="tmp", mount="/tmp", size="3G"),
+                    DiskLvDef(name="var", mount="/var", size="10G"),
+                    DiskLvDef(name="varlog", mount="/var/log", size="5G"),
+                    DiskLvDef(name="varlogaudit", mount="/var/log/audit", size="3G"),
+                    DiskLvDef(name="vartmp", mount="/var/tmp", size="2G"),
+                    DiskLvDef(name="swap", fstype="swap"),
+                ],
+            )
+        ),
+        containers=Containers(enabled=True),
+    )
+    assert cfg.containers.enabled is True
+
+
+def test_hostconfig_allows_containers_with_default_disk_preset():
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(
+                name="opsadmin",
+                authorized_keys=["ssh-ed25519 K admin@h"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        containers=Containers(enabled=True),
+    )
+    assert cfg.containers.enabled is True
+    assert cfg.disk.preset is not None  # default STIG_SERVER

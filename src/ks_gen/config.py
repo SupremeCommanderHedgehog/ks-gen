@@ -645,3 +645,26 @@ class HostConfig(StrictModel):
                 "requires disk.preset='stig_server' or disk.layout"
             )
         return self
+
+    @model_validator(mode="after")
+    def _validate_containers_integration(self) -> HostConfig:
+        if not self.containers.enabled:
+            return self
+
+        admin_name = self.user.admin.name
+        for u in self.containers.users:
+            if u.name == admin_name:
+                raise ValueError(
+                    f"containers.users[].name {u.name!r} collides with "
+                    f"user.admin.name; admin user and container users must be distinct"
+                )
+
+        if self.disk.layout is not None:
+            for lv in self.disk.layout.lvs:
+                if lv.mount == "/srv/containers":
+                    raise ValueError(
+                        "containers.enabled=True conflicts with disk.layout LV mounted at "
+                        "/srv/containers; the container-host preset auto-injects this LV"
+                    )
+
+        return self
