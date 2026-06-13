@@ -518,6 +518,7 @@ See §3.5 for what each value means.
 
 ```yaml
 packages:
+  preset: standard               # "standard" (default) or "lean"
   base_groups: ["@^minimal-environment", "@standard"]
   required:                        # STIG/oscap dependencies + ops baseline
     - scap-security-guide
@@ -541,6 +542,23 @@ packages:
 `excluded` packages are both removed from `%packages` (`-package`)
 and purged via `dnf -y remove` in `%post`. Belt and braces, because
 some get pulled in transitively by groups.
+
+#### `preset: standard` vs `preset: lean`
+
+- **`standard`** (default) emits `base_groups` as written. The RHEL/Alma
+  `@standard` group lands on the system: vim-enhanced, mlocate, sos,
+  smartmontools, postfix, parted, and ~80 other conventional admin tools.
+  Closest to the AlmaLinux DVD interactive install.
+- **`lean`** strips `@standard` from the emitted base groups and
+  auto-adds the packages the STIG profile expects to find regardless
+  (`logrotate`, `postfix`, `cronie`, `crontabs`, `parted`). Cuts ~75
+  packages off the install footprint with no oscap-remediation cost.
+  Choose this for single-purpose appliance hosts (container hosts,
+  edge nodes, bastions) where the full admin toolset is not wanted.
+
+The preset is purely additive over `required` — explicitly listing any
+of the lean compensating packages in `required` is safe; they are
+deduped, not double-added.
 
 ### 4.11 `overrides` — the conflict-point matrix
 
