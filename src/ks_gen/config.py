@@ -371,6 +371,15 @@ class PackagesPreset(StrEnum):
     LEAN = "lean"
 
 
+LEAN_EXTRA_PACKAGES: tuple[str, ...] = (
+    "logrotate",
+    "postfix",
+    "cronie",
+    "crontabs",
+    "parted",
+)
+
+
 class Packages(StrictModel):
     preset: PackagesPreset = PackagesPreset.STANDARD
     base_groups: list[str] = Field(default_factory=lambda: ["@^minimal-environment", "@standard"])
@@ -399,6 +408,19 @@ class Packages(StrictModel):
             "ypserv",
         ]
     )
+
+    @property
+    def effective_base_groups(self) -> list[str]:
+        if self.preset == PackagesPreset.LEAN:
+            return [g for g in self.base_groups if g != "@standard"]
+        return list(self.base_groups)
+
+    @property
+    def effective_required(self) -> list[str]:
+        if self.preset != PackagesPreset.LEAN:
+            return list(self.required)
+        existing = set(self.required)
+        return list(self.required) + [p for p in LEAN_EXTRA_PACKAGES if p not in existing]
 
 
 class FaillockCfg(StrictModel):
