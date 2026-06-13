@@ -3,6 +3,17 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.11.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.10.0...v0.11.0) (2026-06-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **disk:** add disk.target to confine install to a single disk ([#60](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/60))
+
+### Features
+
+* **disk:** add disk.target to confine install to a single disk ([#60](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/60)) ([8e250f9](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/8e250f9ddb2314204788e952746ecd633541bc65))
+
 ## [0.10.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.9.0...v0.10.0) (2026-06-12)
 
 
