@@ -22,6 +22,7 @@ from ks_gen.config import (
     NightlySecurityCfg,
     Overrides,
     Packages,
+    PackagesPreset,
     RebootWindowCfg,
     Ssh,
     System,
@@ -202,6 +203,26 @@ def test_packages_include_dnf_automatic_tooling():
     p = Packages()
     assert "dnf-automatic" in p.required
     assert "dnf-utils" in p.required
+
+
+def test_packages_preset_defaults_to_standard():
+    p = Packages()
+    assert p.preset == PackagesPreset.STANDARD
+
+
+def test_packages_preset_accepts_lean():
+    p = Packages(preset=PackagesPreset.LEAN)
+    assert p.preset == PackagesPreset.LEAN
+
+
+def test_packages_preset_accepts_string_value():
+    p = Packages(preset="lean")
+    assert p.preset.value == "lean"
+
+
+def test_packages_preset_rejects_unknown_value():
+    with pytest.raises(ValidationError):
+        Packages(preset="ultra-lean")
 
 
 def test_overrides_safe_defaults():

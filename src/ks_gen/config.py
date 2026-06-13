@@ -366,7 +366,13 @@ class Crypto(StrictModel):
     policy: CryptoPolicy = CryptoPolicy.MODERN
 
 
+class PackagesPreset(StrEnum):
+    STANDARD = "standard"
+    LEAN = "lean"
+
+
 class Packages(StrictModel):
+    preset: PackagesPreset = PackagesPreset.STANDARD
     base_groups: list[str] = Field(default_factory=lambda: ["@^minimal-environment", "@standard"])
     required: list[str] = Field(
         default_factory=lambda: [
