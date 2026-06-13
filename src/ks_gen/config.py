@@ -118,7 +118,6 @@ class DiskEfiPart(StrictModel):
 
 
 class DiskLayout(StrictModel):
-    ondisk: str | None = Field(default=None, pattern=r"^[a-zA-Z][a-zA-Z0-9]*$")
     boot: DiskBootPart = Field(default_factory=DiskBootPart)
     efi: DiskEfiPart = Field(default_factory=DiskEfiPart)
     vg_name: str = "vg_root"
@@ -257,6 +256,7 @@ class Disk(StrictModel):
     luks: DiskLuks = Field(default_factory=DiskLuks)
     wipe: bool = True
     bootloader_password: str | None = None
+    target: str | None = Field(default=None, pattern=r"^[a-zA-Z][a-zA-Z0-9]*$")
 
     @model_validator(mode="before")
     @classmethod

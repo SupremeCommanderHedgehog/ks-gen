@@ -1,0 +1,11 @@
+system:
+  hostname: stigsrv.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEY ops@bastion"
+    sudo: nopasswd_yes
+disk:
+  target: vda
+  preset: stig_server

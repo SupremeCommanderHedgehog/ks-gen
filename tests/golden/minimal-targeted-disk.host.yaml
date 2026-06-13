@@ -1,0 +1,11 @@
+system:
+  hostname: targetedmin.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYminimal ops@bastion"
+    sudo: nopasswd_yes
+disk:
+  target: sda
+  preset: minimal

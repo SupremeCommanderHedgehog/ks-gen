@@ -516,24 +516,47 @@ def test_disk_layout_minimal_valid():
 
     layout = DiskLayout.model_validate({"lvs": _stig_layout_lvs()})
     assert layout.vg_name == "vg_root"
-    assert layout.ondisk is None
     assert len(layout.lvs) == 8
     assert layout.boot.size == "1G"
     assert layout.efi.size == "1G"
 
 
-def test_disk_layout_ondisk_with_dev_prefix_rejected():
+def test_disk_target_accepts_plain_basename():
+    d = Disk.model_validate({"target": "sda"})
+    assert d.target == "sda"
+
+
+def test_disk_target_accepts_nvme():
+    d = Disk.model_validate({"target": "nvme0n1"})
+    assert d.target == "nvme0n1"
+
+
+def test_disk_target_defaults_to_none():
+    d = Disk.model_validate({})
+    assert d.target is None
+
+
+def test_disk_target_with_dev_prefix_rejected():
+    with pytest.raises(ValidationError):
+        Disk.model_validate({"target": "/dev/sda"})
+
+
+def test_disk_target_with_leading_digit_rejected():
+    with pytest.raises(ValidationError):
+        Disk.model_validate({"target": "1sda"})
+
+
+def test_disk_target_empty_rejected():
+    with pytest.raises(ValidationError):
+        Disk.model_validate({"target": ""})
+
+
+def test_disk_layout_ondisk_field_removed():
+    """Regression-lock the rename: the old field name now hard-fails."""
     from ks_gen.config import DiskLayout
 
     with pytest.raises(ValidationError):
-        DiskLayout.model_validate({"ondisk": "/dev/sda", "lvs": _stig_layout_lvs()})
-
-
-def test_disk_layout_ondisk_accepts_plain_basename():
-    from ks_gen.config import DiskLayout
-
-    layout = DiskLayout.model_validate({"ondisk": "nvme0n1", "lvs": _stig_layout_lvs()})
-    assert layout.ondisk == "nvme0n1"
+        DiskLayout.model_validate({"ondisk": "sda", "lvs": _stig_layout_lvs()})
 
 
 def test_disk_layout_empty_lvs_rejected():

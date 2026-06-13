@@ -1,12 +1,12 @@
 {# Layout-driven partitioning. PV grows to fill remaining disk; LVs are
-   fixed-size, leaving free VG space for operator extension. ondisk
-   (when set) applies to /boot/efi, /boot, and the PV so the whole
+   fixed-size, leaving free VG space for operator extension.
+   disk.target (when set) is appended via ondisk_flag so the whole
    install lands on the named disk in multi-disk hosts. #}
 {% from 'partials/_luks_flags.j2' import luks_pv_flags -%}
-{% set OND = (' --ondisk=' ~ cfg.disk.layout.ondisk) if cfg.disk.layout.ondisk else '' -%}
-part /boot/efi --fstype=efi --size={{ size_to_mb(cfg.disk.layout.efi.size) }} --asprimary{{ OND }}
-part /boot --fstype={{ cfg.disk.layout.boot.fstype }} --size={{ size_to_mb(cfg.disk.layout.boot.size) }}{% if cfg.disk.layout.boot.fsoptions %} --fsoptions="{{ cfg.disk.layout.boot.fsoptions }}"{% endif %} --asprimary{{ OND }}
-part pv.01 --grow --size=1{{ OND }}{{ luks_pv_flags(cfg) }}
+{% from 'partials/_ondisk.j2' import ondisk_flag -%}
+part /boot/efi --fstype=efi --size={{ size_to_mb(cfg.disk.layout.efi.size) }} --asprimary{{ ondisk_flag(cfg) }}
+part /boot --fstype={{ cfg.disk.layout.boot.fstype }} --size={{ size_to_mb(cfg.disk.layout.boot.size) }}{% if cfg.disk.layout.boot.fsoptions %} --fsoptions="{{ cfg.disk.layout.boot.fsoptions }}"{% endif %} --asprimary{{ ondisk_flag(cfg) }}
+part pv.01 --grow --size=1{{ ondisk_flag(cfg) }}{{ luks_pv_flags(cfg) }}
 volgroup {{ cfg.disk.layout.vg_name }} pv.01
 {# Trailing {{ "" }} on the logvol line is load-bearing: the Jinja env
    uses trim_blocks=True which strips the newline after any {% block %}
