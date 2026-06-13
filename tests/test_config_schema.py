@@ -9,6 +9,7 @@ from ks_gen.config import (
     AuditdMaxFileAction,
     AuditdSystemAction,
     Banner,
+    Containers,
     ContainerUser,
     ContainerVolume,
     Crypto,
@@ -1171,3 +1172,36 @@ def test_container_user_rejects_name_starting_with_dash():
 def test_container_user_requires_at_least_one_authorized_key():
     with pytest.raises(ValidationError):
         ContainerUser(name="webapp", authorized_keys=[])
+
+
+def test_containers_defaults_disabled():
+    c = Containers()
+    assert c.enabled is False
+    assert c.users == []
+    assert c.volume.size == "20G"
+
+
+def test_containers_enabled_with_empty_users_ok():
+    # Script is installed at /root even when users list is empty
+    c = Containers(enabled=True)
+    assert c.enabled is True
+    assert c.users == []
+
+
+def test_containers_rejects_duplicate_user_names_when_enabled():
+    user_a = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K1 a@h"])
+    user_b = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K2 b@h"])
+    with pytest.raises(ValidationError):
+        Containers(enabled=True, users=[user_a, user_b])
+
+
+def test_containers_allows_duplicate_user_names_when_disabled():
+    # No validation when feature is off — users list is unused
+    user_a = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K1 a@h"])
+    user_b = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K2 b@h"])
+    c = Containers(enabled=False, users=[user_a, user_b])
+    assert c.enabled is False
+
+
+def test_hostconfig_containers_defaults_disabled(minimal_cfg):
+    assert minimal_cfg.containers.enabled is False

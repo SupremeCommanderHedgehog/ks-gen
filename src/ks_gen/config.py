@@ -407,6 +407,25 @@ class ContainerUser(StrictModel):
         return v
 
 
+class Containers(StrictModel):
+    enabled: bool = False
+    users: list[ContainerUser] = Field(default_factory=list)
+    volume: ContainerVolume = Field(default_factory=ContainerVolume)
+
+    @model_validator(mode="after")
+    def _validate_users_distinct(self) -> Containers:
+        if not self.enabled:
+            return self
+        names = [u.name for u in self.users]
+        if len(names) != len(set(names)):
+            seen: set[str] = set()
+            for n in names:
+                if n in seen:
+                    raise ValueError(f"containers.users duplicate name: {n}")
+                seen.add(n)
+        return self
+
+
 class PackagesPreset(StrEnum):
     STANDARD = "standard"
     LEAN = "lean"
@@ -594,6 +613,7 @@ class HostConfig(StrictModel):
     overrides: Overrides = Field(default_factory=Overrides)
     custom_post: list[str] = Field(default_factory=list)
     exceptions: list[ExceptionDecl] = Field(default_factory=list)
+    containers: Containers = Field(default_factory=Containers)
 
     @model_validator(mode="after")
     def _crypto_fips_mutex(self) -> HostConfig:
