@@ -22,6 +22,7 @@ from ks_gen.config import (
     NightlySecurityCfg,
     Overrides,
     Packages,
+    PackagesPreset,
     RebootWindowCfg,
     Ssh,
     System,
@@ -202,6 +203,26 @@ def test_packages_include_dnf_automatic_tooling():
     p = Packages()
     assert "dnf-automatic" in p.required
     assert "dnf-utils" in p.required
+
+
+def test_packages_preset_defaults_to_standard():
+    p = Packages()
+    assert p.preset == PackagesPreset.STANDARD
+
+
+def test_packages_preset_accepts_lean():
+    p = Packages(preset=PackagesPreset.LEAN)
+    assert p.preset == PackagesPreset.LEAN
+
+
+def test_packages_preset_accepts_string_value():
+    p = Packages(preset="lean")
+    assert p.preset.value == "lean"
+
+
+def test_packages_preset_rejects_unknown_value():
+    with pytest.raises(ValidationError):
+        Packages(preset="ultra-lean")
 
 
 def test_overrides_safe_defaults():
@@ -1011,3 +1032,53 @@ def test_disk_lv_def_encrypted_true_rejected_with_pv_level_message():
         match=r"per-LV encryption is not supported; use disk\.luks\.preset",
     ):
         DiskLvDef(name="root", mount="/", size="15G", encrypted=True)
+
+
+def test_effective_base_groups_standard_passthrough():
+    p = Packages()
+    assert p.effective_base_groups == ["@^minimal-environment", "@standard"]
+
+
+def test_effective_base_groups_lean_strips_standard():
+    p = Packages(preset="lean")
+    assert p.effective_base_groups == ["@^minimal-environment"]
+
+
+def test_effective_base_groups_lean_preserves_user_custom_groups():
+    p = Packages(preset="lean", base_groups=["@^minimal-environment", "@standard", "@development"])
+    assert p.effective_base_groups == ["@^minimal-environment", "@development"]
+
+
+def test_effective_required_standard_passthrough():
+    p = Packages()
+    assert p.effective_required == list(p.required)
+
+
+def test_effective_required_lean_adds_compensating_packages():
+    p = Packages(preset="lean")
+    for pkg in ("logrotate", "postfix", "cronie", "crontabs", "parted"):
+        assert pkg in p.effective_required
+
+
+def test_effective_required_lean_preserves_required_order_and_dedupes():
+    # User already lists logrotate explicitly; should appear once, in its
+    # original position relative to the rest of `required`.
+    p = Packages(preset="lean", required=["scap-security-guide", "logrotate", "aide"])
+    assert p.effective_required.count("logrotate") == 1
+    # Original entries come first; lean extras append after, with already-
+    # present ones skipped.
+    assert p.effective_required[:3] == ["scap-security-guide", "logrotate", "aide"]
+    for pkg in ("postfix", "cronie", "crontabs", "parted"):
+        assert pkg in p.effective_required[3:]
+
+
+def test_effective_properties_are_not_serialized():
+    """Pin the plain-@property (not @computed_field) choice.
+
+    If these properties ever leak into model_dump(), host.yaml round-trips
+    change shape and downstream golden snapshots will silently drift.
+    """
+    p = Packages(preset="lean")
+    dumped = p.model_dump()
+    assert "effective_base_groups" not in dumped
+    assert "effective_required" not in dumped

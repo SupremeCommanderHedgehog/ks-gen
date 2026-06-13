@@ -41,9 +41,9 @@ services --enabled=chronyd,firewalld,auditd,rsyslog,sshd
 authselect select sssd --force
 
 %packages
-{% for grp in cfg.packages.base_groups %}{{ grp }}
+{% for grp in cfg.packages.effective_base_groups %}{{ grp }}
 {% endfor -%}
-{% for pkg in cfg.packages.required %}{{ pkg }}
+{% for pkg in cfg.packages.effective_required %}{{ pkg }}
 {% endfor -%}
 {% for pkg in rule_packages %}{{ pkg }}
 {% endfor -%}

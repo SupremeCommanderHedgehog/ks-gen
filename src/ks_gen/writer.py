@@ -45,7 +45,7 @@ def build_bundle(cfg: HostConfig) -> Bundle:
     post_blocks: list[PostBlock] = []
     tailoring_ops = []
     rule_packages: list[str] = []
-    already = set(cfg.packages.required)
+    already = set(cfg.packages.effective_required)
     for r in applicable:
         body = r.emit_post(cfg).rstrip()
         if body:
