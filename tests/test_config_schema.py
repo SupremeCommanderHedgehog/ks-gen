@@ -1070,3 +1070,15 @@ def test_effective_required_lean_preserves_required_order_and_dedupes():
     assert p.effective_required[:3] == ["scap-security-guide", "logrotate", "aide"]
     for pkg in ("postfix", "cronie", "crontabs", "parted"):
         assert pkg in p.effective_required[3:]
+
+
+def test_effective_properties_are_not_serialized():
+    """Pin the plain-@property (not @computed_field) choice.
+
+    If these properties ever leak into model_dump(), host.yaml round-trips
+    change shape and downstream golden snapshots will silently drift.
+    """
+    p = Packages(preset="lean")
+    dumped = p.model_dump()
+    assert "effective_base_groups" not in dumped
+    assert "effective_required" not in dumped
