@@ -1,0 +1,19 @@
+system:
+  hostname: web01.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYcontainerhost test@laptop"
+    sudo: nopasswd_yes
+containers:
+  enabled: true
+  users:
+    - name: webapp
+      gecos: "Web app workloads"
+      authorized_keys:
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYwebapp1 webapp@bastion"
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYwebapp2 webapp@laptop"
+    - name: dbproxy
+      authorized_keys:
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYdbproxy dbproxy@bastion"
