@@ -647,6 +647,16 @@ class HostConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
+    def _minimal_preset_rejects_containers(self) -> HostConfig:
+        if self.disk.preset == DiskPreset.MINIMAL and self.containers.enabled:
+            raise ValueError(
+                "disk.preset='minimal' has no LVM VG; containers.enabled "
+                "auto-injects an LV at /srv/containers which requires "
+                "disk.preset='stig_server' or disk.layout"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _validate_containers_integration(self) -> HostConfig:
         if not self.containers.enabled:
             return self

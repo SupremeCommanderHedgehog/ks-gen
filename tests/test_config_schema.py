@@ -1320,3 +1320,38 @@ def test_hostconfig_allows_containers_with_default_disk_preset():
     )
     assert cfg.containers.enabled is True
     assert cfg.disk.preset is not None  # default STIG_SERVER
+
+
+def test_hostconfig_rejects_minimal_preset_with_containers_enabled():
+    with pytest.raises(ValidationError) as exc_info:
+        HostConfig(
+            system=System(hostname="h"),
+            user=User(
+                admin=AdminUser(
+                    name="opsadmin",
+                    authorized_keys=["ssh-ed25519 K admin@h"],
+                    sudo="nopasswd_yes",
+                )
+            ),
+            disk=Disk(preset=DiskPreset.MINIMAL),
+            containers=Containers(enabled=True),
+        )
+    err = str(exc_info.value)
+    assert "minimal" in err.lower()
+    assert "container" in err.lower()
+
+
+def test_hostconfig_allows_stig_server_preset_with_containers_enabled():
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(
+                name="opsadmin",
+                authorized_keys=["ssh-ed25519 K admin@h"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        disk=Disk(preset=DiskPreset.STIG_SERVER),
+        containers=Containers(enabled=True),
+    )
+    assert cfg.containers.enabled is True
