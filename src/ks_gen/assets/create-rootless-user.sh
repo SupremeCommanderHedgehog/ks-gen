@@ -48,7 +48,7 @@ Options:
 Examples:
   ${0##*/} appsvc
   ${0##*/} -l -q -c "App Service" appsvc
-  ${0##*/} -l -k "$(cat ./id_ed25519.pub)" deploy
+  ${0##*/} -l -k "\$(cat ./id_ed25519.pub)" deploy
 EOF
 }
 
