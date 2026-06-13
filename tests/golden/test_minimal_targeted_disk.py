@@ -22,3 +22,24 @@ def test_stig_server_targeted_emits_ondisk_on_all_part_lines():
     assert len(part_lines) == 3, f"expected 3 part lines, got {part_lines}"
     for line in part_lines:
         assert "--ondisk=vda" in line, f"missing --ondisk=vda on: {line}"
+
+
+def test_minimal_targeted_disk_emits_ignoredisk():
+    yaml_path = Path(__file__).parent / "minimal-targeted-disk.host.yaml"
+    bundle = build_bundle(load_host_config(yaml_path, sets=[]))
+    assert "ignoredisk --only-use=sda" in bundle.ks_cfg
+
+
+def test_minimal_targeted_disk_clearpart_carries_drives():
+    yaml_path = Path(__file__).parent / "minimal-targeted-disk.host.yaml"
+    bundle = build_bundle(load_host_config(yaml_path, sets=[]))
+    assert "clearpart --all --initlabel --drives=sda" in bundle.ks_cfg
+
+
+def test_minimal_targeted_disk_bootloader_carries_boot_drive():
+    yaml_path = Path(__file__).parent / "minimal-targeted-disk.host.yaml"
+    bundle = build_bundle(load_host_config(yaml_path, sets=[]))
+    bootloader_line = next(
+        line for line in bundle.ks_cfg.splitlines() if line.startswith("bootloader ")
+    )
+    assert "--boot-drive=sda" in bootloader_line
