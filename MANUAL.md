@@ -565,7 +565,69 @@ list one of the compensating packages (e.g. `postfix`) in `excluded`,
 the package is excluded from `%packages` and purged in `%post` — you
 opt out of that part of the lean preset's STIG-compliance guarantee.
 
-### 4.11 `overrides` — the conflict-point matrix
+### 4.11 `containers` — rootless container host preset
+
+```yaml
+containers:
+  enabled: true                  # default false
+  users:                         # may be empty; script still installs at /root
+    - name: webapp
+      gecos: "Web app workloads"
+      authorized_keys:
+        - "ssh-ed25519 AAAA... webapp@bastion"
+        - "ssh-ed25519 BBBB... webapp@laptop"
+    - name: dbproxy
+      authorized_keys:
+        - "ssh-ed25519 CCCC... dbproxy@bastion"
+  volume:
+    size: "20G"                  # default 20G; pattern ^\d+(M|G|T)$
+    fsoptions: "nodev,nosuid"    # default; `noexec` token is rejected
+```
+
+When `enabled: true`, the generated kickstart:
+
+1. Auto-injects an extra logvol `/srv/containers` (XFS, sized per `volume.size`, mounted with `volume.fsoptions`) into the partition layout. Works for both `disk.preset` and `disk.layout` shapes.
+2. Adds the rootless-podman package stack to `%packages`: `podman`, `crun`, `slirp4netns`, `fuse-overlayfs`, `containers-common`, `podman-plugins`. (`policycoreutils-python-utils` for `semanage` is already in the standard required list and gets deduped.)
+3. Drops `/root/create-rootless-user.sh` (mode 0550, root:root) — the same script the kickstart uses to create users is available to the operator for post-install user provisioning.
+4. Writes `/etc/containers/storage.conf` with `rootless_storage_path = "/srv/containers/$USER/storage"` so podman lands new users' graphroot on the mirror automatically.
+5. For each `users[]` entry: calls the script with `-l` (linger always-on) and the configured `gecos`, then writes the full `authorized_keys` file. Container users have no sudo, no wheel group, and a real shell (`/bin/bash`) for SSH login.
+
+#### Recommended pairing with `packages.preset: lean`
+
+A container-host typically wants the lean package baseline (see §4.10). The two presets compose orthogonally:
+
+```yaml
+packages:
+  preset: lean
+containers:
+  enabled: true
+  users:
+    - name: webapp
+      authorized_keys: ["..."]
+```
+
+#### Post-install user provisioning
+
+After install, the operator can add additional rootless container users with the same script kickstart used:
+
+```bash
+sudo /root/create-rootless-user.sh -l -c "Analytics workloads" analytics
+# add a public key:
+sudo /root/create-rootless-user.sh -l -k "$(cat ~/.ssh/id_ed25519.pub)" deploy
+# scaffold a starter Quadlet set for testing:
+sudo /root/create-rootless-user.sh -l -q -c "Sandbox" sandbox
+```
+
+The script is idempotent — re-running it on an existing user is safe and will just (re)apply any options you pass.
+
+#### Constraints
+
+- Container users' names must be distinct from `user.admin.name` (container users are for rootless workloads; admins manage the host).
+- If you're using `disk.layout` (not `disk.preset`), don't add a `/srv/containers` LV yourself — the container-host preset auto-injects it.
+- `volume.fsoptions` rejects `noexec`. Container image layers must execute.
+- **Disk-size budget.** With `disk.preset: stig_server`, the fixed STIG LVs already consume ~44 GiB (`/` 15, `/var` 10, `/home` 5, `/var/log` 5, `/var/log/audit` 3, `/var/tmp` 2, `/tmp` 3) plus `--recommended` swap and `/boot` + EFI. The default `volume.size: 20G` for `/srv/containers` therefore needs a disk of roughly **70 GiB or larger** to install cleanly. On smaller disks, shrink `volume.size` accordingly or move the container LV onto a separate disk via `disk.layout`.
+
+### 4.12 `overrides` — the conflict-point matrix
 
 Each knob has a safe-by-default value. You override to either tighten
 or loosen the STIG/remote-safe tradeoff for a specific host.
@@ -619,7 +681,7 @@ than disabling and replacing the unit.
 
 See §6 for what each rule does with these inputs.
 
-### 4.12 `custom_post`
+### 4.13 `custom_post`
 
 ```yaml
 custom_post:
@@ -632,7 +694,7 @@ Each list entry becomes its own `%post` block separated by
 `# ===== custom_post =====` markers. Runs **after** every ks-gen
 rule's `emit_post`.
 
-### 4.13 `exceptions`
+### 4.14 `exceptions`
 
 ```yaml
 exceptions:

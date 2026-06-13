@@ -9,9 +9,14 @@ from ks_gen.config import (
     AuditdMaxFileAction,
     AuditdSystemAction,
     Banner,
+    Containers,
+    ContainerUser,
+    ContainerVolume,
     Crypto,
     CryptoPolicy,
     Disk,
+    DiskLayout,
+    DiskLvDef,
     DiskPreset,
     ExceptionDecl,
     HostConfig,
@@ -1082,3 +1087,271 @@ def test_effective_properties_are_not_serialized():
     dumped = p.model_dump()
     assert "effective_base_groups" not in dumped
     assert "effective_required" not in dumped
+
+
+def test_container_volume_defaults():
+    v = ContainerVolume()
+    assert v.size == "20G"
+    assert v.fsoptions == "nodev,nosuid"
+    assert v.size_mib == 20480
+
+
+def test_container_volume_size_mib_megabytes():
+    assert ContainerVolume(size="500M").size_mib == 500
+
+
+def test_container_volume_size_mib_terabytes():
+    assert ContainerVolume(size="1T").size_mib == 1048576
+
+
+def test_container_volume_rejects_invalid_size_pattern():
+    with pytest.raises(ValidationError):
+        ContainerVolume(size="20GB")  # only M|G|T allowed, no double-letter
+    with pytest.raises(ValidationError):
+        ContainerVolume(size="big")
+
+
+def test_container_volume_rejects_noexec_fsoption():
+    with pytest.raises(ValidationError):
+        ContainerVolume(fsoptions="nodev,nosuid,noexec")
+
+
+def test_container_volume_rejects_noexec_with_spaces():
+    with pytest.raises(ValidationError):
+        ContainerVolume(fsoptions="nodev, noexec , nosuid")
+
+
+def test_container_volume_accepts_other_options():
+    v = ContainerVolume(fsoptions="nodev,nosuid,noatime")
+    assert v.fsoptions == "nodev,nosuid,noatime"
+
+
+def test_container_volume_size_mib_not_serialized():
+    """Pin the plain-@property (not @computed_field) choice.
+
+    If size_mib ever leaks into model_dump(), host.yaml round-trips change
+    shape and downstream golden snapshots will silently drift.
+    """
+    v = ContainerVolume(size="500M")
+    dumped = v.model_dump()
+    assert "size_mib" not in dumped
+    assert dumped == {"size": "500M", "fsoptions": "nodev,nosuid"}
+
+
+def test_container_user_minimal():
+    u = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 AAAA u@h"])
+    assert u.name == "webapp"
+    assert u.gecos == ""
+
+
+def test_container_user_with_gecos():
+    u = ContainerUser(
+        name="webapp", gecos="Web app workloads", authorized_keys=["ssh-ed25519 AAAA u@h"]
+    )
+    assert u.gecos == "Web app workloads"
+
+
+def test_container_user_rejects_root():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="root", authorized_keys=["ssh-ed25519 AAAA u@h"])
+
+
+def test_container_user_rejects_invalid_name_uppercase():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="WebApp", authorized_keys=["ssh-ed25519 AAAA u@h"])
+
+
+def test_container_user_rejects_name_starting_with_digit():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="1webapp", authorized_keys=["ssh-ed25519 AAAA u@h"])
+
+
+def test_container_user_rejects_name_starting_with_dash():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="-webapp", authorized_keys=["ssh-ed25519 AAAA u@h"])
+
+
+def test_container_user_requires_at_least_one_authorized_key():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="webapp", authorized_keys=[])
+
+
+def test_containers_defaults_disabled():
+    c = Containers()
+    assert c.enabled is False
+    assert c.users == []
+    assert c.volume.size == "20G"
+
+
+def test_containers_enabled_with_empty_users_ok():
+    # Script is installed at /root even when users list is empty
+    c = Containers(enabled=True)
+    assert c.enabled is True
+    assert c.users == []
+
+
+def test_containers_rejects_duplicate_user_names_when_enabled():
+    user_a = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K1 a@h"])
+    user_b = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K2 b@h"])
+    with pytest.raises(ValidationError):
+        Containers(enabled=True, users=[user_a, user_b])
+
+
+def test_containers_allows_duplicate_user_names_when_disabled():
+    # No validation when feature is off — users list is unused
+    user_a = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K1 a@h"])
+    user_b = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K2 b@h"])
+    c = Containers(enabled=False, users=[user_a, user_b])
+    assert c.enabled is False
+
+
+def test_hostconfig_containers_defaults_disabled(minimal_cfg):
+    assert minimal_cfg.containers.enabled is False
+
+
+def test_hostconfig_rejects_container_user_matching_admin_name():
+    with pytest.raises(ValidationError) as exc_info:
+        HostConfig(
+            system=System(hostname="h"),
+            user=User(
+                admin=AdminUser(
+                    name="opsadmin",
+                    authorized_keys=["ssh-ed25519 K admin@h"],
+                    sudo="nopasswd_yes",
+                )
+            ),
+            containers=Containers(
+                enabled=True,
+                users=[ContainerUser(name="opsadmin", authorized_keys=["ssh-ed25519 K x@h"])],
+            ),
+        )
+    assert "user.admin" in str(exc_info.value)
+
+
+def test_hostconfig_allows_distinct_container_and_admin_names():
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(
+                name="opsadmin",
+                authorized_keys=["ssh-ed25519 K admin@h"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        containers=Containers(
+            enabled=True,
+            users=[ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K w@h"])],
+        ),
+    )
+    assert cfg.containers.users[0].name == "webapp"
+
+
+def test_hostconfig_rejects_layout_with_srv_containers_when_containers_enabled():
+    with pytest.raises(ValidationError) as exc_info:
+        HostConfig(
+            system=System(hostname="h"),
+            user=User(
+                admin=AdminUser(
+                    name="opsadmin",
+                    authorized_keys=["ssh-ed25519 K admin@h"],
+                    sudo="nopasswd_yes",
+                )
+            ),
+            disk=Disk(
+                layout=DiskLayout(
+                    lvs=[
+                        DiskLvDef(name="root", mount="/", size="15G"),
+                        DiskLvDef(name="home", mount="/home", size="5G"),
+                        DiskLvDef(name="tmp", mount="/tmp", size="3G"),
+                        DiskLvDef(name="var", mount="/var", size="10G"),
+                        DiskLvDef(name="varlog", mount="/var/log", size="5G"),
+                        DiskLvDef(name="varlogaudit", mount="/var/log/audit", size="3G"),
+                        DiskLvDef(name="vartmp", mount="/var/tmp", size="2G"),
+                        DiskLvDef(name="containers", mount="/srv/containers", size="20G"),
+                        DiskLvDef(name="swap", fstype="swap"),
+                    ],
+                )
+            ),
+            containers=Containers(enabled=True),
+        )
+    assert "/srv/containers" in str(exc_info.value)
+
+
+def test_hostconfig_allows_layout_without_srv_containers_when_containers_enabled():
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(
+                name="opsadmin",
+                authorized_keys=["ssh-ed25519 K admin@h"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        disk=Disk(
+            layout=DiskLayout(
+                lvs=[
+                    DiskLvDef(name="root", mount="/", size="15G"),
+                    DiskLvDef(name="home", mount="/home", size="5G"),
+                    DiskLvDef(name="tmp", mount="/tmp", size="3G"),
+                    DiskLvDef(name="var", mount="/var", size="10G"),
+                    DiskLvDef(name="varlog", mount="/var/log", size="5G"),
+                    DiskLvDef(name="varlogaudit", mount="/var/log/audit", size="3G"),
+                    DiskLvDef(name="vartmp", mount="/var/tmp", size="2G"),
+                    DiskLvDef(name="swap", fstype="swap"),
+                ],
+            )
+        ),
+        containers=Containers(enabled=True),
+    )
+    assert cfg.containers.enabled is True
+
+
+def test_hostconfig_allows_containers_with_default_disk_preset():
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(
+                name="opsadmin",
+                authorized_keys=["ssh-ed25519 K admin@h"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        containers=Containers(enabled=True),
+    )
+    assert cfg.containers.enabled is True
+    assert cfg.disk.preset is not None  # default STIG_SERVER
+
+
+def test_hostconfig_rejects_minimal_preset_with_containers_enabled():
+    with pytest.raises(ValidationError) as exc_info:
+        HostConfig(
+            system=System(hostname="h"),
+            user=User(
+                admin=AdminUser(
+                    name="opsadmin",
+                    authorized_keys=["ssh-ed25519 K admin@h"],
+                    sudo="nopasswd_yes",
+                )
+            ),
+            disk=Disk(preset=DiskPreset.MINIMAL),
+            containers=Containers(enabled=True),
+        )
+    err = str(exc_info.value)
+    assert "minimal" in err.lower()
+    assert "container" in err.lower()
+
+
+def test_hostconfig_allows_stig_server_preset_with_containers_enabled():
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(
+                name="opsadmin",
+                authorized_keys=["ssh-ed25519 K admin@h"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        disk=Disk(preset=DiskPreset.STIG_SERVER),
+        containers=Containers(enabled=True),
+    )
+    assert cfg.containers.enabled is True

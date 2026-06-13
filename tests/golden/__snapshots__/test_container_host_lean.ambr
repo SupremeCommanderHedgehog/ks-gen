@@ -1,0 +1,777 @@
+# serializer version: 1
+# name: test_container_host_lean[exceptions.md]
+  '''
+  # Exceptions report
+  
+  Generated: SNAP
+  Host: `web01.example.com`
+  
+  ## Summary
+  - Applied rules: 14
+  - Tailored XCCDF rules: 13
+  - Declared exceptions: 0
+  
+  ## Applied rules
+  - `admin_user_and_keys` — Create wheel admin, drop authorized_keys, sudoers fragment.
+  - `auditd_actions` — auditd disk_full/disk_error/max_log_file actions (SUSPEND/ROTATE default).
+  - `banner_text` — Write civilian-equivalent login banner; suppress DoD-text oscap rules.
+  - `container_host` — Install rootless-container helper, storage.conf, and per-user setup on /srv/containers.
+  - `crypto_policy` — Apply system crypto-policy; optionally generate Ed25519 host keys.
+  - `dod_root_ca` — Skip DoD root CA bundle installation.
+  - `faillock_safety` — Set faillock unlock_time and disable even_deny_root for remote safety.
+  - `kernel_module_blacklist` — Write modprobe blacklist for unused/disallowed kernel modules.
+  - `package_purge` — Remove disallowed packages after install (catches transitive pulls).
+  - `ssh_keep_open` — Ensure ssh.port reachable in firewalld + SELinux before sshd starts.
+  - `ssh_config_apply` — Write sshd drop-in config for Port/PermitRootLogin/PasswordAuthentication.
+  - `time_servers` — Write chrony.conf with operator-chosen NTP servers (non-DoD by default).
+  - `unattended_updates` — Configure dnf-automatic for nightly security + monthly full updates, with reboot inside a maintenance window.
+  - `usbguard` — Enable or disable USBGuard install + service per overrides.
+  
+  ## Tailored XCCDF rules (oscap rules disabled or value-tailored)
+  | XCCDF rule | Tailored by |
+  |---|---|
+  | `xccdf_org.ssgproject.content_rule_banner_etc_issue` | `banner_text` |
+  | `xccdf_org.ssgproject.content_rule_banner_etc_issue_net` | `banner_text` |
+  | `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled` | `banner_text` |
+  | `xccdf_org.ssgproject.content_rule_enable_fips_mode` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_kex` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_macs` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_mac_ordered` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_install_DoD_intermediate_certificates` | `dod_root_ca` |
+  | `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_even_deny_root` | `faillock_safety` |
+  | `xccdf_org.ssgproject.content_rule_package_usbguard_installed` | `usbguard` |
+  | `xccdf_org.ssgproject.content_rule_service_usbguard_enabled` | `usbguard` |
+  | `xccdf_org.ssgproject.content_rule_configure_usbguard_auditbackend` | `usbguard` |
+  
+  ## Rule exception details
+  ### `auditd_actions` — disk_full=SUSPEND, disk_error=SUSPEND, max_log_file=ROTATE
+  
+  _Reason:_ STIG defaults (HALT / keep_logs) can kill a remote server on a log-volume spike. SUSPEND/ROTATE keeps audit semantics while keeping the box reachable.
+  
+  ### `banner_text` — Substitutes private-system banner for DISA-mandated DoD text.
+  
+  _Reason:_ Server is not a U.S. Government Information System; literal DoD banner would make false legal claims. Civilian text satisfies the rule intent (warn unauthorized users; consent to monitoring).
+  
+  Disabled XCCDF rules:
+  - `xccdf_org.ssgproject.content_rule_banner_etc_issue`
+  - `xccdf_org.ssgproject.content_rule_banner_etc_issue_net`
+  - `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled`
+  
+  ### `crypto_policy` — MODERN crypto policy
+  
+  _Reason:_ MODERN accepts loss of FIPS 140-3 certification in exchange for Curve25519 / Ed25519 / ChaCha20-Poly1305 support.
+  
+  Disabled XCCDF rules:
+  - `xccdf_org.ssgproject.content_rule_enable_fips_mode`
+  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers`
+  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_kex`
+  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_macs`
+  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_mac_ordered`
+  
+  ### `dod_root_ca` — DoD root/intermediate CA bundle not installed.
+  
+  _Reason:_ Server is not a DoD asset; bundle is not applicable.
+  
+  Disabled XCCDF rules:
+  - `xccdf_org.ssgproject.content_rule_install_DoD_intermediate_certificates`
+  
+  ### `faillock_safety` — unlock_time=900, even_deny_root=False
+  
+  _Reason:_ Prevents permanent lockout of the sole remote admin on a missed-key event.
+  
+  Disabled XCCDF rules:
+  - `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_even_deny_root`
+  
+  ### `usbguard` — USBGuard not installed/enabled.
+  
+  _Reason:_ Cloud/headless VMs have no USB; USBGuard is overhead with no benefit. Enable explicitly on bare-metal hosts.
+  
+  Disabled XCCDF rules:
+  - `xccdf_org.ssgproject.content_rule_package_usbguard_installed`
+  - `xccdf_org.ssgproject.content_rule_service_usbguard_enabled`
+  - `xccdf_org.ssgproject.content_rule_configure_usbguard_auditbackend`
+  
+  ## Declared exceptions (from host.yaml)
+  _(none)_
+  
+  '''
+# ---
+# name: test_container_host_lean[ks.cfg]
+  '''
+  # Generated by ks-gen vSNAP on SNAP
+  # Source profile: xccdf_org.ssgproject.content_profile_stig
+  # DO NOT EDIT by hand — regenerate with `ks-gen gen --config <yaml>`
+  
+  text
+  lang en_US.UTF-8
+  keyboard us
+  timezone UTC --utc
+  
+  network --device=link --bootproto=dhcp --hostname=web01.example.com --onboot=yes
+  
+  rootpw --lock
+  bootloader --location=mbr --append="audit=1 audit_backlog_limit=8192"
+  
+  zerombr
+  clearpart --all --initlabel
+  part /boot/efi --fstype=efi --size=1024 --asprimary
+  part /boot --fstype=xfs --size=1024 --fsoptions="nodev,nosuid" --asprimary
+  part pv.01 --grow --size=1
+  volgroup vg_root pv.01
+  logvol /             --vgname=vg_root --name=root     --fstype=xfs --size=15360
+  logvol /home         --vgname=vg_root --name=home     --fstype=xfs --size=5120  --fsoptions="nodev,nosuid"
+  logvol /tmp          --vgname=vg_root --name=tmp      --fstype=xfs --size=3072  --fsoptions="nodev,nosuid,noexec"
+  logvol /var          --vgname=vg_root --name=var      --fstype=xfs --size=10240 --fsoptions="nodev"
+  logvol /var/log      --vgname=vg_root --name=varlog   --fstype=xfs --size=5120  --fsoptions="nodev,nosuid,noexec"
+  logvol /var/log/audit --vgname=vg_root --name=varlogaudit --fstype=xfs --size=3072 --fsoptions="nodev,nosuid,noexec"
+  logvol /var/tmp      --vgname=vg_root --name=vartmp   --fstype=xfs --size=2048  --fsoptions="nodev,nosuid,noexec"
+  logvol swap          --vgname=vg_root --name=swap     --fstype=swap --recommended
+  logvol /srv/containers --vgname=vg_root --name=containers --fstype=xfs --size=20480 --fsoptions="nodev,nosuid"
+  
+  services --enabled=chronyd,firewalld,auditd,rsyslog,sshd
+  authselect select sssd --force
+  
+  %packages
+  @^minimal-environment
+  scap-security-guide
+  openscap-scanner
+  aide
+  audit
+  rsyslog
+  chrony
+  firewalld
+  sudo
+  policycoreutils-python-utils
+  dnf-automatic
+  dnf-utils
+  logrotate
+  postfix
+  cronie
+  crontabs
+  parted
+  podman
+  crun
+  slirp4netns
+  fuse-overlayfs
+  containers-common
+  podman-plugins
+  -telnet-server
+  -rsh-server
+  -tftp-server
+  -vsftpd
+  -ypserv
+  %end
+  
+  %post --nochroot --erroronfail --log=/mnt/sysimage/root/ks-post-oscap-fetch.log
+  set -euo pipefail
+  
+  # Stage tailoring.xml into the target rootfs. Runs in the installer
+  # environment so both network (http(s)) and the kickstart media at
+  # /run/install/repo (hd:LABEL=) are reachable. The chrooted oscap
+  # block that follows reads /root/tailoring.xml unconditionally.
+  ks_arg=$(awk -F'inst.ks=' 'NF>1{print $2}' /proc/cmdline | awk '{print $1}')
+  case "$ks_arg" in
+    http://*|https://*)
+      base="${ks_arg%/*}"
+      curl -fsSL --retry 5 --retry-delay 3 \
+        "${base}/tailoring.xml" -o /mnt/sysimage/root/tailoring.xml
+      ;;
+    hd:LABEL=*)
+      cp /run/install/repo/tailoring.xml /mnt/sysimage/root/tailoring.xml
+      ;;
+    *)
+      echo "ks-gen: unsupported inst.ks transport '$ks_arg' (supports http(s) and hd:LABEL=)" >&2
+      exit 1
+      ;;
+  esac
+  chmod 0600 /mnt/sysimage/root/tailoring.xml
+  %end
+  
+  %post --erroronfail --log=/root/ks-post-oscap.log
+  set -euo pipefail
+  
+  test -s /root/tailoring.xml
+  head -c 5 /root/tailoring.xml | grep -q '<?xml'
+  
+  # --remediate can exit non-zero when rules remain failed (e.g., exception-
+  # disabled rules). The next %post block (ks-gen rule overrides) re-asserts
+  # critical state, so don't abort the install on a non-zero oscap exit.
+  oscap xccdf eval --remediate \
+    --profile xccdf_org.ssgproject.content_profile_stig \
+    --fetch-remote-resources \
+    --tailoring-file /root/tailoring.xml \
+    --results-arf /root/oscap-remediation-results.xml \
+    --report /root/oscap-remediation-report.html \
+    /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml || true
+  %end
+  
+  %post --erroronfail --log=/root/ks-post.log
+  set -euxo pipefail
+  
+  # ===== admin_user_and_keys =====
+  # Create admin user (idempotent)
+  if ! getent passwd opsadmin >/dev/null 2>&1; then
+    useradd --create-home --shell /bin/bash --groups wheel --comment "" opsadmin
+  fi
+  passwd -l opsadmin
+  
+  install -d -m 700 -o opsadmin -g opsadmin /home/opsadmin/.ssh
+  cat > /home/opsadmin/.ssh/authorized_keys <<'__KS_GEN_EOF__'
+  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYcontainerhostlean test@laptop
+  __KS_GEN_EOF__
+  chmod 600 /home/opsadmin/.ssh/authorized_keys
+  chown opsadmin:opsadmin /home/opsadmin/.ssh/authorized_keys
+  restorecon -R /home/opsadmin/.ssh
+  
+  # Sudoers
+  cat > /etc/sudoers.d/00-ks-gen-admin <<'__KS_GEN_EOF__'
+  opsadmin ALL=(ALL) NOPASSWD: ALL
+  __KS_GEN_EOF__
+  chmod 440 /etc/sudoers.d/00-ks-gen-admin
+  visudo -cf /etc/sudoers.d/00-ks-gen-admin
+  
+  # ===== auditd_actions =====
+  # Re-assert auditd actions
+  sed -i -E 's|^disk_full_action.*|disk_full_action = SUSPEND|' /etc/audit/auditd.conf
+  sed -i -E 's|^disk_error_action.*|disk_error_action = SUSPEND|' /etc/audit/auditd.conf
+  sed -i -E 's|^max_log_file_action.*|max_log_file_action = ROTATE|' /etc/audit/auditd.conf
+  
+  # ===== banner_text =====
+  # Civilian-equivalent login banner
+  cat > /etc/issue <<'__KS_GEN_EOF__'
+  WARNING: This is a private computer system. Unauthorized access is
+  prohibited. All activity on this system may be monitored and logged.
+  Use of this system constitutes consent to such monitoring.
+  __KS_GEN_EOF__
+  chmod 644 /etc/issue
+  cat > /etc/issue.net <<'__KS_GEN_EOF__'
+  WARNING: This is a private computer system. Unauthorized access is
+  prohibited. All activity on this system may be monitored and logged.
+  Use of this system constitutes consent to such monitoring.
+  __KS_GEN_EOF__
+  chmod 644 /etc/issue.net
+  cat > /etc/motd <<'__KS_GEN_EOF__'
+  WARNING: This is a private computer system. Unauthorized access is
+  prohibited. All activity on this system may be monitored and logged.
+  Use of this system constitutes consent to such monitoring.
+  __KS_GEN_EOF__
+  chmod 644 /etc/motd
+  
+  # ===== container_host =====
+  # Install the rootless-container-user helper at /root for post-install use
+  cat > /root/create-rootless-user.sh <<'__KS_GEN_EOF__'
+  #!/usr/bin/env bash
+  #
+  # create-rootless-user.sh
+  #
+  # Provision a Linux user account to run rootless Podman containers whose
+  # storage lives on the /srv/containers mirror (XFS on LVM RAID1).
+  #
+  # Idempotent: safe to re-run for an existing user. It will:
+  #   * create the account if it doesn't exist
+  #   * ensure subordinate UID/GID ranges exist (user namespaces need them)
+  #   * create a per-user storage dir on the mirror, owned by the user
+  #   * apply the correct SELinux labels
+  #   * optionally enable linger (containers run at boot / survive logout)
+  #   * optionally install an SSH public key for remote management
+  #   * optionally scaffold a wired-together starter Quadlet set:
+  #       example.network + example.volume + example.container
+  #
+  # Target: AlmaLinux 9 / Podman. Must be run as root.
+  
+  set -euo pipefail
+  
+  # --- configuration ---------------------------------------------------------
+  CONTAINERS_ROOT="/srv/containers"          # mount point of the mirror
+  STORAGE_CONF="/etc/containers/storage.conf"
+  SUBID_COUNT=65536                          # size of each subuid/subgid block
+  DEFAULT_SHELL="/bin/bash"
+  
+  # --- logging ---------------------------------------------------------------
+  info() { printf '[*] %s\n' "$*"; }
+  warn() { printf '[!] %s\n' "$*" >&2; }
+  die()  { printf '[x] %s\n' "$*" >&2; exit 1; }
+  
+  usage() {
+      cat <<EOF
+  Usage: ${0##*/} [options] <username>
+  
+  Provision a user for rootless containers on ${CONTAINERS_ROOT}.
+  
+  Options:
+    -c "Full Name"   GECOS comment for a new account
+    -s SHELL         login shell for a new account (default: ${DEFAULT_SHELL})
+    -k "SSH KEY"     install this public key into the user's authorized_keys
+    -l               enable linger (start containers at boot / outlive logout)
+    -q               scaffold a starter Quadlet set (network + volume + container)
+                     in the user's ~/.config/containers/systemd/ directory
+    -h               show this help
+  
+  Examples:
+    ${0##*/} appsvc
+    ${0##*/} -l -q -c "App Service" appsvc
+    ${0##*/} -l -k "\$(cat ./id_ed25519.pub)" deploy
+  EOF
+  }
+  
+  # --- option parsing --------------------------------------------------------
+  comment=""
+  shell="${DEFAULT_SHELL}"
+  ssh_key=""
+  enable_linger=0
+  scaffold_quadlet=0
+  home=""
+  qdir=""
+  appdata=""
+  
+  while getopts ':c:s:k:lqh' opt; do
+      case "$opt" in
+          c) comment="$OPTARG" ;;
+          s) shell="$OPTARG" ;;
+          k) ssh_key="$OPTARG" ;;
+          l) enable_linger=1 ;;
+          q) scaffold_quadlet=1 ;;
+          h) usage; exit 0 ;;
+          :) die "option -$OPTARG requires an argument (use -h)" ;;
+          \?) die "unknown option -$OPTARG (use -h)" ;;
+      esac
+  done
+  shift $((OPTIND - 1))
+  
+  [ $# -eq 1 ] || { usage; exit 1; }
+  user="$1"
+  
+  # --- preflight checks ------------------------------------------------------
+  [ "$(id -u)" -eq 0 ] || die "must be run as root"
+  
+  [[ "$user" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die "invalid username: '$user'"
+  
+  command -v semanage >/dev/null 2>&1 \
+      || die "semanage not found; install policycoreutils-python-utils"
+  
+  command -v podman >/dev/null 2>&1 \
+      || warn "podman not found in PATH; install container-tools before running containers"
+  
+  # Refuse to write into the root filesystem if the mirror isn't mounted.
+  mountpoint -q "$CONTAINERS_ROOT" \
+      || die "$CONTAINERS_ROOT is not a mounted filesystem; refusing to write to the root fs"
+  
+  if ! grep -Eq "^[[:space:]]*rootless_storage_path[[:space:]]*=.*${CONTAINERS_ROOT}" \
+          "$STORAGE_CONF" 2>/dev/null; then
+      warn "rootless_storage_path in $STORAGE_CONF does not point under $CONTAINERS_ROOT;"
+      warn "rootless storage for this user may not land on the mirror."
+  fi
+  
+  # --- ensure the SELinux equivalence for the tree --------------------------
+  if ! semanage fcontext -l | grep -q "^${CONTAINERS_ROOT} "; then
+      info "adding SELinux fcontext equivalence ${CONTAINERS_ROOT} -> /var/lib/containers"
+      semanage fcontext -a -e /var/lib/containers "$CONTAINERS_ROOT"
+  fi
+  
+  # --- create the account ----------------------------------------------------
+  if id "$user" >/dev/null 2>&1; then
+      info "user '$user' already exists; ensuring container setup"
+  else
+      info "creating user '$user'"
+      useradd_args=(--create-home --shell "$shell")
+      [ -n "$comment" ] && useradd_args+=(--comment "$comment")
+      useradd "${useradd_args[@]}" "$user"
+  fi
+  
+  # --- ensure subordinate id ranges -----------------------------------------
+  # useradd auto-allocates these on Alma9, but a pre-existing account may lack
+  # them. Compute the next free block and assign it via usermod.
+  ensure_subids() {
+      local file="$1"      # /etc/subuid or /etc/subgid
+      local flag="$2"      # --add-subuids or --add-subgids
+      if grep -q "^${user}:" "$file" 2>/dev/null; then
+          return 0
+      fi
+      local start
+      start=$(awk -F: 'NF>=3 {e=$2+$3; if (e>m) m=e} END {print (m>100000)?m:100000}' \
+          "$file" 2>/dev/null)
+      [ -n "$start" ] || start=100000
+      info "allocating ${file##*/} range for '$user': ${start}-$((start + SUBID_COUNT - 1))"
+      usermod "$flag" "${start}-$((start + SUBID_COUNT - 1))" "$user"
+  }
+  ensure_subids /etc/subuid --add-subuids
+  ensure_subids /etc/subgid --add-subgids
+  
+  # --- per-user storage on the mirror ---------------------------------------
+  store="${CONTAINERS_ROOT}/${user}/storage"
+  info "creating storage dir $store"
+  install -d -m 0700 -o "$user" -g "$user" "$store"
+  restorecon -R "${CONTAINERS_ROOT}/${user}"
+  
+  # --- optional: linger ------------------------------------------------------
+  if [ "$enable_linger" -eq 1 ]; then
+      info "enabling linger for '$user'"
+      loginctl enable-linger "$user"
+  fi
+  
+  # --- optional: ssh key -----------------------------------------------------
+  if [ -n "$ssh_key" ]; then
+      home=$(getent passwd "$user" | cut -d: -f6)
+      [ -n "$home" ] || die "could not determine home dir for '$user'"
+      info "installing SSH key into $home/.ssh/authorized_keys"
+      install -d -m 0700 -o "$user" -g "$user" "$home/.ssh"
+      keyfile="$home/.ssh/authorized_keys"
+      touch "$keyfile"
+      if ! grep -qxF "$ssh_key" "$keyfile"; then
+          printf '%s\n' "$ssh_key" >> "$keyfile"
+      fi
+      chown "$user:$user" "$keyfile"
+      chmod 0600 "$keyfile"
+      restorecon -R "$home/.ssh"
+  fi
+  
+  # --- optional: starter Quadlet set (network + volume + container) ---------
+  if [ "$scaffold_quadlet" -eq 1 ]; then
+      home=$(getent passwd "$user" | cut -d: -f6)
+      [ -n "$home" ] || die "could not determine home dir for '$user'"
+      qdir="$home/.config/containers/systemd"
+      appdata="${CONTAINERS_ROOT}/${user}/appdata"
+  
+      info "scaffolding Quadlet units in $qdir"
+      runuser -l "$user" -c 'mkdir -p ~/.config/containers/systemd'
+  
+      # Persistent SELinux label so the bind-mounted volume data is usable by
+      # containers. One regex rule covers <root>/<any-user>/appdata for everyone.
+      if ! semanage fcontext -l | grep -qF "${CONTAINERS_ROOT}/[^/]+/appdata"; then
+          info "adding container_file_t fcontext rule for per-user appdata dirs"
+          semanage fcontext -a -t container_file_t "${CONTAINERS_ROOT}/[^/]+/appdata(/.*)?"
+      fi
+      info "creating volume backing dir $appdata"
+      install -d -m 0700 -o "$user" -g "$user" "$appdata"
+      restorecon -RF "$appdata"
+  
+      # network unit -> example-network.service, podman net 'systemd-example'
+      netfile="$qdir/example.network"
+      if [ -e "$netfile" ]; then
+          info "leaving existing $netfile untouched"
+      else
+          cat > "$netfile" <<'UNIT'
+  # Rootless container network. Generates 'example-network.service' and a
+  # podman network named 'systemd-example'. Reference from a .container with:
+  #   Network=example.network
+  
+  [Network]
+  Driver=bridge
+  # Subnet=10.89.0.0/24
+  # Gateway=10.89.0.1
+  UNIT
+          chown "$user:$user" "$netfile"; chmod 0644 "$netfile"
+          restorecon "$netfile" 2>/dev/null || true
+      fi
+  
+      # volume unit -> bind-backed local volume pinned to $appdata on the mirror
+      volfile="$qdir/example.volume"
+      if [ -e "$volfile" ]; then
+          info "leaving existing $volfile untouched"
+      else
+          cat > "$volfile" <<UNIT
+  # Rootless named volume bind-mounted to a directory on the mirror.
+  # Generates 'example-volume.service' and a podman volume 'systemd-example'.
+  # Reference from a .container with:  Volume=example.volume:/data
+  
+  [Volume]
+  Driver=local
+  Type=none
+  Device=${appdata}
+  Options=bind
+  UNIT
+          chown "$user:$user" "$volfile"; chmod 0644 "$volfile"
+          restorecon "$volfile" 2>/dev/null || true
+      fi
+  
+      # container unit, wired to the network and volume above
+      starter="$qdir/example.container"
+      if [ -e "$starter" ]; then
+          info "leaving existing $starter untouched"
+      else
+          cat > "$starter" <<'UNIT'
+  # Starter rootless Quadlet unit -- EDIT THIS FILE, then as the user run:
+  #   systemctl --user daemon-reload
+  #   systemctl --user start example        # test it now
+  # To start automatically at boot (requires: loginctl enable-linger <user>),
+  # uncomment the [Install] section below, then:
+  #   systemctl --user enable example
+  #
+  # Reference: man quadlet
+  
+  [Unit]
+  Description=Starter rootless container (edit me)
+  
+  [Container]
+  Image=registry.access.redhat.com/ubi9/ubi-minimal:latest
+  Exec=sleep infinity
+  Network=example.network
+  Volume=example.volume:/data
+  # PublishPort=8080:8080
+  # Environment=KEY=value
+  AutoUpdate=registry
+  
+  [Service]
+  Restart=on-failure
+  
+  # [Install]
+  # WantedBy=default.target
+  UNIT
+          chown "$user:$user" "$starter"; chmod 0644 "$starter"
+          restorecon "$starter" 2>/dev/null || true
+      fi
+  
+      if [ "$enable_linger" -eq 0 ]; then
+          warn "Quadlet units won't start at boot until you enable linger (-l) for '$user'"
+      fi
+  fi
+  
+  # --- best-effort verification (also initializes the store) ----------------
+  if command -v podman >/dev/null 2>&1; then
+      if gr=$(runuser -l "$user" -c "podman info --format '{{.Store.GraphRoot}}'" 2>/dev/null); then
+          info "podman store for '$user': $gr"
+          [ "$gr" = "$store" ] || warn "store path ($gr) != expected ($store)"
+      else
+          warn "could not query podman as '$user' yet; verify manually after first login"
+      fi
+  fi
+  
+  # --- summary ---------------------------------------------------------------
+  cat <<EOF
+  
+  [*] Done. '$user' is configured for rootless containers.
+      storage : $store
+      subuid  : $(grep "^${user}:" /etc/subuid 2>/dev/null || echo MISSING)
+      linger  : $([ "$enable_linger" -eq 1 ] && echo enabled || echo 'not enabled (pass -l)')
+      quadlet : $([ "$scaffold_quadlet" -eq 1 ] && echo "$qdir (example.network/.volume/.container)" || echo 'not scaffolded (pass -q)')
+      appdata : $([ "$scaffold_quadlet" -eq 1 ] && echo "$appdata (volume bind target)" || echo '-')
+  
+  Verify manually:
+      runuser -l $user -c "podman info --format '{{.Store.GraphRoot}}'"
+      # expect: $store
+  EOF
+  __KS_GEN_EOF__
+  chown root:root /root/create-rootless-user.sh
+  chmod 0550 /root/create-rootless-user.sh
+  
+  # System-wide storage.conf -- pins rootless graphroot to the /srv/containers mirror
+  install -d -m 0755 /etc/containers
+  cat > /etc/containers/storage.conf <<'__KS_GEN_EOF__'
+  [storage]
+  driver = "overlay"
+  rootless_storage_path = "/srv/containers/$USER/storage"
+  __KS_GEN_EOF__
+  chmod 0644 /etc/containers/storage.conf
+  
+  # Provision container user: webapp
+  /root/create-rootless-user.sh -l -c "Web app workloads" webapp
+  install -d -m 0700 -o webapp -g webapp /home/webapp/.ssh
+  cat > /home/webapp/.ssh/authorized_keys <<'__KS_GEN_EOF__'
+  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYwebapplean webapp@bastion
+  __KS_GEN_EOF__
+  chown webapp:webapp /home/webapp/.ssh/authorized_keys
+  chmod 0600 /home/webapp/.ssh/authorized_keys
+  restorecon -R /home/webapp/.ssh
+  
+  # ===== crypto_policy =====
+  # Apply system-wide crypto policy: MODERN (DEFAULT)
+  update-crypto-policies --set DEFAULT
+  # Generate any missing host keys (incl. Ed25519, not produced under FIPS)
+  ssh-keygen -A
+  
+  # ===== faillock_safety =====
+  # Re-assert faillock.conf in case oscap over-tightened
+  sed -i -E 's/^[# ]*unlock_time *=.*/unlock_time = 900/' /etc/security/faillock.conf
+  grep -q '^unlock_time' /etc/security/faillock.conf || echo 'unlock_time = 900' >> /etc/security/faillock.conf
+  sed -i -E 's/^[# ]*deny *=.*/deny = 3/' /etc/security/faillock.conf
+  grep -q '^deny' /etc/security/faillock.conf || echo 'deny = 3' >> /etc/security/faillock.conf
+  sed -i -E 's/^[# ]*even_deny_root.*/# even_deny_root removed by ks-gen: no/' /etc/security/faillock.conf
+  
+  # ===== kernel_module_blacklist =====
+  # Disable specific kernel modules via modprobe install-trick
+  cat > /etc/modprobe.d/ks-gen-blacklist.conf <<'__KS_GEN_EOF__'
+  install usb-storage /bin/true
+  install cramfs /bin/true
+  install freevxfs /bin/true
+  install jffs2 /bin/true
+  install hfs /bin/true
+  install hfsplus /bin/true
+  install squashfs /bin/true
+  install udf /bin/true
+  __KS_GEN_EOF__
+  chmod 644 /etc/modprobe.d/ks-gen-blacklist.conf
+  
+  # ===== package_purge =====
+  # Remove disallowed packages (no-op if not installed)
+  dnf -y remove telnet-server rsh-server tftp-server vsftpd ypserv || true
+  
+  # ===== ssh_keep_open =====
+  # Pre-open SSH port in firewalld + SELinux (before sshd starts on first boot)
+  firewall-offline-cmd --add-port=22/tcp
+  
+  # ===== ssh_config_apply =====
+  # Drop-in SSH server config (active on first boot)
+  install -d -m 755 /etc/ssh/sshd_config.d
+  cat > /etc/ssh/sshd_config.d/00-ks-gen.conf <<'__KS_GEN_EOF__'
+  Port 22
+  PermitRootLogin no
+  PasswordAuthentication no
+  ClientAliveInterval 600
+  ClientAliveCountMax 1
+  MaxAuthTries 4
+  UsePAM yes
+  __KS_GEN_EOF__
+  chmod 600 /etc/ssh/sshd_config.d/00-ks-gen.conf
+  sshd -t
+  
+  # ===== time_servers =====
+  # Chrony configuration (servers from host.yaml; STIG-compliant base)
+  cat > /etc/chrony.conf <<'__KS_GEN_EOF__'
+  server pool.ntp.org iburst
+  driftfile /var/lib/chrony/drift
+  makestep 1.0 3
+  rtcsync
+  logdir /var/log/chrony
+  __KS_GEN_EOF__
+  chmod 644 /etc/chrony.conf
+  
+  # ===== unattended_updates =====
+  # unattended_updates: nightly security via stock dnf-automatic.timer
+  cat > /etc/dnf/automatic.conf <<'__KS_GEN_EOF__'
+  [commands]
+  upgrade_type = security
+  apply_updates = yes
+  reboot = never
+  network_online_timeout = 60
+  [emitters]
+  emit_via = motd
+  [base]
+  debuglevel = 1
+  __KS_GEN_EOF__
+  chmod 644 /etc/dnf/automatic.conf
+  
+  mkdir -p /etc/systemd/system/dnf-automatic.timer.d
+  cat > /etc/systemd/system/dnf-automatic.timer.d/ks-gen.conf <<'__KS_GEN_EOF__'
+  [Timer]
+  OnCalendar=
+  OnCalendar=*-*-* 02:00:00
+  RandomizedDelaySec=0
+  __KS_GEN_EOF__
+  
+  systemctl daemon-reload
+  systemctl enable dnf-automatic.timer
+  
+  # unattended_updates: monthly full update via custom dnf-automatic timer
+  cat > /etc/dnf/automatic-full.conf <<'__KS_GEN_EOF__'
+  [commands]
+  upgrade_type = default
+  apply_updates = yes
+  reboot = never
+  network_online_timeout = 60
+  [emitters]
+  emit_via = motd
+  [base]
+  debuglevel = 1
+  __KS_GEN_EOF__
+  chmod 644 /etc/dnf/automatic-full.conf
+  
+  cat > /etc/systemd/system/ks-gen-dnf-automatic-full.service <<'__KS_GEN_EOF__'
+  [Unit]
+  Description=ks-gen monthly full dnf-automatic run
+  After=network-online.target
+  Wants=network-online.target
+  [Service]
+  Type=oneshot
+  ExecStart=/usr/bin/dnf-automatic /etc/dnf/automatic-full.conf
+  __KS_GEN_EOF__
+  
+  cat > /etc/systemd/system/ks-gen-dnf-automatic-full.timer <<'__KS_GEN_EOF__'
+  [Unit]
+  Description=ks-gen monthly full dnf-automatic schedule
+  [Timer]
+  OnCalendar=Sun *-*-1..7 02:30:00
+  Persistent=true
+  [Install]
+  WantedBy=timers.target
+  __KS_GEN_EOF__
+  
+  systemctl daemon-reload
+  systemctl enable ks-gen-dnf-automatic-full.timer
+  
+  # unattended_updates: reboot inside maintenance window if needs-restarting -r says so
+  cat > /usr/local/sbin/ks-gen-reboot-if-needed <<'__KS_GEN_EOF__'
+  #!/bin/bash
+  set -euo pipefail
+  if ! command -v needs-restarting >/dev/null 2>&1; then
+    logger -t ks-gen -p user.err "needs-restarting missing; cannot evaluate reboot"
+    exit 1
+  fi
+  if needs-restarting -r >/dev/null 2>&1; then
+    logger -t ks-gen "no reboot needed at $(date -Is)"
+    exit 0
+  fi
+  logger -t ks-gen "reboot needed, rebooting at $(date -Is)"
+  systemctl reboot
+  __KS_GEN_EOF__
+  chmod 755 /usr/local/sbin/ks-gen-reboot-if-needed
+  
+  cat > /etc/systemd/system/ks-gen-reboot-if-needed.service <<'__KS_GEN_EOF__'
+  [Unit]
+  Description=ks-gen reboot if pending kernel/glibc/etc.
+  [Service]
+  Type=oneshot
+  ExecStart=/usr/local/sbin/ks-gen-reboot-if-needed
+  __KS_GEN_EOF__
+  
+  cat > /etc/systemd/system/ks-gen-reboot-if-needed.timer <<'__KS_GEN_EOF__'
+  [Unit]
+  Description=ks-gen reboot-if-needed schedule
+  [Timer]
+  OnCalendar=Sun *-*-* 03:00:00
+  Persistent=true
+  [Install]
+  WantedBy=timers.target
+  __KS_GEN_EOF__
+  
+  systemctl daemon-reload
+  systemctl enable ks-gen-reboot-if-needed.timer
+  
+  %end
+  
+  reboot --eject
+  
+  '''
+# ---
+# name: test_container_host_lean[tailoring.xml]
+  '''
+  <?xml version='1.0' encoding='UTF-8'?>
+  <xccdf:Tailoring xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" id="xccdf_ks-gen_tailoring_default">
+    <xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml"/>
+    <xccdf:version time="SNAP">1</xccdf:version>
+    <xccdf:Profile id="xccdf_ks-gen_profile_tailored" extends="xccdf_org.ssgproject.content_profile_stig">
+      <xccdf:title xml:lang="en-US">ks-gen tailored xccdf_org.ssgproject.content_profile_stig</xccdf:title>
+      <xccdf:description xml:lang="en-US">Tailoring generated by ks-gen.</xccdf:description>
+      <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_auditd_disk_full_action">SUSPEND</xccdf:set-value>
+      <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_auditd_disk_error_action">SUSPEND</xccdf:set-value>
+      <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_auditd_max_log_file_action">ROTATE</xccdf:set-value>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_banner_etc_issue" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_banner_etc_issue_net" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_enable_fips_mode" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_kex" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_macs" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_mac_ordered" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_install_DoD_intermediate_certificates" selected="false"/>
+      <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time">900</xccdf:set-value>
+      <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_deny">3</xccdf:set-value>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_even_deny_root" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_package_usbguard_installed" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_service_usbguard_enabled" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_configure_usbguard_auditbackend" selected="false"/>
+    </xccdf:Profile>
+  </xccdf:Tailoring>
+  
+  '''
+# ---
