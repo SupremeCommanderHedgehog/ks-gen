@@ -36,6 +36,9 @@ clearpart --all --initlabel
 {% else -%}
 {% include 'partials/partitioning_' ~ cfg.disk.preset.value ~ '.j2' %}
 {% endif %}
+{% if cfg.containers.enabled %}
+logvol /srv/containers --vgname={{ cfg.disk.layout.vg_name if cfg.disk.layout else 'vg_root' }} --name=containers --fstype=xfs --size={{ cfg.containers.volume.size_mib }} --fsoptions="{{ cfg.containers.volume.fsoptions }}"
+{% endif %}
 
 services --enabled=chronyd,firewalld,auditd,rsyslog,sshd
 authselect select sssd --force
