@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.12.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.12.0...v0.12.1) (2026-06-13)
+
+
+### Documentation
+
+* **examples:** add host-container.yaml worked example ([#71](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/71)) ([e789afa](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/e789afaf1f12c0b160e9f4213361ed1a6edd8b81))
+
 ## [0.12.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.11.0...v0.12.0) (2026-06-13)
 
 
