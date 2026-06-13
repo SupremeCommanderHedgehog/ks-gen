@@ -306,6 +306,7 @@ absence of any is a config error.
 ```yaml
 disk:
   preset: stig_server              # stig_server | minimal (for custom layouts use disk.layout — see below)
+  target: sda                      # optional; confines install to this disk in multi-disk hosts
   wipe: true                       # clearpart --all --initlabel
   bootloader_password: null        # null | "..."
 ```
@@ -319,6 +320,14 @@ collapses non-`/` mounts into root.
 `bootloader_password` is STIG-required. `null` means "left unset by
 ks-gen" — supply a value or accept the resulting STIG finding.
 
+`disk.target` works with all three partitioning modes (`preset:
+stig_server`, `preset: minimal`, and `disk.layout`). When set, it
+emits `ignoredisk --only-use=<target>`, `clearpart --drives=<target>`,
+`bootloader --boot-drive=<target>`, and `part --ondisk=<target>` on
+every partition line — so the install cannot touch sibling drives on
+multi-disk hosts. Leave unset to keep today's behavior (anaconda picks
+disks by enumeration order).
+
 #### `disk.layout` (alternative to `disk.preset`)
 
 For operators who need to customize partition sizes or add extra
@@ -327,9 +336,7 @@ mutually exclusive with `disk.preset`.
 
 ```yaml
 disk:
-  target: sda             # optional; confines install (ignoredisk +
-                          # clearpart --drives + bootloader --boot-drive +
-                          # part --ondisk) to this disk in multi-disk hosts
+  target: sda             # see disk.target above; works with layout too
   layout:
     lvs:
       - {name: root, mount: /}
