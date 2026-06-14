@@ -98,6 +98,7 @@
   network --device=eno1 --bootproto=static --ip=192.168.50.10 --netmask=255.255.255.0 --gateway=192.168.50.1 --nameserver=1.1.1.1,9.9.9.9 --hostname=baremetal01.example.com --onboot=yes
   
   rootpw --lock
+  user --name=physadmin --lock --groups=wheel --gecos="" --shell=/bin/bash
   bootloader --location=mbr --append="audit=1 audit_backlog_limit=8192"
   
   zerombr
