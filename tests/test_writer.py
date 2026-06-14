@@ -48,6 +48,43 @@ def test_admin_user_block_precedes_sshd_in_post(tmp_path):
     assert admin_idx < ssh_idx
 
 
+def test_top_level_user_line_locked_when_password_null(tmp_path):
+    # Anaconda's GUI requires a top-level `user` directive; without one the
+    # User Creation pane comes up blank on USB-mode installs even when %post
+    # creates the user. Lockout-resistance contract is preserved via --lock.
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(YAML, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert "user --name=opsadmin --lock --groups=wheel" in bundle.ks_cfg
+    assert "--password=" not in bundle.ks_cfg.split("user --name=opsadmin")[1].split("\n")[0]
+
+
+def test_top_level_user_line_password_iscrypted_when_set(tmp_path):
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(
+        textwrap.dedent(
+            """\
+            system: {hostname: web01.example.com}
+            user:
+              admin:
+                name: opsadmin
+                password: "$6$abc$xyz"
+                sudo: nopasswd_yes
+            """
+        ),
+        encoding="utf-8",
+    )
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    user_line = next(
+        line for line in bundle.ks_cfg.splitlines() if line.startswith("user --name=opsadmin")
+    )
+    assert "--password=$6$abc$xyz" in user_line
+    assert "--iscrypted" in user_line
+    assert "--lock" not in user_line
+
+
 def test_rule_packages_land_in_packages_block_when_required_omits_them(tmp_path):
     # Regression for #53: a user-supplied packages.required that omits
     # dnf-automatic / dnf-utils must NOT silently break the unattended_updates

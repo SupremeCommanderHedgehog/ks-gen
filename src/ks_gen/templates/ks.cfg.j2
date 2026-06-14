@@ -12,6 +12,12 @@ network --device={{ iface.device }} --bootproto={{ iface.bootproto }}{% if iface
 {% endfor %}
 
 rootpw --lock
+{% set _admin = cfg.user.admin -%}
+{% if _admin.password -%}
+user --name={{ _admin.name }} --password={{ _admin.password }} --iscrypted --groups={{ _admin.groups | join(',') }} --gecos="{{ _admin.gecos }}" --shell={{ _admin.shell }}
+{% else -%}
+user --name={{ _admin.name }} --lock --groups={{ _admin.groups | join(',') }} --gecos="{{ _admin.gecos }}" --shell={{ _admin.shell }}
+{% endif -%}
 {% if cfg.disk.target -%}
 ignoredisk --only-use={{ cfg.disk.target }}
 {% endif -%}
