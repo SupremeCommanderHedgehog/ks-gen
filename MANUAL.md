@@ -1059,6 +1059,8 @@ default after a 5-second timeout. If you need to recover the
 interactive Anaconda flow, arrow-down to "Install AlmaLinux 9" within
 the timeout window.
 
+For writing the resulting ISO to a USB stick on Windows, see §8.6.
+
 ### 8.4 First-boot verification
 
 Once the system reboots and you can SSH in:
@@ -1355,6 +1357,87 @@ Use both together when appropriate.
 top-level `baseline` key with `path`, `captured_utc`, and `orphans`.
 The key is omitted when `--baseline` isn't set.
 
+### 8.6 Writing a ks-gen ISO to USB on Windows (Rufus)
+
+Boot media for `ks-gen iso` output on Windows. Verified against
+Rufus 4.x on Windows 11. (`ks-gen iso` itself still needs `xorriso`,
+which on Windows means a WSL Ubuntu install with `apt install
+xorriso` — see §2 for the venv setup. This section is about turning
+the resulting `.iso` into a bootable USB stick.)
+
+#### Step 1 — Reset the USB stick if it was previously DD-written
+
+A USB that's been previously written with Rufus's "DD image" mode
+(or any tool that wrote a raw hybrid ISO to the block device)
+carries a partition table that Windows tools can't reliably
+re-partition. `diskpart`'s `clean` command wipes the table and
+disk signatures so Rufus can treat the stick as a blank target.
+
+Open an elevated PowerShell, find the USB by size:
+
+```powershell
+Get-Disk
+```
+
+Then, substituting the correct disk number for `N`:
+
+```powershell
+Clear-Disk -Number N -RemoveData -RemoveOEM -Confirm:$false
+```
+
+Double-check the disk number before running. Picking the system
+drive's number wipes your OS.
+
+#### Step 2 — Run Rufus
+
+1. **Device:** the USB stick.
+2. **Boot selection:** click *Select* and pick your ks-gen ISO.
+3. **Partition scheme:** **MBR**. Produces a USB bootable on both
+   BIOS-CSM and UEFI targets. Pick GPT only if you know the target
+   firmware has no CSM/legacy path.
+4. **Target system:** *BIOS or UEFI* (auto-set by the MBR choice).
+5. **Volume label:** must read exactly `ALMA9`. Rufus reads this
+   from the ISO's volid (which `ks-gen iso` sets via `-volid`), so
+   it should already be correct — but glance at the field before
+   clicking *Start*. **If it's anything else, type `ALMA9` in
+   manually.** The bootloader cmdline that ks-gen wrote references
+   `hd:LABEL=ALMA9` for both `inst.stage2=`, `inst.repo=`, and
+   `inst.ks=`. A label mismatch means anaconda can't find the
+   install tree, the kickstart, or both.
+6. **File system:** *FAT32* (Rufus default for hybrid Linux ISOs).
+7. Click *Start*. At the ISOHybrid prompt, choose **Write in ISO
+   Image mode (Recommended)**. **Do not pick DD Image mode** —
+   some UEFI firmwares only enumerate the ESP partition of a DD-
+   written hybrid ISO, hiding `/ks.cfg` from anaconda entirely.
+
+Eject the USB cleanly from Explorer when Rufus finishes. Plug it
+into the target, boot, pick the USB in the firmware boot menu.
+The ks-gen menu entry runs by default after a 5-second timeout.
+
+#### When this isn't enough
+
+For multi-disk targets where the kernel's `sda`/`sdb`/`sdc`
+enumeration shuffles between boots, the kickstart needs stable disk
+identifiers (`/dev/disk/by-id/...`) instead of kernel device names.
+Anaconda accepts these in `--ondisk=`, `--drives=`, and
+`--boot-drive=`. Hand-edit the post-`ks-gen gen` `ks.cfg` to
+substitute kernel names with by-id paths, then re-run `ks-gen iso`.
+Save the edit as a `patch` file alongside `host.yaml` so the
+substitution is version-controlled and reproducible across
+regenerations.
+
+#### Alternatives if Rufus still doesn't work
+
+- **OEMDRV USB** (§8.2) — skip `ks-gen iso` entirely. Boot from a
+  vanilla AlmaLinux DVD ISO (write to USB with any tool, including
+  Rufus's straightforward path for an unmodified AlmaLinux ISO),
+  with a second FAT-formatted USB labeled `OEMDRV` carrying just
+  `ks.cfg` and `tailoring.xml`. Anaconda auto-discovers the
+  kickstart by label. No bootloader rewrite, no label-matching
+  gymnastics, no xorriso requirement on the workstation.
+- **HTTP delivery** (§8.1) — for cloud / network-boot environments,
+  serving the bundle over HTTP sidesteps physical media entirely.
+
 ## 9. Common workflows
 
 ### 9.1 Spin up a new cloud VM
@@ -1557,6 +1640,33 @@ STIG path; if it didn't, check the log.
 
 If it's listed but its output isn't in the bundle, check
 `applies(cfg)` — it might be returning `False` for your config.
+
+### "Rufus made a USB that boots, but anaconda's install source / packages / user sections are all blank"
+
+Two near-certain causes:
+
+1. **Volume label mismatch.** The bootloader cmdline references the
+   install media by `hd:LABEL=ALMA9` for `inst.stage2=`,
+   `inst.repo=`, and `inst.ks=`. If Rufus formatted the USB's FAT32
+   partition with a label other than `ALMA9`, none of those lookups
+   resolve. Open the USB in Windows Explorer; the drive name must
+   read exactly `ALMA9`. If it doesn't, redo the write with Rufus's
+   "Volume label" field manually set to `ALMA9` before clicking
+   Start. See §8.6 step 2.
+2. **DD Image mode was picked at the ISOHybrid prompt.** Some UEFI
+   firmwares only enumerate the ESP partition of a DD-written
+   hybrid ISO, hiding `/ks.cfg` and the AlmaLinux package tree on
+   the ISO9660 partition. Symptom variant: stage2 loads but
+   anaconda shows "Error setting up base repository," or it boots
+   but only sees the UEFI filesystem. Run `Clear-Disk` on the USB
+   to reset the partition table (§8.6 step 1), then redo with
+   Rufus's **ISO Image mode**.
+
+If neither matches the symptom, check that you're running ks-gen
+v0.11.1 or later — earlier releases omitted `inst.repo=` from the
+bootloader cmdline and the top-level `user --name=` directive from
+the kickstart, both of which anaconda's GUI needs to satisfy its
+prerequisite gates on FAT32 USB installs.
 
 ---
 
