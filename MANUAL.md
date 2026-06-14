@@ -1752,10 +1752,10 @@ Two near-certain causes:
    Rufus's **ISO Image mode**.
 
 If neither matches the symptom, check that you're running ks-gen
-v0.11.1 or later — earlier releases omitted `inst.repo=` from the
-bootloader cmdline and the top-level `user --name=` directive from
-the kickstart, both of which anaconda's GUI needs to satisfy its
-prerequisite gates on FAT32 USB installs.
+v0.12.2 or later — v0.12.1 and earlier omitted `inst.repo=` from
+the bootloader cmdline and the top-level `user --name=` directive
+from the kickstart, both of which anaconda's GUI needs to satisfy
+its prerequisite gates on FAT32 USB installs.
 
 ---
 
