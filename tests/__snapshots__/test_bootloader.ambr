@@ -20,7 +20,7 @@
   
   # ks-gen unattended entry — do not edit
   menuentry 'Unattended STIG install (ks-gen)' --class fedora --class gnu-linux --class gnu --class os {
-    linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=ALMA9 inst.ks=hd:LABEL=ALMA9:/ks.cfg quiet
+    linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=ALMA9 inst.repo=hd:LABEL=ALMA9 inst.ks=hd:LABEL=ALMA9:/ks.cfg quiet
     initrdefi /images/pxeboot/initrd.img
   }
   
@@ -58,7 +58,7 @@
     menu label ^Unattended STIG install (ks-gen)
     menu default
     kernel vmlinuz
-    append initrd=initrd.img inst.stage2=hd:LABEL=ALMA9 inst.ks=hd:LABEL=ALMA9:/ks.cfg quiet
+    append initrd=initrd.img inst.stage2=hd:LABEL=ALMA9 inst.repo=hd:LABEL=ALMA9 inst.ks=hd:LABEL=ALMA9:/ks.cfg quiet
   
   label linux
     menu label ^Install AlmaLinux 9.6

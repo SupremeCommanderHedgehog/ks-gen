@@ -51,9 +51,11 @@ def test_rewrite_isolinux_custom_volid():
     result = rewrite_isolinux(_read_fixture("isolinux.cfg"), volid="WEB01")
     assert "inst.ks=hd:LABEL=WEB01:/ks.cfg" in result
     assert "inst.stage2=hd:LABEL=WEB01" in result
+    assert "inst.repo=hd:LABEL=WEB01" in result
 
 
 def test_rewrite_grub_custom_volid():
     result = rewrite_grub(_read_fixture("grub.cfg"), volid="WEB01")
     assert "inst.ks=hd:LABEL=WEB01:/ks.cfg" in result
     assert "inst.stage2=hd:LABEL=WEB01" in result
+    assert "inst.repo=hd:LABEL=WEB01" in result
