@@ -1422,8 +1422,8 @@ identifiers (`/dev/disk/by-id/...`) instead of kernel device names.
 Anaconda accepts these in `--ondisk=`, `--drives=`, and
 `--boot-drive=`. Hand-edit the post-`ks-gen gen` `ks.cfg` to
 substitute kernel names with by-id paths, then re-run `ks-gen iso`.
-Save the edit as a `patch` file alongside `host.yaml` so the
-substitution is version-controlled and reproducible across
+See §9.6 for the recommended patch-tracking workflow that keeps the
+substitution version-controlled and reproducible across
 regenerations.
 
 #### Alternatives if Rufus still doesn't work
@@ -1502,6 +1502,95 @@ report only changes when the *security posture* changes.
 ```bash
 diff build/web01/exceptions.md build/web02/exceptions.md
 ```
+
+### 9.6 Hand-edit the kickstart via a tracked patch
+
+When you need to extend the generated kickstart beyond what
+`host.yaml` models — RAID layouts, stable disk identifiers
+(`/dev/disk/by-id/...` substituted for `sda`/`sdb`/`sdc`),
+bootloader cmdline tweaks, custom `%pre` blocks — the right pattern
+is **not** to hand-edit `ks.cfg` once and call it done. Hand-edits
+get lost the next time you regenerate. Instead, capture the delta
+as a `patch` file checked into the same place `host.yaml` lives,
+and re-apply it as a build step.
+
+#### Capture the patch once (after your first hand-edit)
+
+```bash
+ks-gen gen --config host.yaml --out build/
+
+cd build/<hostname>
+cp ks.cfg ks.cfg.orig
+# Hand-edit ks.cfg: RAID layout, by-id paths, whatever you need.
+diff -u ks.cfg.orig ks.cfg > ../../kickstart.patch
+cd ../..
+
+git add host.yaml kickstart.patch
+git commit -m "track <hostname> kickstart customization"
+```
+
+#### Apply on every regeneration
+
+```bash
+ks-gen gen  --config host.yaml --out build/
+patch -d build/<hostname>/ -p0 < kickstart.patch
+ks-gen lint build/<hostname>/ks.cfg
+ks-gen iso \
+  --src AlmaLinux-9-latest-x86_64-dvd.iso \
+  --ks build/<hostname>/ks.cfg \
+  --tailoring build/<hostname>/tailoring.xml \
+  --out build/<hostname>/installer.iso
+```
+
+#### Wrapper script
+
+Drop this next to `host.yaml` and `kickstart.patch` in your operator
+repo as `build-installer.sh`. Run from WSL on Windows (or any Linux
+shell) — `ks-gen iso` needs `xorriso`.
+
+```bash
+#!/usr/bin/env bash
+# Build an installer ISO from host.yaml + kickstart.patch.
+set -euo pipefail
+
+HOST="${1:?usage: $0 <hostname> [host.yaml] [kickstart.patch] [src.iso]}"
+HOST_YAML="${2:-host.yaml}"
+PATCH_FILE="${3:-kickstart.patch}"
+SRC_ISO="${4:-AlmaLinux-9-latest-x86_64-dvd.iso}"
+
+BUNDLE="build/$HOST"
+
+ks-gen gen --config "$HOST_YAML" --out build/
+[[ -f "$PATCH_FILE" ]] && patch -d "$BUNDLE" -p0 < "$PATCH_FILE"
+ks-gen lint "$BUNDLE/ks.cfg"
+ks-gen iso \
+  --src "$SRC_ISO" \
+  --ks "$BUNDLE/ks.cfg" \
+  --tailoring "$BUNDLE/tailoring.xml" \
+  --out "$BUNDLE/installer.iso"
+
+echo "ready: $BUNDLE/installer.iso"
+```
+
+#### Cautions
+
+- **Always re-lint after patching.** `ks-gen lint` re-validates the
+  three load-bearing safety invariants (§3.4). If your patch
+  reorders `admin_user_and_keys` past `ssh_config_apply`, drops the
+  oscap fetch block, or strips the `--fetch-remote-resources` flag,
+  lint exits 4 and you find out before burning an ISO. The wrapper
+  script runs lint between patch and iso for exactly this reason.
+- **Patches are line-positionally brittle.** When ks-gen upstream
+  changes lines around your edits, the patch fails to apply
+  (`Hunk #N FAILED`). When that happens, re-capture: delete
+  `kickstart.patch`, regenerate, re-edit, re-diff, re-commit.
+  Don't merge stale hunks by hand.
+- **Don't patch `%post` bodies that come from rules.** If you find
+  yourself editing shell inside a `# ===== <rule_id> =====` block,
+  that's a signal you want either a new rule (file in
+  `src/ks_gen/rules/`) or a `custom_post` block in `host.yaml` —
+  not a patch. Patches are for layout-level things ks-gen's schema
+  doesn't model yet (RAID, by-id, bootloader cmdline).
 
 ---
 
