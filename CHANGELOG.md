@@ -3,6 +3,18 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.12.2](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.12.1...v0.12.2) (2026-06-14)
+
+
+### Bug Fixes
+
+* **iso:** make USB installs find install source and create user ([#73](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/73)) ([ff037c7](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/ff037c7fdcf9637ceae91e5f24aa6156fa65e558))
+
+
+### Documentation
+
+* **manual:** correct version pin to v0.12.2 ([#76](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/76)) ([73fe765](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/73fe76522acb90ba4a0f1a18b94c1cee50d807de))
+
 ## [0.12.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.12.0...v0.12.1) (2026-06-13)
 
 
