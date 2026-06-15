@@ -34,7 +34,7 @@ No source-code files are modified.
 **Files:**
 - Create: `C:\Users\yizshachuck\source\alma-linux-security\build\unifi\unifi.yaml`
 
-- [ ] **Step 1: Write the config file**
+- [x] **Step 1: Write the config file**
 
 Content (exact — copy verbatim):
 
@@ -67,7 +67,7 @@ packages:
   preset: lean
 ```
 
-- [ ] **Step 2: Verify the file exists**
+- [x] **Step 2: Verify the file exists**
 
 PowerShell:
 ```powershell
@@ -75,7 +75,7 @@ Test-Path C:\Users\yizshachuck\source\alma-linux-security\build\unifi\unifi.yaml
 ```
 Expected: `True`
 
-- [ ] **Step 3: Do NOT commit**
+- [x] **Step 3: Do NOT commit**
 
 `build/` is in `.gitignore`. Skip `git add`. Confirm with:
 
@@ -92,7 +92,7 @@ Expected: a line like `.gitignore:<n>:build/    build/unifi/unifi.yaml`.
 - Read: `build/unifi/unifi.yaml`
 - Generated: `build/unifi/bundle/ks.cfg`, `tailoring.xml`, `exceptions.md`, `host.yaml`
 
-- [ ] **Step 1: Run `ks-gen gen`**
+- [x] **Step 1: Run `ks-gen gen`**
 
 PowerShell:
 ```powershell
@@ -108,7 +108,7 @@ If exit code is non-zero, the failure is either (a) a pydantic
 `src/ks_gen/config.py:HostConfig`, or (b) a `lint FAIL: ...` line —
 fix whichever field that lint reports.
 
-- [ ] **Step 2: List the produced bundle**
+- [x] **Step 2: List the produced bundle**
 
 PowerShell:
 ```powershell
@@ -117,7 +117,7 @@ ls C:\Users\yizshachuck\source\alma-linux-security\build\unifi\bundle
 Expected: four files — `ks.cfg`, `tailoring.xml`, `exceptions.md`,
 `host.yaml`.
 
-- [ ] **Step 3: Spot-check the rendered hostname and admin user**
+- [x] **Step 3: Spot-check the rendered hostname and admin user**
 
 PowerShell:
 ```powershell
@@ -130,7 +130,7 @@ and an `sshkey --username=yizshachuck-admin "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...
 line. The `rootpw` line should have `--lock` (root is locked by the
 STIG profile).
 
-- [ ] **Step 4: Spot-check the lean package preset took effect**
+- [x] **Step 4: Spot-check the lean package preset took effect**
 
 PowerShell:
 ```powershell
@@ -140,7 +140,7 @@ Select-String -Path C:\Users\yizshachuck\source\alma-linux-security\build\unifi\
 Expected: no `@standard` line, but `logrotate`, `postfix`, `cronie`,
 `crontabs`, and `parted` are all present in the `%packages` block.
 
-- [ ] **Step 5: No commit**
+- [x] **Step 5: No commit**
 
 The bundle is also under `build/` and is gitignored. Nothing to commit.
 
