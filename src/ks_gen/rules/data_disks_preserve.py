@@ -11,10 +11,9 @@ if TYPE_CHECKING:
 
 def _fstab_spec(d: DataDisk) -> str:
     if d.partition is not None:
-        # Strip a leading "disk/by-id/" prefix if the target is already a
-        # by-id path (e.g. "disk/by-id/ata-FOO") so we don't double-embed it.
-        bare = d.target.removeprefix("disk/by-id/")
-        return f"/dev/disk/by-id/{bare}-part{d.partition}"
+        # Validator restricts partition= to disk/by-id/... or disk/by-path/...
+        # targets, so prepending /dev/ produces a real path in both cases.
+        return f"/dev/{d.target}-part{d.partition}"
     if d.partition_uuid is not None:
         return f"UUID={d.partition_uuid}"
     if d.partition_label is not None:

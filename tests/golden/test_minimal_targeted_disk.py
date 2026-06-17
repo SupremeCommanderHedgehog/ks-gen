@@ -118,7 +118,7 @@ def test_data_disks_preserve_omits_target_from_ignoredisk():
         "  target: sda\n"
         "  preset: stig_server\n"
         "  data_disks:\n"
-        "    - target: sdb\n"
+        "    - target: disk/by-id/ata-PRESERVE_TEST_SDB\n"
         "      mount: /data\n"
         "      wipe: false\n"
         "      partition: 1\n"
@@ -131,10 +131,14 @@ def test_data_disks_preserve_omits_target_from_ignoredisk():
     finally:
         path.unlink()
     ks = bundle.ks_cfg
-    # sdb is preserve -> NOT in ignoredisk, NOT in clearpart drives, NO part line
+    # preserve disk -> NOT in ignoredisk, NOT in clearpart drives, NO part line
     assert "ignoredisk --only-use=sda" in ks
-    assert "sdb" not in ks.split("ignoredisk")[1].split("\n")[0]
+    assert "ata-PRESERVE_TEST_SDB" not in ks.split("ignoredisk")[1].split("\n")[0]
     assert "clearpart --all --initlabel --drives=sda" in ks
-    assert "--ondisk=sdb" not in ks
+    assert "--ondisk=disk/by-id/ata-PRESERVE_TEST_SDB" not in ks
     # The %post rule writes the fstab entry
-    assert 'echo "/dev/disk/by-id/sdb-part1 /data xfs nodev,nosuid 0 2" >> /etc/fstab' in ks
+    expected_fstab = (
+        'echo "/dev/disk/by-id/ata-PRESERVE_TEST_SDB-part1 /data xfs nodev,nosuid 0 2"'
+        " >> /etc/fstab"
+    )
+    assert expected_fstab in ks

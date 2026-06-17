@@ -29,7 +29,9 @@ def test_rule_applies_when_any_data_disk_preserved(minimal_cfg):
         update={
             "disk": Disk(
                 target="sda",
-                data_disks=[DataDisk(target="sdb", mount="/data", wipe=False)],
+                data_disks=[
+                    DataDisk(target="sdb", mount="/data", wipe=False, partition_label="keep")
+                ],
             )
         }
     )
@@ -108,7 +110,7 @@ def test_rule_emit_post_uses_defaults_when_fsoptions_null(minimal_cfg):
                 target="sda",
                 data_disks=[
                     DataDisk(
-                        target="sdb",
+                        target="disk/by-id/ata-CHEAPSSD",
                         mount="/data",
                         wipe=False,
                         partition=1,
@@ -119,7 +121,7 @@ def test_rule_emit_post_uses_defaults_when_fsoptions_null(minimal_cfg):
         }
     )
     body = RULE.emit_post(cfg)
-    assert 'echo "/dev/disk/by-id/sdb-part1 /data xfs defaults 0 2" >> /etc/fstab' in body
+    assert 'echo "/dev/disk/by-id/ata-CHEAPSSD-part1 /data xfs defaults 0 2" >> /etc/fstab' in body
 
 
 def test_rule_emit_post_only_includes_preserved_disks(minimal_cfg):
@@ -180,7 +182,14 @@ def test_rule_emit_packages_is_empty(minimal_cfg):
         update={
             "disk": Disk(
                 target="sda",
-                data_disks=[DataDisk(target="sdb", mount="/data", wipe=False, partition=1)],
+                data_disks=[
+                    DataDisk(
+                        target="disk/by-id/ata-CHEAPSSD",
+                        mount="/data",
+                        wipe=False,
+                        partition=1,
+                    )
+                ],
             )
         }
     )

@@ -345,6 +345,18 @@ class DataDisk(StrictModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _partition_requires_stable_target(self) -> DataDisk:
+        if self.partition is not None and not (
+            self.target.startswith("disk/by-id/") or self.target.startswith("disk/by-path/")
+        ):
+            raise ValueError(
+                "data_disks: partition number requires a stable target "
+                "(disk/by-id/... or disk/by-path/...); use partition_uuid "
+                "or partition_label for bare kernel-name targets"
+            )
+        return self
+
 
 DEFAULT_BANNER = (
     "WARNING: This is a private computer system. Unauthorized access is\n"

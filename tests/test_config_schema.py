@@ -1429,7 +1429,7 @@ def test_data_disk_wipe_true_rejects_partition_label():
 def test_data_disk_wipe_false_defaults_partition_to_1():
     from ks_gen.config import DataDisk
 
-    d = DataDisk(target="sdb", mount="/data", wipe=False)
+    d = DataDisk(target="disk/by-id/ata-FOO", mount="/data", wipe=False)
     assert d.partition == 1
     assert d.partition_uuid is None
     assert d.partition_label is None
@@ -1489,6 +1489,53 @@ def test_data_disk_fsoptions_can_be_null():
 
     d = DataDisk(target="sdb", mount="/data", fsoptions=None)
     assert d.fsoptions is None
+
+
+def test_data_disk_partition_requires_stable_target():
+    from ks_gen.config import DataDisk
+
+    with pytest.raises(ValidationError, match="partition number requires a stable target"):
+        DataDisk(target="sdb", mount="/data", wipe=False, partition=1)
+
+
+def test_data_disk_partition_accepts_by_id_target():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(target="disk/by-id/ata-FOO", mount="/data", wipe=False, partition=2)
+    assert d.partition == 2
+
+
+def test_data_disk_partition_accepts_by_path_target():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(
+        target="disk/by-path/pci-0000:00:1f.2-ata-1",
+        mount="/data",
+        wipe=False,
+        partition=1,
+    )
+    assert d.partition == 1
+
+
+def test_data_disk_bare_target_can_still_use_uuid():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(
+        target="sdb",
+        mount="/data",
+        wipe=False,
+        partition_uuid="0f2a-1c3b",
+    )
+    assert d.partition_uuid == "0f2a-1c3b"
+
+
+def test_data_disk_wipe_false_default_partition_rejects_bare_target():
+    from ks_gen.config import DataDisk
+
+    # wipe=False + no identifier defaults partition=1 via mode=before,
+    # then _partition_requires_stable_target rejects the bare target.
+    with pytest.raises(ValidationError, match="partition number requires a stable target"):
+        DataDisk(target="sdb", mount="/data", wipe=False)
 
 
 # --- Disk.data_disks field --------------------------------------------------

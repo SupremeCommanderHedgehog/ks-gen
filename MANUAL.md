@@ -404,7 +404,7 @@ disk:
       fsoptions: nodev,nosuid              # STIG-aligned default; null for none
       wipe: true                           # true (default) | false
       # wipe: false adds exactly one of:
-      # partition: 1                       # /dev/disk/by-id/<target>-partN
+      # partition: 1                       # /dev/<target>-partN; target must be by-id or by-path
       # partition_uuid: 0f2a-1c3b-...      # UUID=... in fstab
       # partition_label: my_data_lbl       # LABEL=... in fstab
 ```
@@ -422,7 +422,10 @@ followed by `mount -a` + `restorecon -R <mounts>`. Pick the
 identifier that survives the operation: `partition_uuid` is most
 robust; `partition_label` is the friendliest when you control the
 label; `partition: 1` is the implicit default and assumes the legacy
-single-partition layout.
+single-partition layout. **`partition: N` requires a stable target
+(`disk/by-id/...` or `disk/by-path/...`)** — bare kernel-name
+targets like `sdb` don't have a `/dev/disk/by-id/sdb-partN` symlink,
+so use `partition_uuid` or `partition_label` for those.
 
 Cross-field rules enforced at config load:
 
