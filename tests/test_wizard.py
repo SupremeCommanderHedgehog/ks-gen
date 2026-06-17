@@ -230,7 +230,8 @@ def test_disk_stig_server_no_luks(monkeypatch: pytest.MonkeyPatch):
         monkeypatch,
         {
             "select_one": ["stig_server", "none"],
-            "ask_confirm": [True],  # wipe = true
+            "ask_confirm": [True, False],  # wipe = true, add data disk? no
+            "ask_text": [""],  # blank system target
         },
     )
     payload = _disk.prompts()
@@ -246,7 +247,8 @@ def test_disk_stig_server_no_wipe(monkeypatch: pytest.MonkeyPatch):
         monkeypatch,
         {
             "select_one": ["stig_server", "none"],
-            "ask_confirm": [False],
+            "ask_confirm": [False, False],
+            "ask_text": [""],  # blank system target
         },
     )
     payload = _disk.prompts()
@@ -261,6 +263,7 @@ def test_disk_minimal_skips_luks_prompt(monkeypatch: pytest.MonkeyPatch):
         {
             "select_one": ["minimal"],
             "ask_confirm": [True],
+            "ask_text": [""],  # blank system target
         },
     )
     payload = _disk.prompts()
@@ -273,8 +276,9 @@ def test_disk_luks_partial_inline_match(monkeypatch: pytest.MonkeyPatch):
         monkeypatch,
         {
             "select_one": ["stig_server", "partial", "inline"],
-            "ask_confirm": [True],
+            "ask_confirm": [True, False],
             "ask_password": ["hunter2", "hunter2"],
+            "ask_text": [""],  # blank system target
         },
     )
     payload = _disk.prompts()
@@ -290,9 +294,10 @@ def test_disk_luks_partial_inline_retry_then_match(monkeypatch: pytest.MonkeyPat
         monkeypatch,
         {
             "select_one": ["stig_server", "partial", "inline"],
-            "ask_confirm": [True],
+            "ask_confirm": [True, False],
             # first pair mismatches, second pair matches
             "ask_password": ["hunter2", "wrong", "hunter2", "hunter2"],
+            "ask_text": [""],  # blank system target
         },
     )
     payload = _disk.prompts()
@@ -306,6 +311,7 @@ def test_disk_luks_partial_inline_three_mismatches_raises(monkeypatch: pytest.Mo
             "select_one": ["stig_server", "partial", "inline"],
             "ask_confirm": [True],
             "ask_password": ["a", "b"] * 3,
+            "ask_text": [""],  # blank system target
         },
     )
     with pytest.raises(WizardError, match="confirmation mismatch"):
@@ -319,6 +325,7 @@ def test_disk_luks_partial_inline_empty_passphrase_raises(monkeypatch: pytest.Mo
             "select_one": ["stig_server", "partial", "inline"],
             "ask_confirm": [True],
             "ask_password": ["   ", "   "],
+            "ask_text": [""],  # blank system target
         },
     )
     with pytest.raises(WizardError, match="empty"):
@@ -330,8 +337,8 @@ def test_disk_luks_partial_file(monkeypatch: pytest.MonkeyPatch):
         monkeypatch,
         {
             "select_one": ["stig_server", "partial", "file"],
-            "ask_confirm": [True],
-            "ask_text": ["/etc/ks-gen/luks.key"],
+            "ask_confirm": [True, False],
+            "ask_text": ["", "/etc/ks-gen/luks.key"],  # blank target, then key path
         },
     )
     payload = _disk.prompts()
@@ -348,7 +355,7 @@ def test_disk_luks_partial_file_empty_path_raises(monkeypatch: pytest.MonkeyPatc
         {
             "select_one": ["stig_server", "partial", "file"],
             "ask_confirm": [True],
-            "ask_text": [""],
+            "ask_text": ["", ""],  # blank target, then empty key path
         },
     )
     with pytest.raises(WizardError, match="path is empty"):
@@ -537,7 +544,8 @@ def test_run_wizard_disk_group_selected(monkeypatch: pytest.MonkeyPatch):
         monkeypatch,
         {
             "select_one": ["stig_server", "none"],
-            "ask_confirm": [True],
+            "ask_confirm": [True, False],  # wipe=True, add data disk? no
+            "ask_text": [""],  # blank system target
         },
     )
     cfg, _yaml_text = run_wizard(interactive=True)
@@ -563,11 +571,12 @@ def test_run_wizard_all_groups_lints_clean(monkeypatch: pytest.MonkeyPatch, tmp_
                 "dhcp",  # bootproto
             ],
             "ask_confirm": [
-                True,  # wipe
+                True,  # wipe system disk
+                False,  # add data disk? no
                 True,
-                False,  # onboot, add-another
+                False,  # onboot, add-another (network)
             ],
-            "ask_text": ["link"],  # device
+            "ask_text": ["", "link"],  # blank system target, then device
             "ask_checkbox": [
                 ["disk", "network", "overrides"],  # group selector
                 [],  # disable nothing
@@ -602,3 +611,173 @@ def test_run_wizard_keyboard_interrupt_becomes_wizard_error(
 
     with pytest.raises(WizardError, match="aborted"):
         run_wizard(interactive=True)
+
+
+# --- _disk data_disks loop tests -------------------------------------------
+
+
+def test_disk_data_disks_skipped_when_user_declines(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "none"],
+            "ask_confirm": [True, False],  # wipe=true, add data disk? no
+            "ask_text": ["sda"],  # system target
+        },
+    )
+    payload = _disk.prompts()
+    assert "data_disks" not in payload
+    assert payload["target"] == "sda"
+
+
+def test_disk_data_disks_one_wipe_true(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "none", "xfs"],
+            # confirm flow: wipe?, add data disk?, wipe this disk?, add another?
+            "ask_confirm": [True, True, True, False],
+            "ask_text": [
+                "sda",  # system target
+                "disk/by-id/ata-WDC_X",
+                "/data",
+                "nodev,nosuid",
+            ],
+        },
+    )
+    payload = _disk.prompts()
+    assert payload["target"] == "sda"
+    assert payload["data_disks"] == [
+        {
+            "target": "disk/by-id/ata-WDC_X",
+            "mount": "/data",
+            "fstype": "xfs",
+            "fsoptions": "nodev,nosuid",
+            "wipe": True,
+        }
+    ]
+
+
+def test_disk_data_disks_one_preserve_partition_number(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "none", "xfs", "partition"],
+            # wipe sys, add data, wipe data? no, add another? no
+            "ask_confirm": [True, True, False, False],
+            "ask_text": [
+                "sda",  # system target
+                "sdb",
+                "/data",
+                "nodev,nosuid",
+                "1",
+            ],
+        },
+    )
+    payload = _disk.prompts()
+    assert payload["target"] == "sda"
+    assert payload["data_disks"] == [
+        {
+            "target": "sdb",
+            "mount": "/data",
+            "fstype": "xfs",
+            "fsoptions": "nodev,nosuid",
+            "wipe": False,
+            "partition": 1,
+        }
+    ]
+
+
+def test_disk_data_disks_one_preserve_uuid(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "none", "xfs", "uuid"],
+            "ask_confirm": [True, True, False, False],
+            "ask_text": [
+                "sda",  # system target
+                "sdb",
+                "/data",
+                "nodev,nosuid",
+                "0f2a-1c3b-4d5e-6f7a",
+            ],
+        },
+    )
+    payload = _disk.prompts()
+    assert payload["target"] == "sda"
+    assert payload["data_disks"][0]["partition_uuid"] == "0f2a-1c3b-4d5e-6f7a"
+    assert "partition" not in payload["data_disks"][0]
+
+
+def test_disk_data_disks_one_preserve_label(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "none", "xfs", "label"],
+            "ask_confirm": [True, True, False, False],
+            "ask_text": [
+                "sda",  # system target
+                "sdb",
+                "/data",
+                "nodev,nosuid",
+                "preserve_test",
+            ],
+        },
+    )
+    payload = _disk.prompts()
+    assert payload["target"] == "sda"
+    assert payload["data_disks"][0]["partition_label"] == "preserve_test"
+
+
+def test_disk_data_disks_two_disks_mixed(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "none", "xfs", "xfs", "label"],
+            "ask_confirm": [
+                True,  # wipe system disk
+                True,  # add a data disk
+                True,  # disk 1: wipe=true
+                True,  # add another
+                False,  # disk 2: wipe=false
+                False,  # add another? no
+            ],
+            "ask_text": [
+                "sda",  # system target
+                "sdb",
+                "/scratch",
+                "nodev,nosuid",  # disk 1
+                "sdc",
+                "/data",
+                "nodev,nosuid",
+                "keep",  # disk 2 (label keep)
+            ],
+        },
+    )
+    payload = _disk.prompts()
+    assert payload["target"] == "sda"
+    assert len(payload["data_disks"]) == 2
+    assert payload["data_disks"][0]["mount"] == "/scratch"
+    assert payload["data_disks"][0]["wipe"] is True
+    assert payload["data_disks"][1]["mount"] == "/data"
+    assert payload["data_disks"][1]["wipe"] is False
+    assert payload["data_disks"][1]["partition_label"] == "keep"
+
+
+def test_disk_data_disks_without_target_raises(monkeypatch: pytest.MonkeyPatch):
+    _scripted(
+        monkeypatch,
+        {
+            "select_one": ["stig_server", "none", "xfs"],
+            # wipe sys, add data, wipe data, add another? no
+            "ask_confirm": [True, True, True, False],
+            "ask_text": [
+                "",  # blank system target
+                "sdb",
+                "/data",
+                "nodev,nosuid",  # the data disk
+            ],
+        },
+    )
+    with pytest.raises(WizardError, match=r"disk\.target is required when adding data_disks"):
+        _disk.prompts()

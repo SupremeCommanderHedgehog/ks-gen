@@ -106,6 +106,11 @@ _STIG_REQUIRED_LV_MOUNTPOINTS: frozenset[str] = frozenset(
     }
 )
 
+# Accepts persistent identifiers (disk/by-id/ata-FOO, disk/by-path/...)
+# and bare kernel names (sda, vda, nvme0n1). Rejects: leading "/", empty,
+# leading digit, whitespace. Strict superset of the v0.10-v0.12 regex.
+DISK_TARGET_REGEX = r"^[a-zA-Z][a-zA-Z0-9._/:-]*$"
+
 
 class DiskBootPart(StrictModel):
     size: str = Field(default="1G", pattern=r"^\d+(M|G)$")
@@ -257,7 +262,8 @@ class Disk(StrictModel):
     luks: DiskLuks = Field(default_factory=DiskLuks)
     wipe: bool = True
     bootloader_password: str | None = None
-    target: str | None = Field(default=None, pattern=r"^[a-zA-Z][a-zA-Z0-9]*$")
+    target: str | None = Field(default=None, pattern=DISK_TARGET_REGEX)
+    data_disks: list[DataDisk] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -289,6 +295,67 @@ class Disk(StrictModel):
                 "disk.preset='custom' was reserved in v0.1-v0.3; use the disk.layout block instead."
             )
         return v
+
+
+class DataDisk(StrictModel):
+    target: str = Field(..., pattern=DISK_TARGET_REGEX)
+    mount: str = Field(..., min_length=1, pattern=r"^/[a-zA-Z0-9_/-]+$")
+    fstype: Literal["xfs", "ext4"] = "xfs"
+    fsoptions: str | None = "nodev,nosuid"
+    wipe: bool = True
+    partition: int | None = Field(default=None, ge=1)
+    partition_uuid: str | None = None
+    partition_label: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _default_partition_when_preserve(cls, data: dict[str, object]) -> dict[str, object]:
+        """When wipe=False and no identifier is given, default partition=1.
+
+        Runs at the dict-input layer because StrictModel is frozen=True;
+        the after-validator below relies on exactly one identifier being
+        set when wipe=False.
+        """
+        if not isinstance(data, dict):
+            return data
+        if data.get("wipe", True) is False:
+            ids = (
+                data.get("partition"),
+                data.get("partition_uuid"),
+                data.get("partition_label"),
+            )
+            if all(x is None for x in ids):
+                data["partition"] = 1
+        return data
+
+    @model_validator(mode="after")
+    def _validate_identifier(self) -> DataDisk:
+        ids = [self.partition, self.partition_uuid, self.partition_label]
+        n_set = sum(x is not None for x in ids)
+        if self.wipe:
+            if n_set > 0:
+                raise ValueError(
+                    "data_disks: partition / partition_uuid / partition_label "
+                    "are only valid when wipe=False"
+                )
+            return self
+        if n_set > 1:
+            raise ValueError(
+                "data_disks: specify at most one of partition / partition_uuid / partition_label"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _partition_requires_stable_target(self) -> DataDisk:
+        if self.partition is not None and not (
+            self.target.startswith("disk/by-id/") or self.target.startswith("disk/by-path/")
+        ):
+            raise ValueError(
+                "data_disks: partition number requires a stable target "
+                "(disk/by-id/... or disk/by-path/...); use partition_uuid "
+                "or partition_label for bare kernel-name targets"
+            )
+        return self
 
 
 DEFAULT_BANNER = (
@@ -653,6 +720,60 @@ class HostConfig(StrictModel):
                 "disk.preset='minimal' has no LVM VG; containers.enabled "
                 "auto-injects an LV at /srv/containers which requires "
                 "disk.preset='stig_server' or disk.layout"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_data_disks_require_target(self) -> HostConfig:
+        if self.disk.data_disks and self.disk.target is None:
+            raise ValueError(
+                "disk.data_disks is non-empty but disk.target is unset; "
+                "without a system target, anaconda's clearpart --all would "
+                "clobber the data disks"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_data_disks_targets_distinct(self) -> HostConfig:
+        seen: set[str] = {self.disk.target} if self.disk.target else set()
+        for i, d in enumerate(self.disk.data_disks):
+            if d.target in seen:
+                raise ValueError(
+                    f"disk.data_disks[{i}].target {d.target!r} collides "
+                    f"with disk.target or another data disk"
+                )
+            seen.add(d.target)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_data_disks_mounts_distinct(self) -> HostConfig:
+        reserved: set[str] = {"/", "/boot", "/boot/efi"}
+        if self.disk.layout is not None:
+            reserved.update(lv.mount for lv in self.disk.layout.lvs if lv.mount is not None)
+        elif self.disk.preset == DiskPreset.STIG_SERVER:
+            reserved.update(_STIG_REQUIRED_LV_MOUNTPOINTS)
+        # No branch for MINIMAL: _minimal_preset_rejects_data_disks (below)
+        # raises before any minimal+data_disks combination can matter, and
+        # minimal's sole `/` mount is already in `reserved`. CUSTOM never
+        # reaches here — _custom_not_yet_implemented rejects at field load.
+        if self.containers.enabled:
+            reserved.add("/srv/containers")
+        seen: set[str] = set()
+        for i, d in enumerate(self.disk.data_disks):
+            if d.mount in reserved or d.mount in seen:
+                raise ValueError(
+                    f"disk.data_disks[{i}].mount {d.mount!r} collides with "
+                    f"a reserved or already-assigned mount point"
+                )
+            seen.add(d.mount)
+        return self
+
+    @model_validator(mode="after")
+    def _minimal_preset_rejects_data_disks(self) -> HostConfig:
+        if self.disk.preset == DiskPreset.MINIMAL and self.disk.data_disks:
+            raise ValueError(
+                "disk.preset='minimal' is incompatible with disk.data_disks; "
+                "use disk.preset='stig_server' or disk.layout"
             )
         return self
 
