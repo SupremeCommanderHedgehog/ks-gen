@@ -83,10 +83,15 @@ def _ask_data_disks_loop() -> list[dict[str, Any]]:
 
 def prompts() -> dict[str, Any]:
     """Run the disk-group prompts. Returns a HostConfig.disk fragment."""
+    target = _prompts.ask_text(
+        "System disk target (by-id or short name; blank to let anaconda choose):"
+    )
     preset = _prompts.select_one("Disk preset:", ["stig_server", "minimal"])
     wipe = _prompts.ask_confirm("Wipe disk on install?", default=True)
 
     payload: dict[str, Any] = {"preset": preset, "wipe": wipe}
+    if target:
+        payload["target"] = target
 
     if preset == "minimal":
         # _minimal_preset_rejects_luks would reject any LUKS != none, and
@@ -115,14 +120,17 @@ def prompts() -> dict[str, Any]:
                 "passphrase": _ask_inline_passphrase(),
             }
         else:
-            # source == "file"
             path = _prompts.ask_text("Passphrase file path:")
             if not path:
                 raise WizardError("passphrase_file path is empty")
             payload["luks"] = {"preset": "partial", "passphrase_file": path}
 
-    # Data disks loop (applies to stig_server and stig_server+layout paths).
     data_disks = _ask_data_disks_loop()
     if data_disks:
+        if not target:
+            raise WizardError(
+                "disk.target is required when adding data_disks; "
+                "rerun the wizard and supply a system disk target"
+            )
         payload["data_disks"] = data_disks
     return payload
