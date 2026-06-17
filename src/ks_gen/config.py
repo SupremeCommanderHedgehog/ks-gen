@@ -296,6 +296,55 @@ class Disk(StrictModel):
         return v
 
 
+class DataDisk(StrictModel):
+    target: str = Field(..., pattern=DISK_TARGET_REGEX)
+    mount: str = Field(..., min_length=1, pattern=r"^/[a-zA-Z0-9_/-]+$")
+    fstype: Literal["xfs", "ext4"] = "xfs"
+    fsoptions: str | None = "nodev,nosuid"
+    wipe: bool = True
+    partition: int | None = Field(default=None, ge=1)
+    partition_uuid: str | None = None
+    partition_label: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _default_partition_when_preserve(cls, data: dict[str, object]) -> dict[str, object]:
+        """When wipe=False and no identifier is given, default partition=1.
+
+        Runs at the dict-input layer because StrictModel is frozen=True;
+        the after-validator below relies on exactly one identifier being
+        set when wipe=False.
+        """
+        if not isinstance(data, dict):
+            return data
+        if data.get("wipe", True) is False:
+            ids = (
+                data.get("partition"),
+                data.get("partition_uuid"),
+                data.get("partition_label"),
+            )
+            if all(x is None for x in ids):
+                data["partition"] = 1
+        return data
+
+    @model_validator(mode="after")
+    def _validate_identifier(self) -> DataDisk:
+        ids = [self.partition, self.partition_uuid, self.partition_label]
+        n_set = sum(x is not None for x in ids)
+        if self.wipe:
+            if n_set > 0:
+                raise ValueError(
+                    "data_disks: partition / partition_uuid / partition_label "
+                    "are only valid when wipe=False"
+                )
+            return self
+        if n_set > 1:
+            raise ValueError(
+                "data_disks: specify at most one of partition / partition_uuid / partition_label"
+            )
+        return self
+
+
 DEFAULT_BANNER = (
     "WARNING: This is a private computer system. Unauthorized access is\n"
     "prohibited. All activity on this system may be monitored and logged.\n"

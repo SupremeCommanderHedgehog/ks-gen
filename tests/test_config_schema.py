@@ -1391,3 +1391,101 @@ def test_disk_target_rejects_empty():
 def test_disk_target_rejects_whitespace():
     with pytest.raises(ValidationError):
         Disk(target="sda ")
+
+
+def test_data_disk_wipe_true_minimal():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(target="disk/by-id/ata-FOO", mount="/data")
+    assert d.wipe is True
+    assert d.fstype == "xfs"
+    assert d.fsoptions == "nodev,nosuid"
+    assert d.partition is None
+    assert d.partition_uuid is None
+    assert d.partition_label is None
+
+
+def test_data_disk_wipe_true_rejects_partition_number():
+    from ks_gen.config import DataDisk
+
+    with pytest.raises(ValidationError, match="only valid when wipe=False"):
+        DataDisk(target="sdb", mount="/data", partition=1)
+
+
+def test_data_disk_wipe_true_rejects_partition_uuid():
+    from ks_gen.config import DataDisk
+
+    with pytest.raises(ValidationError, match="only valid when wipe=False"):
+        DataDisk(target="sdb", mount="/data", partition_uuid="0f2a-1c3b")
+
+
+def test_data_disk_wipe_true_rejects_partition_label():
+    from ks_gen.config import DataDisk
+
+    with pytest.raises(ValidationError, match="only valid when wipe=False"):
+        DataDisk(target="sdb", mount="/data", partition_label="preserve_test")
+
+
+def test_data_disk_wipe_false_defaults_partition_to_1():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(target="sdb", mount="/data", wipe=False)
+    assert d.partition == 1
+    assert d.partition_uuid is None
+    assert d.partition_label is None
+
+
+def test_data_disk_wipe_false_explicit_partition_uuid_preserved():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(
+        target="sdb",
+        mount="/data",
+        wipe=False,
+        partition_uuid="0f2a-1c3b-4d5e-6f7a",
+    )
+    assert d.partition_uuid == "0f2a-1c3b-4d5e-6f7a"
+    assert d.partition is None
+
+
+def test_data_disk_wipe_false_rejects_uuid_and_label_together():
+    from ks_gen.config import DataDisk
+
+    with pytest.raises(ValidationError, match="at most one of"):
+        DataDisk(
+            target="sdb",
+            mount="/data",
+            wipe=False,
+            partition_uuid="0f2a-1c3b",
+            partition_label="preserve_test",
+        )
+
+
+def test_data_disk_mount_requires_leading_slash():
+    from ks_gen.config import DataDisk
+
+    with pytest.raises(ValidationError):
+        DataDisk(target="sdb", mount="data")
+
+
+def test_data_disk_target_uses_relaxed_regex():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(target="disk/by-id/ata-WDC_WD1002FBYS", mount="/data")
+    assert d.target == "disk/by-id/ata-WDC_WD1002FBYS"
+
+
+def test_data_disk_fstype_only_xfs_or_ext4():
+    from ks_gen.config import DataDisk
+
+    DataDisk(target="sdb", mount="/data", fstype="xfs")
+    DataDisk(target="sdb", mount="/data", fstype="ext4")
+    with pytest.raises(ValidationError):
+        DataDisk(target="sdb", mount="/data", fstype="btrfs")
+
+
+def test_data_disk_fsoptions_can_be_null():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(target="sdb", mount="/data", fsoptions=None)
+    assert d.fsoptions is None
