@@ -1587,7 +1587,7 @@ def test_host_config_data_disks_mount_collides_with_root():
             "data_disks": [{"target": "sdb", "mount": "/boot"}],
         },
     )
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match="should match pattern"):
         HostConfig.model_validate(payload)
     with pytest.raises(ValidationError, match="reserved"):
         HostConfig.model_validate(payload2)

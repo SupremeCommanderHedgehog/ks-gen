@@ -740,6 +740,10 @@ class HostConfig(StrictModel):
             reserved.update(lv.mount for lv in self.disk.layout.lvs if lv.mount is not None)
         elif self.disk.preset == DiskPreset.STIG_SERVER:
             reserved.update(_STIG_REQUIRED_LV_MOUNTPOINTS)
+        # No branch for MINIMAL: _minimal_preset_rejects_data_disks (below)
+        # raises before any minimal+data_disks combination can matter, and
+        # minimal's sole `/` mount is already in `reserved`. CUSTOM never
+        # reaches here — _custom_not_yet_implemented rejects at field load.
         if self.containers.enabled:
             reserved.add("/srv/containers")
         seen: set[str] = set()
