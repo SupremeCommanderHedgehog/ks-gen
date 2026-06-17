@@ -106,6 +106,11 @@ _STIG_REQUIRED_LV_MOUNTPOINTS: frozenset[str] = frozenset(
     }
 )
 
+# Accepts persistent identifiers (disk/by-id/ata-FOO, disk/by-path/...)
+# and bare kernel names (sda, vda, nvme0n1). Rejects: leading "/", empty,
+# leading digit, whitespace. Strict superset of the v0.10-v0.12 regex.
+DISK_TARGET_REGEX = r"^[a-zA-Z][a-zA-Z0-9._/:-]*$"
+
 
 class DiskBootPart(StrictModel):
     size: str = Field(default="1G", pattern=r"^\d+(M|G)$")
@@ -257,7 +262,7 @@ class Disk(StrictModel):
     luks: DiskLuks = Field(default_factory=DiskLuks)
     wipe: bool = True
     bootloader_password: str | None = None
-    target: str | None = Field(default=None, pattern=r"^[a-zA-Z][a-zA-Z0-9]*$")
+    target: str | None = Field(default=None, pattern=DISK_TARGET_REGEX)
 
     @model_validator(mode="before")
     @classmethod

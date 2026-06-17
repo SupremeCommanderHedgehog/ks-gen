@@ -1355,3 +1355,39 @@ def test_hostconfig_allows_stig_server_preset_with_containers_enabled():
         containers=Containers(enabled=True),
     )
     assert cfg.containers.enabled is True
+
+
+def test_disk_target_accepts_by_id_path():
+    d = Disk(target="disk/by-id/ata-TEAML5Lite3D240G_AB20181209A0100005")
+    assert d.target == "disk/by-id/ata-TEAML5Lite3D240G_AB20181209A0100005"
+
+
+def test_disk_target_accepts_by_path():
+    d = Disk(target="disk/by-path/pci-0000:00:1f.2-ata-1")
+    assert d.target == "disk/by-path/pci-0000:00:1f.2-ata-1"
+
+
+def test_disk_target_still_accepts_short_kernel_names():
+    assert Disk(target="sda").target == "sda"
+    assert Disk(target="nvme0n1").target == "nvme0n1"
+    assert Disk(target="vda").target == "vda"
+
+
+def test_disk_target_rejects_leading_slash():
+    with pytest.raises(ValidationError):
+        Disk(target="/dev/sda")
+
+
+def test_disk_target_rejects_leading_digit():
+    with pytest.raises(ValidationError):
+        Disk(target="1sda")
+
+
+def test_disk_target_rejects_empty():
+    with pytest.raises(ValidationError):
+        Disk(target="")
+
+
+def test_disk_target_rejects_whitespace():
+    with pytest.raises(ValidationError):
+        Disk(target="sda ")
