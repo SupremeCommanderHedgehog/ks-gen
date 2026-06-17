@@ -3,6 +3,18 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.13.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.12.2...v0.13.0) (2026-06-17)
+
+
+### Features
+
+* **disk:** accept by-id in disk.target; add disk.data_disks ([#79](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/79)) ([410cd03](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/410cd03ce9698119bae8933a693a7276eefd0cd3))
+
+
+### Documentation
+
+* example host config (spec + plan) ([#77](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/77)) ([b3caa08](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/b3caa088f91ace4672b62fbc6e0ec19d03fbe61d))
+
 ## [0.12.2](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.12.1...v0.12.2) (2026-06-14)
 
 
