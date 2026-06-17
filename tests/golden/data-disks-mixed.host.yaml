@@ -1,0 +1,21 @@
+system:
+  hostname: mixed.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYmixed ops@bastion"
+    sudo: nopasswd_yes
+disk:
+  target: sda
+  preset: stig_server
+  data_disks:
+    - target: sdb
+      mount: /scratch
+      fstype: xfs
+      wipe: true
+    - target: sdc
+      mount: /data
+      fstype: xfs
+      wipe: false
+      partition_label: keep_me

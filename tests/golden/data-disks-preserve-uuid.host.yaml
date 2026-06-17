@@ -1,0 +1,17 @@
+system:
+  hostname: preserve-uuid.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYpruid ops@bastion"
+    sudo: nopasswd_yes
+disk:
+  target: sda
+  preset: stig_server
+  data_disks:
+    - target: sdb
+      mount: /data
+      fstype: xfs
+      wipe: false
+      partition_uuid: 0f2a1c3b-4d5e-6f7a-8b9c-0123456789ab
