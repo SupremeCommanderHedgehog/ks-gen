@@ -328,6 +328,14 @@ every partition line — so the install cannot touch sibling drives on
 multi-disk hosts. Leave unset to keep today's behavior (anaconda picks
 disks by enumeration order).
 
+As of v0.13, `disk.target` accepts persistent identifiers under
+`/dev/disk/by-id/` and `/dev/disk/by-path/` — drop the leading `/dev/`
+when writing the value (e.g. `disk/by-id/ata-FOO`). The same regex
+covers bare kernel names (`sda`, `nvme0n1`) so existing host.yaml
+files load unchanged. By-id targeting is strongly recommended on
+hosts where SATA-port enumeration is unstable (the kernel-name `sda`
+can swap to `sdb` on reseat).
+
 #### `disk.layout` (alternative to `disk.preset`)
 
 For operators who need to customize partition sizes or add extra
@@ -379,6 +387,64 @@ missing any of them fails with a specific error.
 
 Per-LV encryption (`lvs[].encrypted: true`) is not supported — use the
 `disk.luks` block below for PV-level LUKS that covers all LVs.
+
+#### `disk.data_disks` (secondary mounts, v0.13+)
+
+`disk.data_disks` is a list of secondary physical disks. Each entry
+declares one disk:
+
+```yaml
+disk:
+  target: disk/by-id/ata-SYSTEM_SSD
+  preset: stig_server
+  data_disks:
+    - target: disk/by-id/ata-DATA_HDD     # by-id strongly recommended
+      mount: /data                         # must start with /
+      fstype: xfs                          # xfs (default) or ext4
+      fsoptions: nodev,nosuid              # STIG-aligned default; null for none
+      wipe: true                           # true (default) | false
+      # wipe: false adds exactly one of:
+      # partition: 1                       # /dev/disk/by-id/<target>-partN
+      # partition_uuid: 0f2a-1c3b-...      # UUID=... in fstab
+      # partition_label: my_data_lbl       # LABEL=... in fstab
+```
+
+When `wipe: true` (the default), anaconda formats the disk via a
+`part <mount> --fstype=<fs> --grow --size=1 --ondisk=<target>` line and
+mounts it during install — the resulting `/etc/fstab` entry is
+generated for free.
+
+When `wipe: false`, the disk is **omitted from `ignoredisk --only-use=`
+and `clearpart --drives=`** so anaconda ignores it entirely. The
+`data_disks_preserve` rule then writes one fstab entry from `%post`
+using the chosen identifier (partition number, UUID, or label),
+followed by `mount -a` + `restorecon -R <mounts>`. Pick the
+identifier that survives the operation: `partition_uuid` is most
+robust; `partition_label` is the friendliest when you control the
+label; `partition: 1` is the implicit default and assumes the legacy
+single-partition layout.
+
+Cross-field rules enforced at config load:
+
+- `data_disks` requires `disk.target` to be set (without a system
+  target, anaconda's `clearpart --all` would clobber the data disks).
+- Targets must be distinct across `disk.target` and all
+  `data_disks[*].target`.
+- Mounts must be distinct and must not collide with `/`, `/boot`,
+  `/boot/efi`, the active layout/preset's LV mounts, or
+  `/srv/containers` (when `containers.enabled`).
+- The `minimal` preset is incompatible with `data_disks` — use
+  `stig_server` or `disk.layout`.
+
+##### Install-regression recommendation
+
+This feature touches every "DO recommend" path in `CLAUDE.md`'s
+install-regression guidance: schema defaults, template fan-out, and a
+new `%post`-writing rule. Before merging a host that uses `data_disks`
+in anger, run the install-regression harness with a two-disk QEMU VM —
+once for each of the `wipe: true` and `wipe: false` paths. The
+harness recipe lives at `.scratch/install-regression/` (gitignored,
+per-developer).
 
 #### `disk.luks` (PV-level LUKS encryption)
 
