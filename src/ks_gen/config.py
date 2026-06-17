@@ -263,6 +263,7 @@ class Disk(StrictModel):
     wipe: bool = True
     bootloader_password: str | None = None
     target: str | None = Field(default=None, pattern=DISK_TARGET_REGEX)
+    data_disks: list[DataDisk] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -707,6 +708,56 @@ class HostConfig(StrictModel):
                 "disk.preset='minimal' has no LVM VG; containers.enabled "
                 "auto-injects an LV at /srv/containers which requires "
                 "disk.preset='stig_server' or disk.layout"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_data_disks_require_target(self) -> HostConfig:
+        if self.disk.data_disks and self.disk.target is None:
+            raise ValueError(
+                "disk.data_disks is non-empty but disk.target is unset; "
+                "without a system target, anaconda's clearpart --all would "
+                "clobber the data disks"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_data_disks_targets_distinct(self) -> HostConfig:
+        seen: set[str] = {self.disk.target} if self.disk.target else set()
+        for i, d in enumerate(self.disk.data_disks):
+            if d.target in seen:
+                raise ValueError(
+                    f"disk.data_disks[{i}].target {d.target!r} collides "
+                    f"with disk.target or another data disk"
+                )
+            seen.add(d.target)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_data_disks_mounts_distinct(self) -> HostConfig:
+        reserved: set[str] = {"/", "/boot", "/boot/efi"}
+        if self.disk.layout is not None:
+            reserved.update(lv.mount for lv in self.disk.layout.lvs if lv.mount is not None)
+        elif self.disk.preset == DiskPreset.STIG_SERVER:
+            reserved.update(_STIG_REQUIRED_LV_MOUNTPOINTS)
+        if self.containers.enabled:
+            reserved.add("/srv/containers")
+        seen: set[str] = set()
+        for i, d in enumerate(self.disk.data_disks):
+            if d.mount in reserved or d.mount in seen:
+                raise ValueError(
+                    f"disk.data_disks[{i}].mount {d.mount!r} collides with "
+                    f"a reserved or already-assigned mount point"
+                )
+            seen.add(d.mount)
+        return self
+
+    @model_validator(mode="after")
+    def _minimal_preset_rejects_data_disks(self) -> HostConfig:
+        if self.disk.preset == DiskPreset.MINIMAL and self.disk.data_disks:
+            raise ValueError(
+                "disk.preset='minimal' is incompatible with disk.data_disks; "
+                "use disk.preset='stig_server' or disk.layout"
             )
         return self
 

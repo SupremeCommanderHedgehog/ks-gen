@@ -1489,3 +1489,187 @@ def test_data_disk_fsoptions_can_be_null():
 
     d = DataDisk(target="sdb", mount="/data", fsoptions=None)
     assert d.fsoptions is None
+
+
+# --- Disk.data_disks field --------------------------------------------------
+
+
+def test_disk_data_disks_defaults_to_empty():
+    d = Disk()
+    assert d.data_disks == []
+
+
+def test_disk_data_disks_accepts_list():
+    from ks_gen.config import DataDisk
+
+    d = Disk(target="sda", data_disks=[DataDisk(target="sdb", mount="/data")])
+    assert len(d.data_disks) == 1
+    assert d.data_disks[0].target == "sdb"
+
+
+# --- HostConfig cross-validators -------------------------------------------
+
+
+def _minimal_payload(**overrides):
+    base = {
+        "system": {"hostname": "host01.example.com"},
+        "user": {
+            "admin": {
+                "name": "opsadmin",
+                "authorized_keys": ["ssh-ed25519 AAAA a@b"],
+                "sudo": "nopasswd_yes",
+            }
+        },
+    }
+    base.update(overrides)
+    return base
+
+
+def test_host_config_data_disks_require_target():
+    payload = _minimal_payload(
+        disk={
+            "data_disks": [{"target": "sdb", "mount": "/data"}],
+        },
+    )
+    with pytest.raises(ValidationError, match=r"disk\.data_disks is non-empty"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_data_disks_target_collides_with_system_target():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [{"target": "sda", "mount": "/data"}],
+        },
+    )
+    with pytest.raises(ValidationError, match="collides"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_two_data_disks_same_target_rejected():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [
+                {"target": "sdb", "mount": "/data"},
+                {"target": "sdb", "mount": "/scratch"},
+            ],
+        },
+    )
+    with pytest.raises(ValidationError, match="collides"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_data_disks_mount_collides_with_stig_lv():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [{"target": "sdb", "mount": "/home"}],
+        },
+    )
+    with pytest.raises(ValidationError, match="reserved"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_data_disks_mount_collides_with_root():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [{"target": "sdb", "mount": "/"}],
+        },
+    )
+    # "/" fails the mount pydantic pattern (needs leading / + at least one
+    # more char). The model-level reserved-mount check catches /boot etc.
+    # Use /boot to hit the cross-validator path.
+    payload2 = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [{"target": "sdb", "mount": "/boot"}],
+        },
+    )
+    with pytest.raises(ValidationError):
+        HostConfig.model_validate(payload)
+    with pytest.raises(ValidationError, match="reserved"):
+        HostConfig.model_validate(payload2)
+
+
+def test_host_config_data_disks_mount_collides_with_containers_srv():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [{"target": "sdb", "mount": "/srv/containers"}],
+        },
+        containers={
+            "enabled": True,
+            "users": [{"name": "webapp", "authorized_keys": ["ssh-ed25519 K w@h"]}],
+        },
+    )
+    with pytest.raises(ValidationError, match="reserved"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_two_data_disks_same_mount_rejected():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [
+                {"target": "sdb", "mount": "/data"},
+                {"target": "sdc", "mount": "/data"},
+            ],
+        },
+    )
+    with pytest.raises(ValidationError, match="already-assigned"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_data_disks_mount_collides_with_custom_layout_lv():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "layout": {
+                "lvs": [
+                    {"name": "root", "mount": "/", "fstype": "xfs", "size": "15G"},
+                    {"name": "home", "mount": "/home", "fstype": "xfs", "size": "5G"},
+                    {"name": "tmp", "mount": "/tmp", "fstype": "xfs", "size": "3G"},
+                    {"name": "var", "mount": "/var", "fstype": "xfs", "size": "10G"},
+                    {"name": "varlog", "mount": "/var/log", "fstype": "xfs", "size": "5G"},
+                    {
+                        "name": "varlogaudit",
+                        "mount": "/var/log/audit",
+                        "fstype": "xfs",
+                        "size": "3G",
+                    },
+                    {"name": "vartmp", "mount": "/var/tmp", "fstype": "xfs", "size": "2G"},
+                    {"name": "srv", "mount": "/srv", "fstype": "xfs", "size": "20G"},
+                    {"name": "swap", "fstype": "swap", "size": "2G"},
+                ],
+            },
+            "data_disks": [{"target": "sdb", "mount": "/srv"}],
+        },
+    )
+    with pytest.raises(ValidationError, match="reserved"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_minimal_preset_rejects_data_disks():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "preset": "minimal",
+            "data_disks": [{"target": "sdb", "mount": "/data"}],
+        },
+    )
+    with pytest.raises(ValidationError, match=r"incompatible with disk\.data_disks"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_data_disks_pass_through_happy_path():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [{"target": "sdb", "mount": "/data"}],
+        },
+    )
+    cfg = HostConfig.model_validate(payload)
+    assert len(cfg.disk.data_disks) == 1
+    assert cfg.disk.data_disks[0].mount == "/data"
