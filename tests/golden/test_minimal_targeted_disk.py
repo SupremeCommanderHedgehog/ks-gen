@@ -70,3 +70,71 @@ def test_minimal_targeted_disk_wipe_false_keeps_ignoredisk_and_bootdrive():
     assert "--boot-drive=sda" in bootloader_line
     assert "clearpart" not in ks
     assert "zerombr" not in ks
+
+
+def test_data_disks_wipe_extends_ignoredisk_and_clearpart_and_adds_part():
+    import tempfile
+
+    yaml = (
+        "system:\n  hostname: twodisk.example.com\n"
+        "user:\n  admin:\n    name: opsadmin\n"
+        "    authorized_keys:\n"
+        '      - "ssh-ed25519 AAAA test@bastion"\n'
+        "    sudo: nopasswd_yes\n"
+        "disk:\n"
+        "  target: sda\n"
+        "  preset: stig_server\n"
+        "  data_disks:\n"
+        "    - target: sdb\n"
+        "      mount: /data\n"
+        "      fstype: xfs\n"
+        "      wipe: true\n"
+    )
+    with tempfile.NamedTemporaryFile("w", suffix=".host.yaml", delete=False) as fh:
+        fh.write(yaml)
+        path = Path(fh.name)
+    try:
+        bundle = build_bundle(load_host_config(path, sets=[]))
+    finally:
+        path.unlink()
+    ks = bundle.ks_cfg
+    assert "ignoredisk --only-use=sda,sdb" in ks
+    assert "clearpart --all --initlabel --drives=sda,sdb" in ks
+    bootloader_line = next(line for line in ks.splitlines() if line.startswith("bootloader "))
+    assert "--boot-drive=sda" in bootloader_line
+    assert 'part /data --fstype=xfs --grow --size=1 --ondisk=sdb --fsoptions="nodev,nosuid"' in ks
+
+
+def test_data_disks_preserve_omits_target_from_ignoredisk():
+    import tempfile
+
+    yaml = (
+        "system:\n  hostname: presrv.example.com\n"
+        "user:\n  admin:\n    name: opsadmin\n"
+        "    authorized_keys:\n"
+        '      - "ssh-ed25519 AAAA test@bastion"\n'
+        "    sudo: nopasswd_yes\n"
+        "disk:\n"
+        "  target: sda\n"
+        "  preset: stig_server\n"
+        "  data_disks:\n"
+        "    - target: sdb\n"
+        "      mount: /data\n"
+        "      wipe: false\n"
+        "      partition: 1\n"
+    )
+    with tempfile.NamedTemporaryFile("w", suffix=".host.yaml", delete=False) as fh:
+        fh.write(yaml)
+        path = Path(fh.name)
+    try:
+        bundle = build_bundle(load_host_config(path, sets=[]))
+    finally:
+        path.unlink()
+    ks = bundle.ks_cfg
+    # sdb is preserve -> NOT in ignoredisk, NOT in clearpart drives, NO part line
+    assert "ignoredisk --only-use=sda" in ks
+    assert "sdb" not in ks.split("ignoredisk")[1].split("\n")[0]
+    assert "clearpart --all --initlabel --drives=sda" in ks
+    assert "--ondisk=sdb" not in ks
+    # The %post rule writes the fstab entry
+    assert 'echo "/dev/disk/by-id/sdb-part1 /data xfs nodev,nosuid 0 2" >> /etc/fstab' in ks

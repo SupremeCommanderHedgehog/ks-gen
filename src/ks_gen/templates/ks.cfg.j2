@@ -18,8 +18,9 @@ user --name={{ _admin.name }} --password={{ _admin.password }} --iscrypted --gro
 {% else -%}
 user --name={{ _admin.name }} --lock --groups={{ _admin.groups | join(',') }} --gecos="{{ _admin.gecos }}" --shell={{ _admin.shell }}
 {% endif -%}
+{% set _wipe_targets = ([cfg.disk.target] + cfg.disk.data_disks | selectattr('wipe') | map(attribute='target') | list) | reject('none') | list -%}
 {% if cfg.disk.target -%}
-ignoredisk --only-use={{ cfg.disk.target }}
+ignoredisk --only-use={{ _wipe_targets | join(',') }}
 {% endif -%}
 {% set BOOT_DRIVE = (' --boot-drive=' ~ cfg.disk.target) if cfg.disk.target else '' -%}
 {% if cfg.disk.bootloader_password -%}
@@ -31,7 +32,7 @@ bootloader --location=mbr{{ BOOT_DRIVE }} --append="audit=1 audit_backlog_limit=
 {% if cfg.disk.wipe -%}
 zerombr
 {% if cfg.disk.target -%}
-clearpart --all --initlabel --drives={{ cfg.disk.target }}
+clearpart --all --initlabel --drives={{ _wipe_targets | join(',') }}
 {% else -%}
 clearpart --all --initlabel
 {% endif -%}
@@ -42,6 +43,9 @@ clearpart --all --initlabel
 {% else -%}
 {% include 'partials/partitioning_' ~ cfg.disk.preset.value ~ '.j2' %}
 {% endif %}
+{% for d in cfg.disk.data_disks if d.wipe -%}
+part {{ d.mount }} --fstype={{ d.fstype }} --grow --size=1 --ondisk={{ d.target }}{% if d.fsoptions %} --fsoptions="{{ d.fsoptions }}"{% endif %}
+{% endfor -%}
 {% if cfg.containers.enabled %}
 logvol /srv/containers --vgname={{ cfg.disk.layout.vg_name if cfg.disk.layout else 'vg_root' }} --name=containers --fstype=xfs --size={{ cfg.containers.volume.size_mib }} --fsoptions="{{ cfg.containers.volume.fsoptions }}"
 {% endif %}
