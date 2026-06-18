@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import re
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 
 class StrictModel(BaseModel):
@@ -666,7 +666,14 @@ class ExceptionDecl(StrictModel):
     stig_rules_disabled: list[str] = Field(..., min_length=1)
 
 
+_DEFAULT_SCAP_CONTENT_BY_DISTRO: dict[str, str] = {
+    "alma9": "ssg-almalinux9-ds.xml",
+    "ubuntu2404": "ssg-ubuntu2404-ds.xml",
+}
+
+
 class HostConfig(StrictModel):
+    distro: Literal["alma9", "ubuntu2404"] = "alma9"
     meta: Meta = Field(default_factory=Meta)
     system: System
     network: Network = Field(default_factory=Network)
@@ -703,6 +710,47 @@ class HostConfig(StrictModel):
                 "admin unable to escalate privileges."
             )
         return self
+
+    @model_validator(mode="before")
+    @classmethod
+    def _scap_content_matches_distro_before(
+        cls, data: dict[str, Any], info: ValidationInfo
+    ) -> dict[str, Any]:
+        """Check and adjust scap_content before model construction."""
+        distro = data.get("distro", "alma9")
+        meta_was_explicit = "meta" in data
+
+        # Only process if distro is a valid value; let Literal validation catch invalid ones
+        if distro not in _DEFAULT_SCAP_CONTENT_BY_DISTRO:
+            return data
+
+        expected = _DEFAULT_SCAP_CONTENT_BY_DISTRO[distro]
+        alma_default = _DEFAULT_SCAP_CONTENT_BY_DISTRO["alma9"]
+
+        # If meta was not explicitly provided and distro is not alma9, we'll auto-update it later
+        # If meta was explicitly provided, validate it matches the distro
+        if meta_was_explicit:
+            meta_data = data.get("meta", {})
+            if isinstance(meta_data, dict):
+                scap_content = meta_data.get("scap_content", alma_default)
+            else:
+                scap_content = getattr(meta_data, "scap_content", alma_default)
+
+            # If explicitly set meta and it mismatches, raise error
+            if scap_content != expected:
+                raise ValueError(
+                    f"meta.scap_content={scap_content!r} does not match distro={distro!r}; "
+                    f"expected {expected!r}"
+                )
+        else:
+            # If meta not provided and distro is not alma9, inject the correct scap_content
+            if distro != "alma9":
+                if "meta" not in data:
+                    data["meta"] = {}
+                if isinstance(data["meta"], dict):
+                    data["meta"]["scap_content"] = expected
+
+        return data
 
     @model_validator(mode="after")
     def _minimal_preset_rejects_luks(self) -> HostConfig:
