@@ -59,22 +59,24 @@ All fields not listed below inherit defaults from
 
 ### Admin user
 
-Console login is required (admin must be able to log in at the box
-without SSH for break-glass), so this matches the cougar pattern, not
-the previous unifi minimal pattern:
+Locked admin with NOPASSWD sudo and key-only SSH. Console login is
+intentionally impossible — offline recovery is GRUB emergency shell
+(`rd.break=switch_root`) only. This matches the project default
+(`reference_ks_gen_vm_testing` and the broader unifi pattern), not
+cougar's console-password break-glass model.
 
 | Field | Value |
 |---|---|
 | `user.admin.name` | `yizshachuck-admin` |
 | `user.admin.gecos` | `"yizshachuck-admin"` |
 | `user.admin.authorized_keys` | `["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE4lYlqPDyt+c2YsS54ML0gS0eADwa/AswXmszzTUbdv pat@krypte.me"]` |
-| `user.admin.password` | `$6$…` hash from `openssl passwd -6`; placeholder string in YAML, replaced before `ks-gen gen` |
-| `user.admin.sudo` | `nopasswd_no` (sudo prompts for password) |
+| `user.admin.password` | `null` (account is `passwd -l`-locked in `%post`) |
+| `user.admin.sudo` | `nopasswd_yes` (sudoers fragment: `NOPASSWD: ALL`) |
 
-The `AdminUser._keys_or_password` validator accepts the placeholder
-string as a real value (pydantic doesn't introspect hash format), so a
-stale placeholder would silently produce an unusable console login. The
-YAML comment explicitly flags this.
+The `HostConfig._admin_credential_mutex` validator enforces that
+`password=null` implies `sudo=nopasswd_yes` — otherwise a locked
+account could never escalate. `AdminUser._keys_or_password` enforces
+at least one authorized key when the password is null.
 
 ### Packages
 
@@ -147,8 +149,6 @@ together.
 
 ## Build pipeline
 
-After the user replaces the password placeholder:
-
 ```bash
 # WSL on Windows (xorriso only available there)
 cd /mnt/c/Users/yizshachuck/source/alma-linux-security
@@ -174,9 +174,10 @@ The generated `ks.cfg` should show:
 - `logvol /var --vgname=vg_root --name=lv_var --fstype=xfs --size=51200 --fsoptions="nodev"` (50 G = 51200 MiB)
 - `logvol /home --vgname=vg_root --name=lv_home --fstype=xfs --size=143360 --fsoptions="nodev,nosuid"` (140 G)
 - `network --device=eno1 --bootproto=dhcp --hostname=unifi --onboot=yes`
-- `user --name=yizshachuck-admin --password=<hash> --iscrypted --groups=wheel --gecos="yizshachuck-admin" --shell=/bin/bash`
-  (note: no `--nopasswd` line in `%post` sudoers — `nopasswd_no` means
-  sudo prompts)
+- `user --name=yizshachuck-admin --lock --groups=wheel --gecos="yizshachuck-admin" --shell=/bin/bash`
+- `passwd -l yizshachuck-admin` in `%post` (admin account locked)
+- `yizshachuck-admin ALL=(ALL) NOPASSWD: ALL` in
+  `/etc/sudoers.d/00-ks-gen-admin`
 
 ## Out of scope
 
