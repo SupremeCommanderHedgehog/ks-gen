@@ -4,7 +4,7 @@ import re
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StrictModel(BaseModel):
@@ -713,9 +713,7 @@ class HostConfig(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _scap_content_matches_distro_before(
-        cls, data: dict[str, Any], info: ValidationInfo
-    ) -> dict[str, Any]:
+    def _scap_content_matches_distro_before(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Check and adjust scap_content before model construction."""
         distro = data.get("distro", "alma9")
         meta_was_explicit = "meta" in data
