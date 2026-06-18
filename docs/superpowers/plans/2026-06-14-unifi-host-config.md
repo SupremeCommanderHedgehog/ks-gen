@@ -13,7 +13,7 @@ config it accepts — successfully produces a bundle from this file. No
 new tests, no production code edits.
 
 **Tech Stack:** Plain YAML; ks-gen 0.12.2 CLI from the project's
-Windows `.venv` (`C:\Users\yizshachuck\source\alma-linux-security\.venv\Scripts\ks-gen.exe`).
+Windows `.venv` (`C:\Users\yizshachuck\source\ks-gen\.venv\Scripts\ks-gen.exe`).
 
 ---
 
@@ -32,7 +32,7 @@ No source-code files are modified.
 ### Task 1: Write `build/unifi/unifi.yaml`
 
 **Files:**
-- Create: `C:\Users\yizshachuck\source\alma-linux-security\build\unifi\unifi.yaml`
+- Create: `C:\Users\yizshachuck\source\ks-gen\build\unifi\unifi.yaml`
 
 - [x] **Step 1: Write the config file**
 
@@ -71,7 +71,7 @@ packages:
 
 PowerShell:
 ```powershell
-Test-Path C:\Users\yizshachuck\source\alma-linux-security\build\unifi\unifi.yaml
+Test-Path C:\Users\yizshachuck\source\ks-gen\build\unifi\unifi.yaml
 ```
 Expected: `True`
 
@@ -80,7 +80,7 @@ Expected: `True`
 `build/` is in `.gitignore`. Skip `git add`. Confirm with:
 
 ```powershell
-git -C C:\Users\yizshachuck\source\alma-linux-security check-ignore -v build\unifi\unifi.yaml
+git -C C:\Users\yizshachuck\source\ks-gen check-ignore -v build\unifi\unifi.yaml
 ```
 Expected: a line like `.gitignore:<n>:build/    build/unifi/unifi.yaml`.
 
@@ -96,9 +96,9 @@ Expected: a line like `.gitignore:<n>:build/    build/unifi/unifi.yaml`.
 
 PowerShell:
 ```powershell
-C:\Users\yizshachuck\source\alma-linux-security\.venv\Scripts\ks-gen.exe gen `
-  --config C:\Users\yizshachuck\source\alma-linux-security\build\unifi\unifi.yaml `
-  --out    C:\Users\yizshachuck\source\alma-linux-security\build\unifi\bundle
+C:\Users\yizshachuck\source\ks-gen\.venv\Scripts\ks-gen.exe gen `
+  --config C:\Users\yizshachuck\source\ks-gen\build\unifi\unifi.yaml `
+  --out    C:\Users\yizshachuck\source\ks-gen\build\unifi\bundle
 ```
 
 Expected on success: exit code 0, last line `Wrote bundle to C:\...\build\unifi\bundle`.
@@ -112,7 +112,7 @@ fix whichever field that lint reports.
 
 PowerShell:
 ```powershell
-ls C:\Users\yizshachuck\source\alma-linux-security\build\unifi\bundle
+ls C:\Users\yizshachuck\source\ks-gen\build\unifi\bundle
 ```
 Expected: four files — `ks.cfg`, `tailoring.xml`, `exceptions.md`,
 `host.yaml`.
@@ -121,7 +121,7 @@ Expected: four files — `ks.cfg`, `tailoring.xml`, `exceptions.md`,
 
 PowerShell:
 ```powershell
-Select-String -Path C:\Users\yizshachuck\source\alma-linux-security\build\unifi\bundle\ks.cfg -Pattern '^(network --hostname|user --name|rootpw|sshkey)' | Select-Object -First 10
+Select-String -Path C:\Users\yizshachuck\source\ks-gen\build\unifi\bundle\ks.cfg -Pattern '^(network --hostname|user --name|rootpw|sshkey)' | Select-Object -First 10
 ```
 
 Expected (order may vary): a `network --hostname=unifi ...` line, a
@@ -134,7 +134,7 @@ STIG profile).
 
 PowerShell:
 ```powershell
-Select-String -Path C:\Users\yizshachuck\source\alma-linux-security\build\unifi\bundle\ks.cfg -Pattern '^@standard$|^logrotate$|^postfix$|^cronie$|^crontabs$|^parted$'
+Select-String -Path C:\Users\yizshachuck\source\ks-gen\build\unifi\bundle\ks.cfg -Pattern '^@standard$|^logrotate$|^postfix$|^cronie$|^crontabs$|^parted$'
 ```
 
 Expected: no `@standard` line, but `logrotate`, `postfix`, `cronie`,
