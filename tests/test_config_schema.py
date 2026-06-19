@@ -30,6 +30,7 @@ from ks_gen.config import (
     PackagesPreset,
     RebootWindowCfg,
     Ssh,
+    SshKeepOpenCfg,
     System,
     Time,
     UnattendedUpdatesCfg,
@@ -238,6 +239,8 @@ def test_overrides_safe_defaults():
     assert o.auditd.disk_full_action == AuditdSystemAction.SUSPEND
     assert o.auditd.max_log_file_action == AuditdMaxFileAction.ROTATE
     assert o.ssh_keep_open.ensure_firewalld_port is True
+    assert o.ssh_keep_open.ensure_selinux_port is True
+    assert o.ssh_keep_open.ensure_ufw_port is True
     assert o.usbguard.enable is False
     assert o.dod_root_ca.install is False
     assert "usb-storage" in o.kernel_module_blacklist.modules
@@ -246,6 +249,13 @@ def test_overrides_safe_defaults():
 def test_auditd_actions_reject_bogus():
     with pytest.raises(ValidationError):
         AuditdActionsCfg(disk_full_action="BURN")  # type: ignore[arg-type]
+
+
+def test_ssh_keep_open_cfg_defaults_include_ufw_port():
+    cfg = SshKeepOpenCfg()
+    assert cfg.ensure_firewalld_port is True
+    assert cfg.ensure_selinux_port is True
+    assert cfg.ensure_ufw_port is True
 
 
 def test_custom_post_passes_through():
