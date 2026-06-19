@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+from ks_gen.rules._meta import dod_root_ca as meta
 from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 
 if TYPE_CHECKING:
@@ -13,9 +14,9 @@ _RULE_ID = "xccdf_org.ssgproject.content_rule_install_DoD_intermediate_certifica
 
 @dataclass(frozen=True)
 class _Rule:
-    id: str = "dod_root_ca"
-    summary: str = "Skip DoD root CA bundle installation."
-    depends_on: list[str] = field(default_factory=list)
+    id: str = meta.ID
+    summary: str = meta.SUMMARY
+    depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
     stig_rules_affected: list[str] = field(default_factory=lambda: [_RULE_ID])
 
     def applies(self, cfg: HostConfig) -> bool:
@@ -32,10 +33,10 @@ class _Rule:
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
         return ExceptionEntry(
-            rule_id="dod_root_ca",
-            summary="DoD root/intermediate CA bundle not installed.",
+            rule_id=meta.ID,
+            summary=meta.EXCEPTION_SUMMARY,
             stig_rules_disabled=[_RULE_ID],
-            reason="Server is not a DoD asset; bundle is not applicable.",
+            reason=meta.EXCEPTION_REASON,
         )
 
 
