@@ -55,7 +55,11 @@ def test_parse_round_trips_build_tailoring_xml() -> None:
         TailoringOp(rule_id="rule_b", action="select"),
         TailoringOp(rule_id="rule_c", action="set_value", value="24"),
     ]
-    xml = build_tailoring_xml(ops, profile_id="xccdf_org.ssgproject.content_profile_stig")
+    xml = build_tailoring_xml(
+        ops,
+        profile_id="xccdf_org.ssgproject.content_profile_stig",
+        scap_content="ssg-almalinux9-ds.xml",
+    )
     parsed = parse_tailoring_xml(xml)
 
     assert parsed.profile_id == "xccdf_org.ssgproject.content_profile_stig"
@@ -64,7 +68,7 @@ def test_parse_round_trips_build_tailoring_xml() -> None:
 
 def test_parse_handles_empty_set_value() -> None:
     ops = [TailoringOp(rule_id="rule_a", action="set_value", value="")]
-    xml = build_tailoring_xml(ops, profile_id="p")
+    xml = build_tailoring_xml(ops, profile_id="p", scap_content="ssg-almalinux9-ds.xml")
     parsed = parse_tailoring_xml(xml)
     assert parsed.ops == [TailoringOp(rule_id="rule_a", action="set_value", value="")]
 

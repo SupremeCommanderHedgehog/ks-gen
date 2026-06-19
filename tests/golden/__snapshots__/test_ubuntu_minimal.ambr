@@ -187,7 +187,7 @@
   '''
   <?xml version='1.0' encoding='UTF-8'?>
   <xccdf:Tailoring xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" id="xccdf_ks-gen_tailoring_default">
-    <xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml"/>
+    <xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml"/>
     <xccdf:version time="SNAP">1</xccdf:version>
     <xccdf:Profile id="xccdf_ks-gen_profile_tailored" extends="xccdf_org.ssgproject.content_profile_stig">
       <xccdf:title xml:lang="en-US">ks-gen tailored xccdf_org.ssgproject.content_profile_stig</xccdf:title>
@@ -214,6 +214,8 @@
           shell: /bin/bash
           ssh_authorized_keys:
             - "ssh-ed25519 AAAA a@b"
+    packages:
+      - "ufw"
     late-commands:
     - |
       curtin in-target --target=/target -- bash -c '# rule:banner_text
