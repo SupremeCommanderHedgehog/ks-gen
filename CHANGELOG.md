@@ -3,6 +3,21 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.16.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.15.0...v0.16.0) (2026-06-19)
+
+
+### Features
+
+* **rules/ubuntu2404:** banner_text port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.1) ([#101](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/101)) ([1df3798](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1df3798ba57c288c95609727a17ea346f34ffeff))
+* **rules/ubuntu2404:** ssh_config_apply port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.2) ([#102](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/102)) ([1e4cd9e](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1e4cd9ee440d030724ef7a4c920386993dc310f1))
+
+
+### Bug Fixes
+
+* **tailoring:** derive benchmark href from cfg.meta.scap_content ([#97](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/97)) ([#98](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/98)) ([2def33e](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/2def33e9c7d22529e2dd9f24707d07661d77c1e3))
+* **templates:** carry cfg.user.admin.password into autoinstall users[].passwd ([#96](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/96)) ([#100](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/100)) ([0a31081](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/0a3108112b808a680b265a256a78973cd88fda72))
+* **writer/ubuntu2404:** wire rule emit_packages into autoinstall packages ([#95](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/95)) ([#99](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/99)) ([a9fbddc](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/a9fbddc26cf49a8761b30e823148e82d8d27f5ab))
+
 ## [0.15.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.14.0...v0.15.0) (2026-06-19)
 
 
