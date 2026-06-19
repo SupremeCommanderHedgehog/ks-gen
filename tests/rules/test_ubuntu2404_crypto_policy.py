@@ -131,3 +131,23 @@ def test_openssl_future_minproto_tlsv1_3_seclevel_3(ubuntu_cfg_factory):
     out = RULE.emit_post(cfg)
     assert "MinProtocol = TLSv1.3" in out
     assert "CipherString = DEFAULT@SECLEVEL=3" in out
+
+
+def test_gnutls_stig_emits_secure128(ubuntu_cfg_factory):
+    # STIG = SECURE128 (gnutls28 built-in profile for 128-bit equivalent
+    # security). Identical to MODERN under this rule.
+    from ks_gen.config import Crypto, CryptoPolicy
+
+    cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.STIG)})
+    out = RULE.emit_post(cfg)
+    # The priority appears inside the heredoc body, on its own line.
+    assert "SECURE128\n" in out
+    assert "SECURE256" not in out
+
+
+def test_gnutls_future_emits_secure256(ubuntu_cfg_factory):
+    from ks_gen.config import Crypto, CryptoPolicy
+
+    cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.FUTURE)})
+    out = RULE.emit_post(cfg)
+    assert "SECURE256\n" in out
