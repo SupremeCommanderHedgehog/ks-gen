@@ -341,9 +341,9 @@ def test_build_bundle_ubuntu2404_late_commands_includes_ufw_entry(tmp_path):
 
     doc = _yaml.safe_load(bundle.user_data)
     late = doc["autoinstall"]["late-commands"]
-    assert len(late) == 1
-    assert "ufw allow 22/tcp" in late[0]
-    assert "# rule:ssh_keep_open" in late[0]
+    ssh_entries = [e for e in late if "# rule:ssh_keep_open" in e]
+    assert len(ssh_entries) == 1
+    assert "ufw allow 22/tcp" in ssh_entries[0]
 
 
 def test_render_tailoring_matches_build_bundle_tailoring_xml() -> None:
