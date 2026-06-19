@@ -3,14 +3,22 @@ from ks_gen.tailoring import build_tailoring_xml
 
 
 def test_empty_ops_produces_skeleton():
-    xml = build_tailoring_xml([], profile_id="xccdf_org.ssgproject.content_profile_stig")
+    xml = build_tailoring_xml(
+        [],
+        profile_id="xccdf_org.ssgproject.content_profile_stig",
+        scap_content="ssg-almalinux9-ds.xml",
+    )
     assert "<xccdf:Tailoring" in xml
     assert 'extends="xccdf_org.ssgproject.content_profile_stig"' in xml
 
 
 def test_disable_rule_select_false():
     ops = [TailoringOp(rule_id="xccdf_org.ssgproject.content_rule_foo", action="disable")]
-    xml = build_tailoring_xml(ops, profile_id="xccdf_org.ssgproject.content_profile_stig")
+    xml = build_tailoring_xml(
+        ops,
+        profile_id="xccdf_org.ssgproject.content_profile_stig",
+        scap_content="ssg-almalinux9-ds.xml",
+    )
     assert '<xccdf:select idref="xccdf_org.ssgproject.content_rule_foo" selected="false"/>' in xml
 
 
@@ -22,7 +30,11 @@ def test_set_value_emits_set_value_element():
             value="SUSPEND",
         )
     ]
-    xml = build_tailoring_xml(ops, profile_id="xccdf_org.ssgproject.content_profile_stig")
+    xml = build_tailoring_xml(
+        ops,
+        profile_id="xccdf_org.ssgproject.content_profile_stig",
+        scap_content="ssg-almalinux9-ds.xml",
+    )
     assert (
         '<xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_auditd_disk_full_action">'
         "SUSPEND</xccdf:set-value>" in xml
@@ -31,5 +43,28 @@ def test_set_value_emits_set_value_element():
 
 def test_select_action_select_true():
     ops = [TailoringOp(rule_id="xccdf_org.ssgproject.content_rule_bar", action="select")]
-    xml = build_tailoring_xml(ops, profile_id="xccdf_org.ssgproject.content_profile_stig")
+    xml = build_tailoring_xml(
+        ops,
+        profile_id="xccdf_org.ssgproject.content_profile_stig",
+        scap_content="ssg-almalinux9-ds.xml",
+    )
     assert '<xccdf:select idref="xccdf_org.ssgproject.content_rule_bar" selected="true"/>' in xml
+
+
+def test_benchmark_href_uses_scap_content_alma():
+    xml = build_tailoring_xml(
+        [],
+        profile_id="xccdf_org.ssgproject.content_profile_stig",
+        scap_content="ssg-almalinux9-ds.xml",
+    )
+    assert '<xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml"/>' in xml
+
+
+def test_benchmark_href_uses_scap_content_ubuntu():
+    xml = build_tailoring_xml(
+        [],
+        profile_id="xccdf_org.ssgproject.content_profile_stig",
+        scap_content="ssg-ubuntu2404-ds.xml",
+    )
+    assert '<xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml"/>' in xml
+    assert "ssg-almalinux9-ds.xml" not in xml
