@@ -151,3 +151,38 @@ def test_gnutls_future_emits_secure256(ubuntu_cfg_factory):
     cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.FUTURE)})
     out = RULE.emit_post(cfg)
     assert "SECURE256\n" in out
+
+
+def test_applies_always_true(ubuntu_cfg_factory):
+    assert RULE.applies(ubuntu_cfg_factory()) is True
+
+
+def test_emit_packages_returns_empty(ubuntu_cfg_factory):
+    # openssh-server, openssl, libgnutls30 all ship in Ubuntu Server's
+    # minimal install. No apt deps.
+    assert RULE.emit_packages(ubuntu_cfg_factory()) == []
+
+
+def test_emit_tailoring_returns_empty_deferred(ubuntu_cfg_factory):
+    # Deferred until ssg-ubuntu2404-ds.xml crypto rule survey lands in
+    # the audit-story PR.
+    assert RULE.emit_tailoring(ubuntu_cfg_factory()) == []
+
+
+def test_exception_entry_returns_none_deferred(ubuntu_cfg_factory):
+    # Deferred until ssg-ubuntu2404-ds.xml crypto rule survey lands.
+    assert RULE.exception_entry(ubuntu_cfg_factory()) is None
+
+
+def test_depends_on_is_empty(ubuntu_cfg_factory):
+    # Mirrors meta's empty DEPENDS_ON. The drop-in lex-orders after
+    # ssh_config_apply's 00-ks-gen.conf without needing an explicit
+    # depends_on edge — they don't overlap on directives.
+    assert RULE.depends_on == []
+
+
+def test_id_and_summary_come_from_shared_meta(ubuntu_cfg_factory):
+    from ks_gen.rules._meta import crypto_policy as meta
+
+    assert RULE.id == meta.ID
+    assert RULE.summary == meta.SUMMARY
