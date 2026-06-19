@@ -3,6 +3,20 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.14.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.13.0...v0.14.0) (2026-06-19)
+
+
+### Features
+
+* **config,rules:** distro discriminator + per-distro registry ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 1) ([#90](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/90)) ([60d83a1](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/60d83a12fcce9d2028a03e1687ac91d37010857e))
+
+
+### Documentation
+
+* ubuntu 24.04 STIG autoinstall design spec ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81)) ([#89](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/89)) ([8d194fb](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/8d194fb941601883c51216ed9e2b9249e8be26ca))
+* unifi host kickstart rebuild — spec, plan, post-impl correction ([#80](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/80)) ([655f1a7](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/655f1a7d4362bb76c8a518aafc760b0a3c4107f4))
+* update stale alma-linux-security paths after folder rename ([#82](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/82)) ([732c7e6](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/732c7e612694bd590df0f7535af56cb4d7702c2f))
+
 ## [0.13.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.12.2...v0.13.0) (2026-06-17)
 
 
