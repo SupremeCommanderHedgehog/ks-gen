@@ -83,7 +83,7 @@ def test_ssh_port_opened_in_firewalld_before_any_firewalld_enable_command(cfg):
 def test_no_disabled_xccdf_rule_without_exception_entry(cfg):
     from ks_gen.registry import load_rules
 
-    for r in load_rules():
+    for r in load_rules(cfg.distro):
         if not r.applies(cfg):
             continue
         ops = r.emit_tailoring(cfg)

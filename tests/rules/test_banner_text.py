@@ -1,4 +1,4 @@
-from ks_gen.rules.banner_text import RULE
+from ks_gen.rules.alma9.banner_text import RULE
 
 
 def test_post_writes_issue_files(minimal_cfg):

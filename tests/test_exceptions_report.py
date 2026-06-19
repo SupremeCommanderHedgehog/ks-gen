@@ -4,7 +4,7 @@ from ks_gen.topo import topo_sort
 
 
 def test_report_lists_applied_rules(minimal_cfg):
-    rules = [r for r in topo_sort(load_rules()) if r.applies(minimal_cfg)]
+    rules = [r for r in topo_sort(load_rules(minimal_cfg.distro)) if r.applies(minimal_cfg)]
     md = render_exceptions_md(minimal_cfg, rules)
     assert "# Exceptions report" in md
     assert "admin_user_and_keys" in md
@@ -12,7 +12,7 @@ def test_report_lists_applied_rules(minimal_cfg):
 
 
 def test_report_lists_disabled_xccdf_rules(minimal_cfg):
-    rules = [r for r in topo_sort(load_rules()) if r.applies(minimal_cfg)]
+    rules = [r for r in topo_sort(load_rules(minimal_cfg.distro)) if r.applies(minimal_cfg)]
     md = render_exceptions_md(minimal_cfg, rules)
     assert "banner_etc_issue" in md
     assert "sshd_use_approved_ciphers" in md
@@ -32,14 +32,14 @@ def test_report_includes_declared_exceptions(minimal_cfg):
             ]
         }
     )
-    rules = [r for r in topo_sort(load_rules()) if r.applies(cfg)]
+    rules = [r for r in topo_sort(load_rules(cfg.distro)) if r.applies(cfg)]
     md = render_exceptions_md(cfg, rules)
     assert "no-luks" in md
     assert "encrypt_partitions" in md
 
 
 def test_report_counts_summary(minimal_cfg):
-    rules = [r for r in topo_sort(load_rules()) if r.applies(minimal_cfg)]
+    rules = [r for r in topo_sort(load_rules(minimal_cfg.distro)) if r.applies(minimal_cfg)]
     md = render_exceptions_md(minimal_cfg, rules)
     assert "Applied rules:" in md
     assert "Tailored XCCDF rules:" in md

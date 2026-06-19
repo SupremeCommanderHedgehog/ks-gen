@@ -4,7 +4,7 @@ from ks_gen.config import (
     AuditdSystemAction,
     Overrides,
 )
-from ks_gen.rules.auditd_actions import RULE
+from ks_gen.rules.alma9.auditd_actions import RULE
 
 
 def test_tailoring_uses_default_actions(minimal_cfg):
