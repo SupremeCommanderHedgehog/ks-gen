@@ -110,6 +110,7 @@ def test_run_verify_check_tailoring_true_attaches_drift_report(tmp_path: Path) -
             )
         ],
         profile_id="xccdf_org.ssgproject.content_profile_stig",
+        scap_content="ssg-almalinux9-ds.xml",
     )
 
     with (
@@ -424,6 +425,7 @@ def test_run_verify_baseline_path_composes_with_check_tailoring(tmp_path: Path) 
     deployed_xml = build_tailoring_xml(
         [TailoringOp("xccdf_org.ssgproject.content_rule_synthetic_drift", "disable")],
         profile_id="xccdf_org.ssgproject.content_profile_stig",
+        scap_content="ssg-almalinux9-ds.xml",
     )
     _ = render_tailoring(cfg)  # warm any deferred imports — matches existing test pattern
 
