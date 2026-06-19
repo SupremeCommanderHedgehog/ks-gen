@@ -7,13 +7,14 @@
   Host: `u24-min`
   
   ## Summary
-  - Applied rules: 2
+  - Applied rules: 3
   - Tailored XCCDF rules: 0
   - Declared exceptions: 0
   
   ## Applied rules
   - `admin_user_and_keys` — Create wheel admin, drop authorized_keys, sudoers fragment.
   - `ssh_keep_open` — Ensure ssh.port reachable in firewalld + SELinux before sshd starts.
+  - `ssh_config_apply` — Write sshd drop-in config for Port/PermitRootLogin/PasswordAuthentication.
   
   ## Tailored XCCDF rules (oscap rules disabled or value-tailored)
   _(none)_
@@ -217,6 +218,22 @@
     - |
       curtin in-target --target=/target -- bash -c '# rule:ssh_keep_open
       ufw allow 22/tcp'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:ssh_config_apply
+      # Drop-in SSH server config (active on first boot)
+      install -d -m 755 /etc/ssh/sshd_config.d
+      cat > /etc/ssh/sshd_config.d/00-ks-gen.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      Port 22
+      PermitRootLogin no
+      PasswordAuthentication no
+      ClientAliveInterval 600
+      ClientAliveCountMax 1
+      MaxAuthTries 4
+      UsePAM yes
+      Banner /etc/ssh/sshd-banner
+      __KS_GEN_EOF__
+      chmod 600 /etc/ssh/sshd_config.d/00-ks-gen.conf
+      sshd -t'
   
   '''
 # ---
