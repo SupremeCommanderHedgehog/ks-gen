@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, assert_never
 
 import yaml
 
@@ -70,7 +70,7 @@ def build_bundle(cfg: HostConfig) -> Bundle:
         return _build_alma9_bundle(cfg)
     if cfg.distro == "ubuntu2404":
         return _build_ubuntu2404_bundle(cfg)
-    raise AssertionError(f"unhandled distro: {cfg.distro!r}")
+    assert_never(cfg.distro)
 
 
 def _build_alma9_bundle(cfg: HostConfig) -> Bundle:
