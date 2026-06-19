@@ -1,6 +1,7 @@
 import textwrap
 
 import pytest
+import yaml
 
 from ks_gen.loader import load_host_config
 from ks_gen.writer import Bundle, build_bundle, write_bundle
@@ -229,7 +230,8 @@ def test_build_bundle_ubuntu2404_returns_distro_tagged_bundle(tmp_path):
     assert bundle.user_data is not None
     assert bundle.meta_data is not None
     assert bundle.user_data.startswith("#cloud-config")
-    assert "instance-id: u24-test" in bundle.meta_data
+    meta = yaml.safe_load(bundle.meta_data)
+    assert meta["instance-id"] == "u24-test"
 
 
 def test_build_bundle_ubuntu2404_tailoring_is_valid_xccdf_skeleton(tmp_path):

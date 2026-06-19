@@ -1,2 +1,2 @@
-instance-id: {{ cfg.system.hostname }}
-local-hostname: {{ cfg.system.hostname }}
+instance-id: {{ cfg.system.hostname | tojson }}
+local-hostname: {{ cfg.system.hostname | tojson }}

@@ -1,3 +1,4 @@
+import pytest
 import yaml
 
 from ks_gen.skeleton import render_meta_data, render_user_data
@@ -46,3 +47,42 @@ def test_render_meta_data_carries_hostname(ubuntu_cfg_factory):
     doc = yaml.safe_load(text)
     assert doc["instance-id"] == "u24-meta-test"
     assert doc["local-hostname"] == "u24-meta-test"
+
+
+@pytest.mark.parametrize(
+    "hostname",
+    [
+        "true",  # YAML implicit bool
+        "null",  # YAML implicit None
+        "2026-06-19",  # YAML implicit date
+        "host:with:colons",
+        'host"with"quotes',
+    ],
+)
+def test_render_user_data_yaml_reserved_hostname_round_trips_as_string(
+    ubuntu_cfg_factory, hostname
+):
+    text = render_user_data(ubuntu_cfg_factory(hostname=hostname))
+    doc = yaml.safe_load(text)
+    assert isinstance(doc["autoinstall"]["identity"]["hostname"], str)
+    assert doc["autoinstall"]["identity"]["hostname"] == hostname
+
+
+@pytest.mark.parametrize(
+    "hostname",
+    [
+        "true",
+        "null",
+        "2026-06-19",
+        "host:with:colons",
+        'host"with"quotes',
+    ],
+)
+def test_render_meta_data_yaml_reserved_hostname_round_trips_as_string(
+    ubuntu_cfg_factory, hostname
+):
+    text = render_meta_data(ubuntu_cfg_factory(hostname=hostname))
+    doc = yaml.safe_load(text)
+    assert isinstance(doc["instance-id"], str)
+    assert doc["instance-id"] == hostname
+    assert doc["local-hostname"] == hostname

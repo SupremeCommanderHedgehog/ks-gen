@@ -23,7 +23,7 @@ from ks_gen.writer import build_bundle, write_bundle
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="ks-gen — DISA STIG AlmaLinux kickstart generator",
+    help="ks-gen — DISA STIG kickstart/autoinstall generator (AlmaLinux 9, Ubuntu 24.04)",
 )
 
 
@@ -44,6 +44,8 @@ def gen(
         raise typer.Exit(code=int(e.exit_code)) from None
     bundle = build_bundle(cfg)
     write_bundle(bundle, out)
+    # lint_kickstart validates ks.cfg invariants; skip for ubuntu2404 until
+    # phase 4 introduces a user-data lint.
     if bundle.distro == "alma9":
         report = lint_kickstart(out / "ks.cfg")
         if not report.ok:
@@ -120,11 +122,14 @@ def new_cmd(
     host_dir = write_initial(out, cfg, yaml_text)
     bundle = build_bundle(cfg)
     write_bundle(bundle, host_dir)
-    report = lint_kickstart(host_dir / "ks.cfg")
-    if not report.ok:
-        for f in report.failures:
-            typer.echo(f"lint FAIL: {f}", err=True)
-        raise typer.Exit(code=int(ExitCode.LINT_FAIL))
+    # lint_kickstart validates ks.cfg invariants; skip for ubuntu2404 until
+    # phase 4 introduces a user-data lint.
+    if bundle.distro == "alma9":
+        report = lint_kickstart(host_dir / "ks.cfg")
+        if not report.ok:
+            for f in report.failures:
+                typer.echo(f"lint FAIL: {f}", err=True)
+            raise typer.Exit(code=int(ExitCode.LINT_FAIL))
     typer.echo(f"Wrote bundle to {host_dir}")
 
 
