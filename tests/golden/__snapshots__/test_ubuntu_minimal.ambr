@@ -7,12 +7,13 @@
   Host: `u24-min`
   
   ## Summary
-  - Applied rules: 2
+  - Applied rules: 3
   - Tailored XCCDF rules: 0
   - Declared exceptions: 0
   
   ## Applied rules
   - `admin_user_and_keys` — Create wheel admin, drop authorized_keys, sudoers fragment.
+  - `banner_text` — Write civilian-equivalent login banner; suppress DoD-text oscap rules.
   - `ssh_keep_open` — Ensure ssh.port reachable in firewalld + SELinux before sshd starts.
   
   ## Tailored XCCDF rules (oscap rules disabled or value-tailored)
@@ -216,6 +217,27 @@
     packages:
       - "ufw"
     late-commands:
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:banner_text
+      # Civilian-equivalent login banner
+      cat > /etc/issue <<'"'"'__KS_GEN_EOF__'"'"'
+      WARNING: This is a private computer system. Unauthorized access is
+      prohibited. All activity on this system may be monitored and logged.
+      Use of this system constitutes consent to such monitoring.
+      __KS_GEN_EOF__
+      chmod 644 /etc/issue
+      cat > /etc/issue.net <<'"'"'__KS_GEN_EOF__'"'"'
+      WARNING: This is a private computer system. Unauthorized access is
+      prohibited. All activity on this system may be monitored and logged.
+      Use of this system constitutes consent to such monitoring.
+      __KS_GEN_EOF__
+      chmod 644 /etc/issue.net
+      cat > /etc/ssh/sshd-banner <<'"'"'__KS_GEN_EOF__'"'"'
+      WARNING: This is a private computer system. Unauthorized access is
+      prohibited. All activity on this system may be monitored and logged.
+      Use of this system constitutes consent to such monitoring.
+      __KS_GEN_EOF__
+      chmod 644 /etc/ssh/sshd-banner'
     - |
       curtin in-target --target=/target -- bash -c '# rule:ssh_keep_open
       ufw allow 22/tcp'
