@@ -1,4 +1,4 @@
-from ks_gen.rules.faillock_safety import RULE
+from ks_gen.rules.alma9.faillock_safety import RULE
 
 
 def test_applies_when_enabled(minimal_cfg):

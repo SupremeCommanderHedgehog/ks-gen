@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+from ks_gen.rules._meta import banner_text as meta
 from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 
 if TYPE_CHECKING:
@@ -24,9 +25,9 @@ _TARGET = {
 
 @dataclass(frozen=True)
 class _Rule:
-    id: str = "banner_text"
-    summary: str = "Write civilian-equivalent login banner; suppress DoD-text oscap rules."
-    depends_on: list[str] = field(default_factory=list)
+    id: str = meta.ID
+    summary: str = meta.SUMMARY
+    depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
     stig_rules_affected: list[str] = field(default_factory=lambda: list(_TAILORED))
 
     def applies(self, cfg: HostConfig) -> bool:
@@ -53,14 +54,10 @@ class _Rule:
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
         return ExceptionEntry(
-            rule_id="banner_text",
-            summary="Substitutes private-system banner for DISA-mandated DoD text.",
+            rule_id=meta.ID,
+            summary=meta.EXCEPTION_SUMMARY,
             stig_rules_disabled=list(_TAILORED),
-            reason=(
-                "Server is not a U.S. Government Information System; literal DoD banner "
-                "would make false legal claims. Civilian text satisfies the rule intent "
-                "(warn unauthorized users; consent to monitoring)."
-            ),
+            reason=meta.EXCEPTION_REASON,
         )
 
 

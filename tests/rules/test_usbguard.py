@@ -1,5 +1,5 @@
 from ks_gen.config import Overrides, UsbguardCfg
-from ks_gen.rules.usbguard import RULE
+from ks_gen.rules.alma9.usbguard import RULE
 
 
 def test_disabled_tailoring_disables_oscap_rules(minimal_cfg):

@@ -1,4 +1,4 @@
-from ks_gen.rules.package_purge import RULE
+from ks_gen.rules.alma9.package_purge import RULE
 
 
 def test_post_removes_excluded_packages(minimal_cfg):

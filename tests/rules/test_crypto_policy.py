@@ -1,5 +1,5 @@
 from ks_gen.config import Crypto, CryptoPolicy
-from ks_gen.rules.crypto_policy import RULE
+from ks_gen.rules.alma9.crypto_policy import RULE
 
 
 def test_stig_emits_fips(minimal_cfg):

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+from ks_gen.rules._meta import auditd_actions as meta
 from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 
 if TYPE_CHECKING:
@@ -16,9 +17,9 @@ _VAR_MAX_LOG = f"{_PREFIX}var_auditd_max_log_file_action"
 
 @dataclass(frozen=True)
 class _Rule:
-    id: str = "auditd_actions"
-    summary: str = "auditd disk_full/disk_error/max_log_file actions (SUSPEND/ROTATE default)."
-    depends_on: list[str] = field(default_factory=list)
+    id: str = meta.ID
+    summary: str = meta.SUMMARY
+    depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
     stig_rules_affected: list[str] = field(default_factory=list)
 
     def applies(self, cfg: HostConfig) -> bool:
@@ -62,7 +63,7 @@ class _Rule:
         if strict:
             return None
         return ExceptionEntry(
-            rule_id="auditd_actions",
+            rule_id=meta.ID,
             summary=(
                 f"disk_full={a.disk_full_action.value}, "
                 f"disk_error={a.disk_error_action.value}, "

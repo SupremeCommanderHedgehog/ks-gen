@@ -1,5 +1,5 @@
 from ks_gen.config import Containers, ContainerUser
-from ks_gen.rules.container_host import RULE
+from ks_gen.rules.alma9.container_host import RULE
 
 
 def test_container_host_rule_id_and_summary():
@@ -39,7 +39,7 @@ def test_container_host_exception_entry_is_none(minimal_cfg):
 def test_container_host_rule_is_discoverable():
     from ks_gen.registry import load_rules
 
-    rule_ids = {r.id for r in load_rules()}
+    rule_ids = {r.id for r in load_rules("alma9")}
     assert "container_host" in rule_ids
 
 
