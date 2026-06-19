@@ -61,3 +61,51 @@ def test_ssh_future_drops_sha1_and_short_macs(ubuntu_cfg_factory):
     # — the "ssh-rsa," prefix would still appear inside "ssh-rsa-..." so
     # check the canonical form:
     assert "HostKeyAlgorithms ssh-ed25519,rsa-sha2-512" in out
+
+
+def test_ssh_stig_emits_warning_banner_comment(ubuntu_cfg_factory):
+    from ks_gen.config import Crypto, CryptoPolicy
+
+    cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.STIG)})
+    out = RULE.emit_post(cfg)
+    # The banner is unambiguous about the FIPS gap so an auditor reading
+    # the generated sshd_config drop-in immediately sees that STIG mode
+    # without pro_attach is algorithm-aligned, not FIPS-validated.
+    assert "STIG-aligned algorithms but NOT FIPS-validated" in out
+    assert "pro_attach rule" in out
+
+
+def test_ssh_modern_does_not_emit_warning_banner_comment(ubuntu_cfg_factory):
+    # MODERN is civilian-by-design; no FIPS claim to disclaim.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "NOT FIPS-validated" not in out
+
+
+def test_ssh_non_stig_emits_ssh_keygen_a(ubuntu_cfg_factory):
+    # MODERN/FUTURE may need Ed25519 host keys that wouldn't exist if
+    # the host was ever in FIPS mode. Regen any missing keys.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "ssh-keygen -A" in out
+
+
+def test_ssh_stig_does_not_emit_ssh_keygen_a(ubuntu_cfg_factory):
+    # Under STIG/FIPS, host keys are FIPS-approved already; no regen
+    # needed and ssh-keygen -A could regenerate non-FIPS keys.
+    from ks_gen.config import Crypto, CryptoPolicy
+
+    cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.STIG)})
+    out = RULE.emit_post(cfg)
+    assert "ssh-keygen -A" not in out
+
+
+def test_ssh_block_runs_sshd_t_validation(ubuntu_cfg_factory):
+    # sshd -t in the late-command makes the install fail-fast if the
+    # generated config is invalid — better than producing a host with
+    # broken sshd that can't accept SSH.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "sshd -t" in out
+
+
+def test_ssh_block_chmod_600(ubuntu_cfg_factory):
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "chmod 600 /etc/ssh/sshd_config.d/10-ks-gen-crypto.conf" in out
