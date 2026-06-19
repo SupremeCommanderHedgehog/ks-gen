@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+from ks_gen.rules._meta import faillock_safety as meta
 from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 
 if TYPE_CHECKING:
@@ -16,9 +17,9 @@ _RULE_EVEN_DENY_ROOT = f"{_PREFIX}rule_accounts_passwords_pam_faillock_even_deny
 
 @dataclass(frozen=True)
 class _Rule:
-    id: str = "faillock_safety"
-    summary: str = "Set faillock unlock_time and disable even_deny_root for remote safety."
-    depends_on: list[str] = field(default_factory=list)
+    id: str = meta.ID
+    summary: str = meta.SUMMARY
+    depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
     stig_rules_affected: list[str] = field(default_factory=lambda: [_RULE_EVEN_DENY_ROOT])
 
     def applies(self, cfg: HostConfig) -> bool:
@@ -59,10 +60,10 @@ class _Rule:
             return None
         disabled = [_RULE_EVEN_DENY_ROOT] if not f.even_deny_root else []
         return ExceptionEntry(
-            rule_id="faillock_safety",
+            rule_id=meta.ID,
             summary=f"unlock_time={f.unlock_time}, even_deny_root={f.even_deny_root}",
             stig_rules_disabled=disabled,
-            reason="Prevents permanent lockout of the sole remote admin on a missed-key event.",
+            reason=meta.EXCEPTION_REASON,
         )
 
 

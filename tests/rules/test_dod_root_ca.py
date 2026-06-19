@@ -1,5 +1,5 @@
 from ks_gen.config import DodRootCaCfg, Overrides
-from ks_gen.rules.dod_root_ca import RULE
+from ks_gen.rules.alma9.dod_root_ca import RULE
 
 
 def test_applies_only_when_install_false(minimal_cfg):

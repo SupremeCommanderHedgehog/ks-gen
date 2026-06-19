@@ -29,7 +29,7 @@ def render_tailoring(cfg: HostConfig) -> str:
     timestamp comes from `build_tailoring_xml`'s `datetime.now(UTC)` call —
     callers comparing two renders must strip it first.
     """
-    rules = topo_sort(load_rules())
+    rules = topo_sort(load_rules(cfg.distro))
     applicable = [r for r in rules if r.applies(cfg)]
     tailoring_ops = []
     for r in applicable:
@@ -39,7 +39,7 @@ def render_tailoring(cfg: HostConfig) -> str:
 
 
 def build_bundle(cfg: HostConfig) -> Bundle:
-    rules = topo_sort(load_rules())
+    rules = topo_sort(load_rules(cfg.distro))
     applicable = [r for r in rules if r.applies(cfg)]
 
     post_blocks: list[PostBlock] = []

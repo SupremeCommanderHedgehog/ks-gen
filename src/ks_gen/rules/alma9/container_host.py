@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from importlib.resources import files
 from typing import TYPE_CHECKING, cast
 
+from ks_gen.rules._meta import container_host as meta
 from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 
 if TYPE_CHECKING:
@@ -59,11 +60,9 @@ def _emit(cfg: HostConfig) -> str:
 
 @dataclass(frozen=True)
 class _Rule:
-    id: str = "container_host"
-    summary: str = (
-        "Install rootless-container helper, storage.conf, and per-user setup on /srv/containers."
-    )
-    depends_on: list[str] = field(default_factory=list)
+    id: str = meta.ID
+    summary: str = meta.SUMMARY
+    depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
     stig_rules_affected: list[str] = field(default_factory=list)
 
     def applies(self, cfg: HostConfig) -> bool:

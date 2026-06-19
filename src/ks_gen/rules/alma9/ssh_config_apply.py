@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+from ks_gen.rules._meta import ssh_config_apply as meta
 from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 
 if TYPE_CHECKING:
@@ -32,9 +33,9 @@ sshd -t
 
 @dataclass(frozen=True)
 class _Rule:
-    id: str = "ssh_config_apply"
-    summary: str = "Write sshd drop-in config for Port/PermitRootLogin/PasswordAuthentication."
-    depends_on: list[str] = field(default_factory=lambda: ["admin_user_and_keys", "ssh_keep_open"])
+    id: str = meta.ID
+    summary: str = meta.SUMMARY
+    depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
     stig_rules_affected: list[str] = field(default_factory=list)
 
     def applies(self, cfg: HostConfig) -> bool:

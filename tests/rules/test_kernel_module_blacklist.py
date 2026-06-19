@@ -1,4 +1,4 @@
-from ks_gen.rules.kernel_module_blacklist import RULE
+from ks_gen.rules.alma9.kernel_module_blacklist import RULE
 
 
 def test_post_writes_modprobe_conf(minimal_cfg):
