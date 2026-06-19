@@ -58,3 +58,21 @@ def render_skeleton(
         version=__version__,
         generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
+
+
+def render_user_data(cfg: HostConfig) -> str:
+    """Render the autoinstall + cloud-init user-data for an ubuntu2404 host.
+
+    Phase 2: emits a minimal placeholder (identity + empty late-commands).
+    Phase 3 will populate late-commands from the ubuntu2404 rule registry.
+    """
+    env = _env()
+    template = env.get_template("user-data.j2")
+    return template.render(cfg=cfg)
+
+
+def render_meta_data(cfg: HostConfig) -> str:
+    """Render the cloud-init NoCloud meta-data for an ubuntu2404 host."""
+    env = _env()
+    template = env.get_template("meta-data.j2")
+    return template.render(cfg=cfg)
