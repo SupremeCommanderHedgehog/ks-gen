@@ -20,3 +20,44 @@ def test_gnutls_block_writes_default_priorities(ubuntu_cfg_factory):
     # Debian/Ubuntu convention for system-wide GnuTLS priority.
     out = RULE.emit_post(ubuntu_cfg_factory())
     assert "/etc/gnutls/default-priorities" in out
+
+
+def test_ssh_stig_emits_no_chacha20_no_curve25519(ubuntu_cfg_factory):
+    from ks_gen.config import Crypto, CryptoPolicy
+
+    cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.STIG)})
+    out = RULE.emit_post(cfg)
+    # STIG = FIPS-aligned algorithm set. chacha20 and curve25519 are
+    # excluded under FIPS 140-3.
+    assert "chacha20-poly1305" not in out
+    assert "curve25519" not in out
+    assert "ssh-ed25519" not in out
+    # But STIG-approved AES-GCM / ECDH-nistp / hmac-sha2 are present:
+    assert "aes256-gcm@openssh.com" in out
+    assert "ecdh-sha2-nistp384" in out
+    assert "hmac-sha2-512-etm@openssh.com" in out
+
+
+def test_ssh_modern_emits_chacha20_and_curve25519(ubuntu_cfg_factory):
+    # MODERN is the default policy. Adds chacha20-poly1305, curve25519,
+    # and ssh-ed25519 to the STIG base.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "chacha20-poly1305@openssh.com" in out
+    assert "curve25519-sha256" in out
+    assert "ssh-ed25519" in out
+
+
+def test_ssh_future_drops_sha1_and_short_macs(ubuntu_cfg_factory):
+    from ks_gen.config import Crypto, CryptoPolicy
+
+    cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.FUTURE)})
+    out = RULE.emit_post(cfg)
+    # FUTURE keeps only the strongest MACs (ETM variants).
+    assert "hmac-sha2-512-etm@openssh.com" in out
+    assert "hmac-sha2-256-etm@openssh.com" in out
+    # Non-ETM hmac-sha2-256 / -512 dropped.
+    assert "MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com\n" in out
+    # ssh-rsa (without rsa-sha2-* prefix) dropped from HostKeyAlgorithms
+    # — the "ssh-rsa," prefix would still appear inside "ssh-rsa-..." so
+    # check the canonical form:
+    assert "HostKeyAlgorithms ssh-ed25519,rsa-sha2-512" in out
