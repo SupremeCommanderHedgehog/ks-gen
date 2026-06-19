@@ -27,6 +27,7 @@ class _Rule:
         return True
 
     def emit_tailoring(self, cfg: HostConfig) -> list[TailoringOp]:
+        # Deferred: ssg-ubuntu2404-ds.xml banner-rule survey lands in the audit-story PR.
         return []
 
     def emit_post(self, cfg: HostConfig) -> str:
@@ -34,6 +35,7 @@ class _Rule:
         lines = ["# Civilian-equivalent login banner"]
         for target in cfg.banner.apply_to:
             if target == "gdm":
+                # Ubuntu Server has no GDM; tailoring for the matching oscap rule is deferred.
                 continue
             path = _TARGET[target]
             lines.append(f"cat > {path} <<'__KS_GEN_EOF__'")
@@ -46,6 +48,7 @@ class _Rule:
         return []
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
+        # Deferred: paired with emit_tailoring above; see audit-story PR.
         return None
 
 
