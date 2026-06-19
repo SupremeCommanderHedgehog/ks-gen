@@ -65,3 +65,37 @@ def test_post_uses_install_dir_for_chrony_dir(ubuntu_cfg_factory):
     # package install, so on a fresh run this is a no-op.
     out = RULE.emit_post(ubuntu_cfg_factory())
     assert "install -d -m 755 /etc/chrony" in out
+
+
+def test_applies_always_true(ubuntu_cfg_factory):
+    assert RULE.applies(ubuntu_cfg_factory()) is True
+
+
+def test_emit_tailoring_returns_empty_deferred(ubuntu_cfg_factory):
+    # Deferred until ssg-ubuntu2404-ds.xml NTP rule survey lands in the
+    # audit-story PR.
+    assert RULE.emit_tailoring(ubuntu_cfg_factory()) == []
+
+
+def test_exception_entry_returns_none_deferred(ubuntu_cfg_factory):
+    # Deferred until ssg-ubuntu2404-ds.xml NTP rule survey lands.
+    assert RULE.exception_entry(ubuntu_cfg_factory()) is None
+
+
+def test_emit_packages_returns_chrony(ubuntu_cfg_factory):
+    # chrony is NOT in Ubuntu Server's minimal install. This rule is the
+    # first ubuntu2404 rule to actually contribute a package to
+    # autoinstall.packages via the rule_packages plumbing from PR #99.
+    assert RULE.emit_packages(ubuntu_cfg_factory()) == ["chrony"]
+
+
+def test_depends_on_is_empty(ubuntu_cfg_factory):
+    # Mirrors meta's empty DEPENDS_ON.
+    assert RULE.depends_on == []
+
+
+def test_id_and_summary_come_from_shared_meta(ubuntu_cfg_factory):
+    from ks_gen.rules._meta import time_servers as meta
+
+    assert RULE.id == meta.ID
+    assert RULE.summary == meta.SUMMARY
