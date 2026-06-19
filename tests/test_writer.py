@@ -208,6 +208,78 @@ def test_bundle_ubuntu2404_requires_user_data_meta_data_and_rejects_ks_cfg():
         )
 
 
+def test_build_bundle_ubuntu2404_returns_distro_tagged_bundle(tmp_path):
+    yaml_text = textwrap.dedent(
+        """\
+        distro: ubuntu2404
+        system: {hostname: u24-test}
+        user:
+          admin:
+            name: opsadmin
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            sudo: nopasswd_yes
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert bundle.distro == "ubuntu2404"
+    assert bundle.ks_cfg is None
+    assert bundle.user_data is not None
+    assert bundle.meta_data is not None
+    assert bundle.user_data.startswith("#cloud-config")
+    assert "instance-id: u24-test" in bundle.meta_data
+
+
+def test_build_bundle_ubuntu2404_tailoring_is_valid_xccdf_skeleton(tmp_path):
+    # No ubuntu2404 rules exist yet (phase 3 ports them), so the tailoring
+    # should be a valid XCCDF document with no select/disable ops — just
+    # the profile skeleton. Phase 3 starts populating it.
+    yaml_text = textwrap.dedent(
+        """\
+        distro: ubuntu2404
+        system: {hostname: u24-empty}
+        user:
+          admin:
+            name: ops
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            sudo: nopasswd_yes
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert "<xccdf:Tailoring" in bundle.tailoring_xml
+    # No rule overrides yet — no <xccdf:select> tags.
+    assert "<xccdf:select" not in bundle.tailoring_xml
+
+
+def test_build_bundle_alma9_default_unchanged_when_distro_omitted(tmp_path):
+    # Regression guard for the dispatch refactor: a config with no `distro:`
+    # still defaults to alma9 and produces a ks_cfg-bearing bundle.
+    yaml_text = textwrap.dedent(
+        """\
+        system: {hostname: alma-default}
+        user:
+          admin:
+            name: ops
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            sudo: nopasswd_yes
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert bundle.distro == "alma9"
+    assert bundle.ks_cfg is not None
+    assert "%post" in bundle.ks_cfg
+    assert bundle.user_data is None
+    assert bundle.meta_data is None
+
+
 def test_render_tailoring_matches_build_bundle_tailoring_xml() -> None:
     """render_tailoring(cfg) produces the same XML as build_bundle(cfg).tailoring_xml,
     modulo the embedded timestamp in <xccdf:version time="...">."""
