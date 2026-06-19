@@ -1,0 +1,9 @@
+#cloud-config
+autoinstall:
+  version: 1
+  identity:
+    hostname: {{ cfg.system.hostname | tojson }}
+    realname: {{ cfg.user.admin.name | tojson }}
+    username: {{ cfg.user.admin.name | tojson }}
+    password: "*"
+  late-commands: []
