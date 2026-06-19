@@ -3,6 +3,14 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.15.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.14.0...v0.15.0) (2026-06-19)
+
+
+### Features
+
+* **rules/ubuntu2404:** late-commands + admin_user_and_keys + ssh_keep_open ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.0) ([#94](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/94)) ([53140b4](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/53140b45b914b2e0492204361f70d4a94d23a0a1))
+* **writer,cli:** bundle reshape + distro dispatch ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 2) ([#92](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/92)) ([4304799](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/4304799c0d7440e6b5f3528edc4332bce421eea0))
+
 ## [0.14.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.13.0...v0.14.0) (2026-06-19)
 
 
