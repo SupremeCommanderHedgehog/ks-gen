@@ -7,7 +7,7 @@
   Host: `u24-min`
   
   ## Summary
-  - Applied rules: 4
+  - Applied rules: 5
   - Tailored XCCDF rules: 0
   - Declared exceptions: 0
   
@@ -16,6 +16,7 @@
   - `banner_text` — Write civilian-equivalent login banner; suppress DoD-text oscap rules.
   - `ssh_keep_open` — Ensure ssh.port reachable in firewalld + SELinux before sshd starts.
   - `ssh_config_apply` — Write sshd drop-in config for Port/PermitRootLogin/PasswordAuthentication.
+  - `time_servers` — Write chrony.conf with operator-chosen NTP servers (non-DoD by default).
   
   ## Tailored XCCDF rules (oscap rules disabled or value-tailored)
   _(none)_
@@ -217,6 +218,7 @@
             - "ssh-ed25519 AAAA a@b"
     packages:
       - "ufw"
+      - "chrony"
     late-commands:
     - |
       curtin in-target --target=/target -- bash -c '# rule:banner_text
@@ -258,6 +260,18 @@
       __KS_GEN_EOF__
       chmod 600 /etc/ssh/sshd_config.d/00-ks-gen.conf
       sshd -t'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:time_servers
+      # Chrony configuration (servers from host.yaml; STIG-compliant base)
+      install -d -m 755 /etc/chrony
+      cat > /etc/chrony/chrony.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      server pool.ntp.org iburst
+      driftfile /var/lib/chrony/chrony.drift
+      makestep 1.0 3
+      rtcsync
+      logdir /var/log/chrony
+      __KS_GEN_EOF__
+      chmod 644 /etc/chrony/chrony.conf'
   
   '''
 # ---

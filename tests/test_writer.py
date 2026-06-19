@@ -396,6 +396,32 @@ def test_build_bundle_ubuntu2404_packages_block_includes_ufw_when_ssh_keep_open_
     assert "ufw" in doc["autoinstall"]["packages"]
 
 
+def test_build_bundle_ubuntu2404_packages_includes_chrony_when_time_servers_applies(tmp_path):
+    # time_servers.applies(cfg) is always True, and its emit_packages
+    # returns ["chrony"] because chrony isn't in Ubuntu Server's minimal
+    # install. A ubuntu2404 bundle must surface "chrony" in
+    # autoinstall.packages so the chroot has chrony before time_servers'
+    # late-command writes /etc/chrony/chrony.conf.
+    yaml_text = textwrap.dedent(
+        """\
+        distro: ubuntu2404
+        system: {hostname: u24-chrony}
+        user:
+          admin:
+            name: ops
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            sudo: nopasswd_yes
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert bundle.user_data is not None
+    doc = yaml.safe_load(bundle.user_data)
+    assert "chrony" in doc["autoinstall"]["packages"]
+
+
 def test_render_tailoring_matches_build_bundle_tailoring_xml() -> None:
     """render_tailoring(cfg) produces the same XML as build_bundle(cfg).tailoring_xml,
     modulo the embedded timestamp in <xccdf:version time="...">."""
