@@ -1,7 +1,10 @@
 import textwrap
 
+import pytest
+import yaml
+
 from ks_gen.loader import load_host_config
-from ks_gen.writer import build_bundle, write_bundle
+from ks_gen.writer import Bundle, build_bundle, write_bundle
 
 YAML = textwrap.dedent(
     """\
@@ -127,6 +130,194 @@ def test_rule_packages_are_deduped_against_required(tmp_path):
     pkgs_block = bundle.ks_cfg.split("%packages", 1)[1].split("%end", 1)[0]
     assert pkgs_block.count("\ndnf-automatic\n") == 1
     assert pkgs_block.count("\ndnf-utils\n") == 1
+
+
+def test_bundle_alma9_requires_ks_cfg_and_rejects_user_data():
+    # alma9 bundle MUST have ks_cfg set; MUST NOT have user_data or meta_data.
+    Bundle(
+        distro="alma9",
+        tailoring_xml="<x/>",
+        host_yaml="meta: {}\n",
+        exceptions_md="# x\n",
+        ks_cfg="cmdline\n%end\n",
+    )  # OK
+    with pytest.raises(ValueError, match=r"^alma9 bundle requires ks_cfg$"):
+        Bundle(
+            distro="alma9",
+            tailoring_xml="<x/>",
+            host_yaml="meta: {}\n",
+            exceptions_md="# x\n",
+            ks_cfg=None,
+        )
+    with pytest.raises(ValueError, match=r"^alma9 bundle must not set user_data$"):
+        Bundle(
+            distro="alma9",
+            tailoring_xml="<x/>",
+            host_yaml="meta: {}\n",
+            exceptions_md="# x\n",
+            ks_cfg="cmdline\n",
+            user_data="#cloud-config\n",
+        )
+    with pytest.raises(ValueError, match=r"^alma9 bundle must not set meta_data$"):
+        Bundle(
+            distro="alma9",
+            tailoring_xml="<x/>",
+            host_yaml="meta: {}\n",
+            exceptions_md="# x\n",
+            ks_cfg="cmdline\n",
+            meta_data="instance-id: x\n",
+        )
+
+
+def test_bundle_ubuntu2404_requires_user_data_meta_data_and_rejects_ks_cfg():
+    # ubuntu2404 bundle MUST have user_data AND meta_data; MUST NOT have ks_cfg.
+    Bundle(
+        distro="ubuntu2404",
+        tailoring_xml="<x/>",
+        host_yaml="meta: {}\n",
+        exceptions_md="# x\n",
+        user_data="#cloud-config\nautoinstall: {version: 1}\n",
+        meta_data="instance-id: x\n",
+    )  # OK
+    with pytest.raises(ValueError, match=r"^ubuntu2404 bundle requires user_data$"):
+        Bundle(
+            distro="ubuntu2404",
+            tailoring_xml="<x/>",
+            host_yaml="meta: {}\n",
+            exceptions_md="# x\n",
+            user_data=None,
+            meta_data="instance-id: x\n",
+        )
+    with pytest.raises(ValueError, match=r"^ubuntu2404 bundle requires meta_data$"):
+        Bundle(
+            distro="ubuntu2404",
+            tailoring_xml="<x/>",
+            host_yaml="meta: {}\n",
+            exceptions_md="# x\n",
+            user_data="#cloud-config\n",
+            meta_data=None,
+        )
+    with pytest.raises(ValueError, match=r"^ubuntu2404 bundle must not set ks_cfg$"):
+        Bundle(
+            distro="ubuntu2404",
+            tailoring_xml="<x/>",
+            host_yaml="meta: {}\n",
+            exceptions_md="# x\n",
+            user_data="#cloud-config\n",
+            meta_data="instance-id: x\n",
+            ks_cfg="cmdline\n",
+        )
+
+
+def test_build_bundle_ubuntu2404_returns_distro_tagged_bundle(tmp_path):
+    yaml_text = textwrap.dedent(
+        """\
+        distro: ubuntu2404
+        system: {hostname: u24-test}
+        user:
+          admin:
+            name: opsadmin
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            sudo: nopasswd_yes
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert bundle.distro == "ubuntu2404"
+    assert bundle.ks_cfg is None
+    assert bundle.user_data is not None
+    assert bundle.meta_data is not None
+    assert bundle.user_data.startswith("#cloud-config")
+    meta = yaml.safe_load(bundle.meta_data)
+    assert meta["instance-id"] == "u24-test"
+
+
+def test_build_bundle_ubuntu2404_tailoring_is_valid_xccdf_skeleton(tmp_path):
+    # No ubuntu2404 rules exist yet (phase 3 ports them), so the tailoring
+    # should be a valid XCCDF document with no select/disable ops — just
+    # the profile skeleton. Phase 3 starts populating it.
+    yaml_text = textwrap.dedent(
+        """\
+        distro: ubuntu2404
+        system: {hostname: u24-empty}
+        user:
+          admin:
+            name: ops
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            sudo: nopasswd_yes
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert "<xccdf:Tailoring" in bundle.tailoring_xml
+    # No rule overrides yet — no <xccdf:select> tags.
+    assert "<xccdf:select" not in bundle.tailoring_xml
+
+
+def test_build_bundle_alma9_default_unchanged_when_distro_omitted(tmp_path):
+    # Regression guard for the dispatch refactor: a config with no `distro:`
+    # still defaults to alma9 and produces a ks_cfg-bearing bundle.
+    yaml_text = textwrap.dedent(
+        """\
+        system: {hostname: alma-default}
+        user:
+          admin:
+            name: ops
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            sudo: nopasswd_yes
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert bundle.distro == "alma9"
+    assert bundle.ks_cfg is not None
+    assert "%post" in bundle.ks_cfg
+    assert bundle.user_data is None
+    assert bundle.meta_data is None
+
+
+def test_write_bundle_ubuntu2404_writes_seed_files(tmp_path):
+    yaml_text = textwrap.dedent(
+        """\
+        distro: ubuntu2404
+        system: {hostname: u24-write}
+        user:
+          admin:
+            name: ops
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            sudo: nopasswd_yes
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    out = tmp_path / "out"
+    write_bundle(bundle, out)
+    for name in ("user-data", "meta-data", "tailoring.xml", "host.yaml", "exceptions.md"):
+        assert (out / name).is_file(), f"missing {name}"
+    # ks.cfg must NOT be written for ubuntu2404.
+    assert not (out / "ks.cfg").exists()
+
+
+def test_write_bundle_alma9_does_not_write_ubuntu_seed_files(tmp_path):
+    # Regression guard: the alma9 path keeps writing ks.cfg + the three
+    # shared artifacts and must NOT spuriously write user-data/meta-data.
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(YAML, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    out = tmp_path / "out"
+    write_bundle(bundle, out)
+    assert (out / "ks.cfg").is_file()
+    assert not (out / "user-data").exists()
+    assert not (out / "meta-data").exists()
 
 
 def test_render_tailoring_matches_build_bundle_tailoring_xml() -> None:

@@ -2,23 +2,50 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, assert_never
 
 import yaml
 
 from ks_gen.config import HostConfig
 from ks_gen.exceptions_report import render_exceptions_md
 from ks_gen.registry import load_rules
-from ks_gen.skeleton import PostBlock, render_skeleton
+from ks_gen.skeleton import PostBlock, render_meta_data, render_skeleton, render_user_data
 from ks_gen.tailoring import build_tailoring_xml
 from ks_gen.topo import topo_sort
 
 
 @dataclass(frozen=True)
 class Bundle:
-    ks_cfg: str
+    """Generated artifacts for one host.
+
+    Fields split into a shared core (always populated) and a distro-specific
+    payload (exactly one set populated per `distro`). `__post_init__` enforces
+    the invariant so callers downstream of construction can rely on it.
+    """
+
+    distro: Literal["alma9", "ubuntu2404"]
     tailoring_xml: str
     host_yaml: str
     exceptions_md: str
+    ks_cfg: str | None = None
+    user_data: str | None = None
+    meta_data: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.distro == "alma9":
+            if self.ks_cfg is None:
+                raise ValueError("alma9 bundle requires ks_cfg")
+            if self.user_data is not None:
+                raise ValueError("alma9 bundle must not set user_data")
+            if self.meta_data is not None:
+                raise ValueError("alma9 bundle must not set meta_data")
+        elif self.distro == "ubuntu2404":
+            if self.user_data is None:
+                raise ValueError("ubuntu2404 bundle requires user_data")
+            if self.meta_data is None:
+                raise ValueError("ubuntu2404 bundle requires meta_data")
+            if self.ks_cfg is not None:
+                raise ValueError("ubuntu2404 bundle must not set ks_cfg")
 
 
 def render_tailoring(cfg: HostConfig) -> str:
@@ -39,6 +66,14 @@ def render_tailoring(cfg: HostConfig) -> str:
 
 
 def build_bundle(cfg: HostConfig) -> Bundle:
+    if cfg.distro == "alma9":
+        return _build_alma9_bundle(cfg)
+    if cfg.distro == "ubuntu2404":
+        return _build_ubuntu2404_bundle(cfg)
+    assert_never(cfg.distro)
+
+
+def _build_alma9_bundle(cfg: HostConfig) -> Bundle:
     rules = topo_sort(load_rules(cfg.distro))
     applicable = [r for r in rules if r.applies(cfg)]
 
@@ -64,6 +99,7 @@ def build_bundle(cfg: HostConfig) -> Bundle:
     )
     exceptions_md = render_exceptions_md(cfg, applicable)
     return Bundle(
+        distro="alma9",
         ks_cfg=ks_cfg,
         tailoring_xml=tailoring_xml,
         host_yaml=host_yaml,
@@ -71,9 +107,46 @@ def build_bundle(cfg: HostConfig) -> Bundle:
     )
 
 
+def _build_ubuntu2404_bundle(cfg: HostConfig) -> Bundle:
+    # Phase 2: empty/placeholder bundle. Phase 3 ports rules into
+    # rules/ubuntu2404/; their emit_post bodies will populate late-commands
+    # via render_user_data once that template wires the list in.
+    rules = topo_sort(load_rules(cfg.distro))
+    applicable = [r for r in rules if r.applies(cfg)]
+
+    tailoring_ops = []
+    for r in applicable:
+        tailoring_ops.extend(r.emit_tailoring(cfg))
+
+    profile_id = f"xccdf_org.ssgproject.content_profile_{cfg.meta.profile}"
+    tailoring_xml = build_tailoring_xml(tailoring_ops, profile_id=profile_id)
+    user_data = render_user_data(cfg)
+    meta_data = render_meta_data(cfg)
+    host_yaml = yaml.safe_dump(
+        cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False
+    )
+    exceptions_md = render_exceptions_md(cfg, applicable)
+    return Bundle(
+        distro="ubuntu2404",
+        tailoring_xml=tailoring_xml,
+        host_yaml=host_yaml,
+        exceptions_md=exceptions_md,
+        user_data=user_data,
+        meta_data=meta_data,
+    )
+
+
 def write_bundle(bundle: Bundle, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "ks.cfg").write_text(bundle.ks_cfg, encoding="utf-8", newline="\n")
     (out_dir / "tailoring.xml").write_text(bundle.tailoring_xml, encoding="utf-8", newline="\n")
     (out_dir / "host.yaml").write_text(bundle.host_yaml, encoding="utf-8", newline="\n")
     (out_dir / "exceptions.md").write_text(bundle.exceptions_md, encoding="utf-8", newline="\n")
+    if bundle.distro == "alma9":
+        assert bundle.ks_cfg is not None  # Bundle.__post_init__ guarantees this
+        (out_dir / "ks.cfg").write_text(bundle.ks_cfg, encoding="utf-8", newline="\n")
+    elif bundle.distro == "ubuntu2404":
+        assert bundle.user_data is not None and bundle.meta_data is not None
+        (out_dir / "user-data").write_text(bundle.user_data, encoding="utf-8", newline="\n")
+        (out_dir / "meta-data").write_text(bundle.meta_data, encoding="utf-8", newline="\n")
+    else:
+        assert_never(bundle.distro)

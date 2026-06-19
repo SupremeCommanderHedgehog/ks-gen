@@ -28,3 +28,16 @@ def test_registry_returns_rule_instances_for_alma9():
 def test_registry_ubuntu2404_returns_empty_list():
     rules = load_rules("ubuntu2404")
     assert rules == []
+
+
+def test_registry_ubuntu2404_package_exists():
+    """ubuntu2404 package marker exists post-phase-2 so phase 3 has a home.
+
+    Before this file existed, `load_rules('ubuntu2404')` returned [] via the
+    `ModuleNotFoundError` branch; now it returns [] via a real (empty)
+    package iterated by pkgutil.
+    """
+    import importlib
+
+    pkg = importlib.import_module("ks_gen.rules.ubuntu2404")
+    assert pkg.__path__  # truthy => is a real package
