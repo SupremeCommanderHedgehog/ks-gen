@@ -6,4 +6,4 @@ autoinstall:
     realname: {{ cfg.user.admin.name | tojson }}
     username: {{ cfg.user.admin.name | tojson }}
     password: "*"
-  late-commands: []
+  late-commands:{{ late_commands_block }}
