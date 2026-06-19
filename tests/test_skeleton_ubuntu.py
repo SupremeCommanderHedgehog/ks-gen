@@ -175,6 +175,32 @@ def test_render_user_data_users_block_no_keys_emits_empty_list(ubuntu_cfg_factor
     assert doc["autoinstall"]["user-data"]["users"][0]["ssh_authorized_keys"] == []
 
 
+def test_render_user_data_emits_packages_block_when_rule_packages_nonempty(ubuntu_cfg_factory):
+    text = render_user_data(ubuntu_cfg_factory(), post_blocks=[], rule_packages=["ufw"])
+    doc = yaml.safe_load(text)
+    assert doc["autoinstall"]["packages"] == ["ufw"]
+
+
+def test_render_user_data_omits_packages_block_when_rule_packages_empty(ubuntu_cfg_factory):
+    text = render_user_data(ubuntu_cfg_factory(), post_blocks=[], rule_packages=[])
+    doc = yaml.safe_load(text)
+    assert "packages" not in doc["autoinstall"]
+
+
+def test_render_user_data_omits_packages_block_when_rule_packages_omitted(ubuntu_cfg_factory):
+    text = render_user_data(ubuntu_cfg_factory(), post_blocks=[])
+    doc = yaml.safe_load(text)
+    assert "packages" not in doc["autoinstall"]
+
+
+def test_render_user_data_packages_preserves_order(ubuntu_cfg_factory):
+    text = render_user_data(
+        ubuntu_cfg_factory(), post_blocks=[], rule_packages=["ufw", "fail2ban", "aide"]
+    )
+    doc = yaml.safe_load(text)
+    assert doc["autoinstall"]["packages"] == ["ufw", "fail2ban", "aide"]
+
+
 def test_render_user_data_users_block_password_sudo_no(ubuntu_cfg_factory):
     from ks_gen.config import AdminUser, HostConfig, System, User
 
