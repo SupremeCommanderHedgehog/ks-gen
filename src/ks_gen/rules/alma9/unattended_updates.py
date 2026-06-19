@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+from ks_gen.rules._meta import unattended_updates as meta
 from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 
 if TYPE_CHECKING:
@@ -11,12 +12,9 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class _Rule:
-    id: str = "unattended_updates"
-    summary: str = (
-        "Configure dnf-automatic for nightly security + monthly full updates, "
-        "with reboot inside a maintenance window."
-    )
-    depends_on: list[str] = field(default_factory=list)
+    id: str = meta.ID
+    summary: str = meta.SUMMARY
+    depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
     stig_rules_affected: list[str] = field(default_factory=list)
 
     def applies(self, cfg: HostConfig) -> bool:

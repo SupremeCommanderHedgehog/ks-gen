@@ -22,7 +22,7 @@ def expected_failure_rule_ids(cfg: HostConfig) -> set[str]:
     # of applicable = [r for r in rules if r.applies(cfg)]; if the two diverge,
     # the exceptions.md report and the verify reconciliation will disagree.
     ids: set[str] = set()
-    for r in topo_sort(load_rules()):
+    for r in topo_sort(load_rules(cfg.distro)):
         if not r.applies(cfg):
             continue
         entry = r.exception_entry(cfg)

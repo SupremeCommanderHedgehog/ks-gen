@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+from ks_gen.rules._meta import admin_user_and_keys as meta
 from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 
 if TYPE_CHECKING:
@@ -50,9 +51,9 @@ visudo -cf /etc/sudoers.d/00-ks-gen-admin
 
 @dataclass(frozen=True)
 class _Rule:
-    id: str = "admin_user_and_keys"
-    summary: str = "Create wheel admin, drop authorized_keys, sudoers fragment."
-    depends_on: list[str] = field(default_factory=list)
+    id: str = meta.ID
+    summary: str = meta.SUMMARY
+    depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
     stig_rules_affected: list[str] = field(default_factory=list)
 
     def applies(self, cfg: HostConfig) -> bool:

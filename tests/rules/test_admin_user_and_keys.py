@@ -1,4 +1,4 @@
-from ks_gen.rules.admin_user_and_keys import RULE
+from ks_gen.rules.alma9.admin_user_and_keys import RULE
 
 
 def test_applies_always(minimal_cfg):

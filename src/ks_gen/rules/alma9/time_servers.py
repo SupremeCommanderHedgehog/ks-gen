@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+from ks_gen.rules._meta import time_servers as meta
 from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 
 if TYPE_CHECKING:
@@ -11,26 +12,30 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class _Rule:
-    id: str = "kernel_module_blacklist"
-    summary: str = "Write modprobe blacklist for unused/disallowed kernel modules."
-    depends_on: list[str] = field(default_factory=list)
+    id: str = meta.ID
+    summary: str = meta.SUMMARY
+    depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
     stig_rules_affected: list[str] = field(default_factory=list)
 
     def applies(self, cfg: HostConfig) -> bool:
-        return cfg.overrides.kernel_module_blacklist.enable
+        return True
 
     def emit_tailoring(self, cfg: HostConfig) -> list[TailoringOp]:
         return []
 
     def emit_post(self, cfg: HostConfig) -> str:
-        modules = cfg.overrides.kernel_module_blacklist.modules
-        body = "\n".join(f"install {m} /bin/true" for m in modules)
+        servers = "\n".join(f"server {s} iburst" for s in cfg.time.servers)
+        thresh = cfg.time.chrony_makestep_threshold
         return f"""\
-# Disable specific kernel modules via modprobe install-trick
-cat > /etc/modprobe.d/ks-gen-blacklist.conf <<'__KS_GEN_EOF__'
-{body}
+# Chrony configuration (servers from host.yaml; STIG-compliant base)
+cat > /etc/chrony.conf <<'__KS_GEN_EOF__'
+{servers}
+driftfile /var/lib/chrony/drift
+makestep {thresh} 3
+rtcsync
+logdir /var/log/chrony
 __KS_GEN_EOF__
-chmod 644 /etc/modprobe.d/ks-gen-blacklist.conf
+chmod 644 /etc/chrony.conf
 """
 
     def emit_packages(self, cfg: HostConfig) -> list[str]:

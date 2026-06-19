@@ -5,7 +5,7 @@ from ks_gen.config import (
     RebootWindowCfg,
     UnattendedUpdatesCfg,
 )
-from ks_gen.rules.unattended_updates import RULE
+from ks_gen.rules.alma9.unattended_updates import RULE
 
 
 def test_rule_metadata():
