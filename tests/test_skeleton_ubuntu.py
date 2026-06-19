@@ -193,3 +193,57 @@ def test_render_user_data_users_block_password_sudo_no(ubuntu_cfg_factory):
     text = render_user_data(cfg, post_blocks=[])
     doc = yaml.safe_load(text)
     assert doc["autoinstall"]["user-data"]["users"][0]["sudo"] == "ALL=(ALL) ALL"
+
+
+def test_render_user_data_users_block_passwd_emitted_when_password_set():
+    # Regression for #96: cfg.user.admin.password must land in users[0].passwd
+    # so the provisioned admin can authenticate sudo (or console login on
+    # break-glass). Without this, a `password: "$6$..."` + `sudo: nopasswd_no`
+    # config silently produces a host whose admin can't escalate.
+    from ks_gen.config import AdminUser, HostConfig, System, User
+
+    cfg = HostConfig(
+        distro="ubuntu2404",
+        system=System(hostname="u24-pw"),
+        user=User(
+            admin=AdminUser(
+                name="ops",
+                authorized_keys=["ssh-ed25519 AAAA a@b"],
+                password="$6$abc$hash",
+                sudo="nopasswd_no",
+            )
+        ),
+    )
+    text = render_user_data(cfg, post_blocks=[])
+    doc = yaml.safe_load(text)
+    assert doc["autoinstall"]["user-data"]["users"][0]["passwd"] == "$6$abc$hash"
+
+
+def test_render_user_data_users_block_passwd_omitted_when_password_none(ubuntu_cfg_factory):
+    # Default factory sets password=None — passwd must not appear.
+    text = render_user_data(ubuntu_cfg_factory(), post_blocks=[])
+    doc = yaml.safe_load(text)
+    assert "passwd" not in doc["autoinstall"]["user-data"]["users"][0]
+
+
+def test_render_user_data_identity_password_stays_locked_even_when_admin_password_set():
+    # The installer-side identity is just the live anaconda/subiquity env;
+    # we keep it locked. The provisioned-system credential is on the
+    # cloud-init users[0].passwd path.
+    from ks_gen.config import AdminUser, HostConfig, System, User
+
+    cfg = HostConfig(
+        distro="ubuntu2404",
+        system=System(hostname="u24-identity"),
+        user=User(
+            admin=AdminUser(
+                name="ops",
+                authorized_keys=["ssh-ed25519 AAAA a@b"],
+                password="$6$abc$hash",
+                sudo="nopasswd_no",
+            )
+        ),
+    )
+    text = render_user_data(cfg, post_blocks=[])
+    doc = yaml.safe_load(text)
+    assert doc["autoinstall"]["identity"]["password"] == "*"
