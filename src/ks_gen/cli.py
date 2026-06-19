@@ -44,11 +44,12 @@ def gen(
         raise typer.Exit(code=int(e.exit_code)) from None
     bundle = build_bundle(cfg)
     write_bundle(bundle, out)
-    report = lint_kickstart(out / "ks.cfg")
-    if not report.ok:
-        for f in report.failures:
-            typer.echo(f"lint FAIL: {f}", err=True)
-        raise typer.Exit(code=int(ExitCode.LINT_FAIL))
+    if bundle.distro == "alma9":
+        report = lint_kickstart(out / "ks.cfg")
+        if not report.ok:
+            for f in report.failures:
+                typer.echo(f"lint FAIL: {f}", err=True)
+            raise typer.Exit(code=int(ExitCode.LINT_FAIL))
     typer.echo(f"Wrote bundle to {out}")
 
 

@@ -280,6 +280,44 @@ def test_build_bundle_alma9_default_unchanged_when_distro_omitted(tmp_path):
     assert bundle.meta_data is None
 
 
+def test_write_bundle_ubuntu2404_writes_seed_files(tmp_path):
+    yaml_text = textwrap.dedent(
+        """\
+        distro: ubuntu2404
+        system: {hostname: u24-write}
+        user:
+          admin:
+            name: ops
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            sudo: nopasswd_yes
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    out = tmp_path / "out"
+    write_bundle(bundle, out)
+    for name in ("user-data", "meta-data", "tailoring.xml", "host.yaml", "exceptions.md"):
+        assert (out / name).is_file(), f"missing {name}"
+    # ks.cfg must NOT be written for ubuntu2404.
+    assert not (out / "ks.cfg").exists()
+
+
+def test_write_bundle_alma9_does_not_write_ubuntu_seed_files(tmp_path):
+    # Regression guard: the alma9 path keeps writing ks.cfg + the three
+    # shared artifacts and must NOT spuriously write user-data/meta-data.
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(YAML, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    out = tmp_path / "out"
+    write_bundle(bundle, out)
+    assert (out / "ks.cfg").is_file()
+    assert not (out / "user-data").exists()
+    assert not (out / "meta-data").exists()
+
+
 def test_render_tailoring_matches_build_bundle_tailoring_xml() -> None:
     """render_tailoring(cfg) produces the same XML as build_bundle(cfg).tailoring_xml,
     modulo the embedded timestamp in <xccdf:version time="...">."""

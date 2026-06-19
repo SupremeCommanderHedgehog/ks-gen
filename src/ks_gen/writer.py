@@ -137,9 +137,14 @@ def _build_ubuntu2404_bundle(cfg: HostConfig) -> Bundle:
 
 
 def write_bundle(bundle: Bundle, out_dir: Path) -> None:
-    assert bundle.ks_cfg is not None, "write_bundle only supports alma9 bundles (ks_cfg required)"
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "ks.cfg").write_text(bundle.ks_cfg, encoding="utf-8", newline="\n")
     (out_dir / "tailoring.xml").write_text(bundle.tailoring_xml, encoding="utf-8", newline="\n")
     (out_dir / "host.yaml").write_text(bundle.host_yaml, encoding="utf-8", newline="\n")
     (out_dir / "exceptions.md").write_text(bundle.exceptions_md, encoding="utf-8", newline="\n")
+    if bundle.distro == "alma9":
+        assert bundle.ks_cfg is not None  # Bundle.__post_init__ guarantees this
+        (out_dir / "ks.cfg").write_text(bundle.ks_cfg, encoding="utf-8", newline="\n")
+    elif bundle.distro == "ubuntu2404":
+        assert bundle.user_data is not None and bundle.meta_data is not None
+        (out_dir / "user-data").write_text(bundle.user_data, encoding="utf-8", newline="\n")
+        (out_dir / "meta-data").write_text(bundle.meta_data, encoding="utf-8", newline="\n")
