@@ -320,6 +320,32 @@ def test_write_bundle_alma9_does_not_write_ubuntu_seed_files(tmp_path):
     assert not (out / "meta-data").exists()
 
 
+def test_build_bundle_ubuntu2404_late_commands_includes_ufw_entry(tmp_path):
+    yaml_text = textwrap.dedent(
+        """\
+        distro: ubuntu2404
+        system: {hostname: u24-late}
+        user:
+          admin:
+            name: ops
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            sudo: nopasswd_yes
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert bundle.user_data is not None
+    import yaml as _yaml
+
+    doc = _yaml.safe_load(bundle.user_data)
+    late = doc["autoinstall"]["late-commands"]
+    assert len(late) == 1
+    assert "ufw allow 22/tcp" in late[0]
+    assert "# rule:ssh_keep_open" in late[0]
+
+
 def test_render_tailoring_matches_build_bundle_tailoring_xml() -> None:
     """render_tailoring(cfg) produces the same XML as build_bundle(cfg).tailoring_xml,
     modulo the embedded timestamp in <xccdf:version time="...">."""

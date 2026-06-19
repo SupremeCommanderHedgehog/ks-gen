@@ -108,19 +108,20 @@ def _build_alma9_bundle(cfg: HostConfig) -> Bundle:
 
 
 def _build_ubuntu2404_bundle(cfg: HostConfig) -> Bundle:
-    # Phase 2: empty/placeholder bundle. Phase 3 ports rules into
-    # rules/ubuntu2404/; their emit_post bodies will populate late-commands
-    # via render_user_data once that template wires the list in.
     rules = topo_sort(load_rules(cfg.distro))
     applicable = [r for r in rules if r.applies(cfg)]
 
+    post_blocks: list[PostBlock] = []
     tailoring_ops = []
     for r in applicable:
+        body = r.emit_post(cfg).rstrip()
+        if body:
+            post_blocks.append(PostBlock(rule_id=r.id, body=body))
         tailoring_ops.extend(r.emit_tailoring(cfg))
 
     profile_id = f"xccdf_org.ssgproject.content_profile_{cfg.meta.profile}"
     tailoring_xml = build_tailoring_xml(tailoring_ops, profile_id=profile_id)
-    user_data = render_user_data(cfg)
+    user_data = render_user_data(cfg, post_blocks)
     meta_data = render_meta_data(cfg)
     host_yaml = yaml.safe_dump(
         cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False

@@ -6,4 +6,14 @@ autoinstall:
     realname: {{ cfg.user.admin.name | tojson }}
     username: {{ cfg.user.admin.name | tojson }}
     password: "*"
-  late-commands: []
+  user-data:
+    users:
+      - name: {{ cfg.user.admin.name | tojson }}
+        sudo: {{ ("ALL=(ALL) NOPASSWD:ALL" if cfg.user.admin.sudo == "nopasswd_yes" else "ALL=(ALL) ALL") | tojson }}
+        shell: /bin/bash
+        ssh_authorized_keys:{% if not cfg.user.admin.authorized_keys %} []{% endif %}
+
+{% for key in cfg.user.admin.authorized_keys %}
+          - {{ key | tojson }}
+{% endfor %}
+  late-commands:{{ late_commands_block }}

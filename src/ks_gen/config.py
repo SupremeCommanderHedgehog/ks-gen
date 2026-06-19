@@ -580,6 +580,7 @@ class AuditdActionsCfg(StrictModel):
 class SshKeepOpenCfg(StrictModel):
     ensure_firewalld_port: bool = True
     ensure_selinux_port: bool = True
+    ensure_ufw_port: bool = True
 
 
 class UsbguardCfg(StrictModel):

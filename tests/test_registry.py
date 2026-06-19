@@ -25,9 +25,10 @@ def test_registry_returns_rule_instances_for_alma9():
         assert hasattr(r, "emit_post")
 
 
-def test_registry_ubuntu2404_returns_empty_list():
+def test_registry_ubuntu2404_loads_admin_user_and_keys():
     rules = load_rules("ubuntu2404")
-    assert rules == []
+    ids = {r.id for r in rules}
+    assert "admin_user_and_keys" in ids
 
 
 def test_registry_ubuntu2404_package_exists():
