@@ -7,6 +7,13 @@
 > responsibility and will land with that rule's ubuntu2404 port in a later
 > phase").
 
+> **Merge-order assumption (added post-review):** The Architecture section's
+> topo trace assumes phase 3.1 (`banner_text`, PR #101) merges first. If 3.2
+> ships solo, the topo order is `[admin_user_and_keys, ssh_keep_open,
+> ssh_config_apply]` (no banner_text yet), and the predicted snapshot count
+> bump is `2 → 3` instead of `3 → 4`. Either merge order produces a valid
+> install — the rule code itself is independent.
+
 ## Goal
 
 Port the `ssh_config_apply` rule to `ubuntu2404` so an ubuntu autoinstall

@@ -10,6 +10,13 @@
 
 **Branch:** Plan assumes `feat/phase-3-2-ssh-config-apply` is checked out from `main` at commit `e2abc56` (post-spec-commit).
 
+**Merge-order assumption (added post-review):** This plan was written assuming
+phase 3.1 (`banner_text`, PR #101) would merge to main first. If 3.2 ships
+solo on main, the snapshot diff predictions in Task 3 are slightly off:
+expect a count bump of `2 → 3` (not `3 → 4`) and the new `ssh_config_apply`
+bullet falls right after `ssh_keep_open` (not after `banner_text`).
+Mechanically identical change, smaller predicted diff.
+
 **Acceptance bar:**
 - New rule + new unit test file pass.
 - `tests/golden/__snapshots__/test_ubuntu_minimal.ambr` regen shows: one new late-command entry appended to the END of `late-commands` (ssh_config_apply body), plus the exceptions.md Applied-rules count bump `3 → 4` and new bullet. No other deltas.
