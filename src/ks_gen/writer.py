@@ -35,8 +35,10 @@ class Bundle:
         if self.distro == "alma9":
             if self.ks_cfg is None:
                 raise ValueError("alma9 bundle requires ks_cfg")
-            if self.user_data is not None or self.meta_data is not None:
-                raise ValueError("alma9 bundle must not set user_data/meta_data")
+            if self.user_data is not None:
+                raise ValueError("alma9 bundle must not set user_data")
+            if self.meta_data is not None:
+                raise ValueError("alma9 bundle must not set meta_data")
         elif self.distro == "ubuntu2404":
             if self.user_data is None:
                 raise ValueError("ubuntu2404 bundle requires user_data")

@@ -140,7 +140,7 @@ def test_bundle_alma9_requires_ks_cfg_and_rejects_user_data():
         exceptions_md="# x\n",
         ks_cfg="cmdline\n%end\n",
     )  # OK
-    with pytest.raises(ValueError, match="alma9 bundle requires ks_cfg"):
+    with pytest.raises(ValueError, match=r"^alma9 bundle requires ks_cfg$"):
         Bundle(
             distro="alma9",
             tailoring_xml="<x/>",
@@ -148,7 +148,7 @@ def test_bundle_alma9_requires_ks_cfg_and_rejects_user_data():
             exceptions_md="# x\n",
             ks_cfg=None,
         )
-    with pytest.raises(ValueError, match="alma9 bundle must not set user_data"):
+    with pytest.raises(ValueError, match=r"^alma9 bundle must not set user_data$"):
         Bundle(
             distro="alma9",
             tailoring_xml="<x/>",
@@ -156,6 +156,15 @@ def test_bundle_alma9_requires_ks_cfg_and_rejects_user_data():
             exceptions_md="# x\n",
             ks_cfg="cmdline\n",
             user_data="#cloud-config\n",
+        )
+    with pytest.raises(ValueError, match=r"^alma9 bundle must not set meta_data$"):
+        Bundle(
+            distro="alma9",
+            tailoring_xml="<x/>",
+            host_yaml="meta: {}\n",
+            exceptions_md="# x\n",
+            ks_cfg="cmdline\n",
+            meta_data="instance-id: x\n",
         )
 
 
@@ -169,7 +178,7 @@ def test_bundle_ubuntu2404_requires_user_data_meta_data_and_rejects_ks_cfg():
         user_data="#cloud-config\nautoinstall: {version: 1}\n",
         meta_data="instance-id: x\n",
     )  # OK
-    with pytest.raises(ValueError, match="ubuntu2404 bundle requires user_data"):
+    with pytest.raises(ValueError, match=r"^ubuntu2404 bundle requires user_data$"):
         Bundle(
             distro="ubuntu2404",
             tailoring_xml="<x/>",
@@ -178,7 +187,7 @@ def test_bundle_ubuntu2404_requires_user_data_meta_data_and_rejects_ks_cfg():
             user_data=None,
             meta_data="instance-id: x\n",
         )
-    with pytest.raises(ValueError, match="ubuntu2404 bundle requires meta_data"):
+    with pytest.raises(ValueError, match=r"^ubuntu2404 bundle requires meta_data$"):
         Bundle(
             distro="ubuntu2404",
             tailoring_xml="<x/>",
@@ -187,7 +196,7 @@ def test_bundle_ubuntu2404_requires_user_data_meta_data_and_rejects_ks_cfg():
             user_data="#cloud-config\n",
             meta_data=None,
         )
-    with pytest.raises(ValueError, match="ubuntu2404 bundle must not set ks_cfg"):
+    with pytest.raises(ValueError, match=r"^ubuntu2404 bundle must not set ks_cfg$"):
         Bundle(
             distro="ubuntu2404",
             tailoring_xml="<x/>",
