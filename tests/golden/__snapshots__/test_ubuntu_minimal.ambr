@@ -7,13 +7,14 @@
   Host: `u24-min`
   
   ## Summary
-  - Applied rules: 5
+  - Applied rules: 6
   - Tailored XCCDF rules: 0
   - Declared exceptions: 0
   
   ## Applied rules
   - `admin_user_and_keys` — Create wheel admin, drop authorized_keys, sudoers fragment.
   - `banner_text` — Write civilian-equivalent login banner; suppress DoD-text oscap rules.
+  - `crypto_policy` — Apply system crypto-policy; optionally generate Ed25519 host keys.
   - `ssh_keep_open` — Ensure ssh.port reachable in firewalld + SELinux before sshd starts.
   - `ssh_config_apply` — Write sshd drop-in config for Port/PermitRootLogin/PasswordAuthentication.
   - `time_servers` — Write chrony.conf with operator-chosen NTP servers (non-DoD by default).
@@ -241,6 +242,36 @@
       Use of this system constitutes consent to such monitoring.
       __KS_GEN_EOF__
       chmod 644 /etc/ssh/sshd-banner'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:crypto_policy
+      # SSH crypto policy (MODERN)
+      install -d -m 755 /etc/ssh/sshd_config.d
+      cat > /etc/ssh/sshd_config.d/10-ks-gen-crypto.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+      KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group16-sha512,diffie-hellman-group14-sha256
+      MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+      HostKeyAlgorithms ssh-ed25519,ssh-rsa,rsa-sha2-512,rsa-sha2-256,ecdsa-sha2-nistp521,ecdsa-sha2-nistp384,ecdsa-sha2-nistp256
+      PubkeyAcceptedAlgorithms ssh-ed25519,ssh-rsa,rsa-sha2-512,rsa-sha2-256,ecdsa-sha2-nistp521,ecdsa-sha2-nistp384,ecdsa-sha2-nistp256
+      __KS_GEN_EOF__
+      chmod 600 /etc/ssh/sshd_config.d/10-ks-gen-crypto.conf
+      ssh-keygen -A
+      sshd -t
+      # OpenSSL crypto policy (MODERN)
+      install -d -m 755 /etc/ssl/openssl.cnf.d
+      cat > /etc/ssl/openssl.cnf.d/10-ks-gen.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      [default_sect]
+      activate = 1
+      [system_default_sect]
+      MinProtocol = TLSv1.2
+      CipherString = DEFAULT@SECLEVEL=2
+      __KS_GEN_EOF__
+      chmod 644 /etc/ssl/openssl.cnf.d/10-ks-gen.conf
+      # GnuTLS crypto policy (MODERN)
+      install -d -m 755 /etc/gnutls
+      cat > /etc/gnutls/default-priorities <<'"'"'__KS_GEN_EOF__'"'"'
+      SECURE128
+      __KS_GEN_EOF__
+      chmod 644 /etc/gnutls/default-priorities'
     - |
       curtin in-target --target=/target -- bash -c '# rule:ssh_keep_open
       ufw allow 22/tcp'
