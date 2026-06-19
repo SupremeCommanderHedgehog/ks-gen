@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import yaml
 
@@ -15,10 +16,34 @@ from ks_gen.topo import topo_sort
 
 @dataclass(frozen=True)
 class Bundle:
-    ks_cfg: str
+    """Generated artifacts for one host.
+
+    Fields split into a shared core (always populated) and a distro-specific
+    payload (exactly one set populated per `distro`). `__post_init__` enforces
+    the invariant so callers downstream of construction can rely on it.
+    """
+
+    distro: Literal["alma9", "ubuntu2404"]
     tailoring_xml: str
     host_yaml: str
     exceptions_md: str
+    ks_cfg: str | None = None
+    user_data: str | None = None
+    meta_data: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.distro == "alma9":
+            if self.ks_cfg is None:
+                raise ValueError("alma9 bundle requires ks_cfg")
+            if self.user_data is not None or self.meta_data is not None:
+                raise ValueError("alma9 bundle must not set user_data/meta_data")
+        elif self.distro == "ubuntu2404":
+            if self.user_data is None:
+                raise ValueError("ubuntu2404 bundle requires user_data")
+            if self.meta_data is None:
+                raise ValueError("ubuntu2404 bundle requires meta_data")
+            if self.ks_cfg is not None:
+                raise ValueError("ubuntu2404 bundle must not set ks_cfg")
 
 
 def render_tailoring(cfg: HostConfig) -> str:
@@ -64,6 +89,7 @@ def build_bundle(cfg: HostConfig) -> Bundle:
     )
     exceptions_md = render_exceptions_md(cfg, applicable)
     return Bundle(
+        distro="alma9",
         ks_cfg=ks_cfg,
         tailoring_xml=tailoring_xml,
         host_yaml=host_yaml,
@@ -72,6 +98,7 @@ def build_bundle(cfg: HostConfig) -> Bundle:
 
 
 def write_bundle(bundle: Bundle, out_dir: Path) -> None:
+    assert bundle.ks_cfg is not None, "write_bundle only supports alma9 bundles (ks_cfg required)"
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "ks.cfg").write_text(bundle.ks_cfg, encoding="utf-8", newline="\n")
     (out_dir / "tailoring.xml").write_text(bundle.tailoring_xml, encoding="utf-8", newline="\n")
