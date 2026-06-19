@@ -61,7 +61,11 @@ def render_skeleton(
     )
 
 
-def render_user_data(cfg: HostConfig, post_blocks: list[PostBlock]) -> str:
+def render_user_data(
+    cfg: HostConfig,
+    post_blocks: list[PostBlock],
+    rule_packages: list[str] | None = None,
+) -> str:
     """Render the autoinstall + cloud-init user-data for an ubuntu2404 host.
 
     Emits a ``#cloud-config`` document with ``autoinstall.version: 1``, an
@@ -70,12 +74,19 @@ def render_user_data(cfg: HostConfig, post_blocks: list[PostBlock]) -> str:
     list with one entry per ``PostBlock`` (wrapped as
     ``curtin in-target --target=/target -- bash -c <shlex-quoted body>`` inside a
     YAML literal block).
+
+    If ``rule_packages`` is non-empty, also emits an ``autoinstall.packages:``
+    list. This carries rule-declared apt deps (e.g. ``ufw`` for
+    ``ssh_keep_open``) into subiquity's install-time package set — without it,
+    late-commands targeting those binaries would fail with ``command not found``
+    on a fresh install.
     """
     env = _env()
     template = env.get_template("user-data.j2")
     return template.render(
         cfg=cfg,
         late_commands_block=_format_late_commands(post_blocks),
+        rule_packages=rule_packages or [],
     )
 
 

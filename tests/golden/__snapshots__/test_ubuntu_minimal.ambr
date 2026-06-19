@@ -213,6 +213,8 @@
           shell: /bin/bash
           ssh_authorized_keys:
             - "ssh-ed25519 AAAA a@b"
+    packages:
+      - "ufw"
     late-commands:
     - |
       curtin in-target --target=/target -- bash -c '# rule:ssh_keep_open

@@ -117,17 +117,23 @@ def _build_ubuntu2404_bundle(cfg: HostConfig) -> Bundle:
 
     post_blocks: list[PostBlock] = []
     tailoring_ops = []
+    rule_packages: list[str] = []
+    seen: set[str] = set()
     for r in applicable:
         body = r.emit_post(cfg).rstrip()
         if body:
             post_blocks.append(PostBlock(rule_id=r.id, body=body))
         tailoring_ops.extend(r.emit_tailoring(cfg))
+        for pkg in r.emit_packages(cfg):
+            if pkg not in seen:
+                rule_packages.append(pkg)
+                seen.add(pkg)
 
     profile_id = f"xccdf_org.ssgproject.content_profile_{cfg.meta.profile}"
     tailoring_xml = build_tailoring_xml(
         tailoring_ops, profile_id=profile_id, scap_content=cfg.meta.scap_content
     )
-    user_data = render_user_data(cfg, post_blocks)
+    user_data = render_user_data(cfg, post_blocks, rule_packages=rule_packages)
     meta_data = render_meta_data(cfg)
     host_yaml = yaml.safe_dump(
         cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False

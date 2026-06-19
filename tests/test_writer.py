@@ -346,6 +346,31 @@ def test_build_bundle_ubuntu2404_late_commands_includes_ufw_entry(tmp_path):
     assert "# rule:ssh_keep_open" in late[0]
 
 
+def test_build_bundle_ubuntu2404_packages_block_includes_ufw_when_ssh_keep_open_applies(tmp_path):
+    # Regression for #95: ssh_keep_open.emit_packages -> ["ufw"], so a
+    # ubuntu2404 bundle must surface "ufw" in autoinstall.packages. Without
+    # this, late-commands run `ufw allow 22/tcp` against an install where
+    # ufw isn't guaranteed installed -> curtin aborts.
+    yaml_text = textwrap.dedent(
+        """\
+        distro: ubuntu2404
+        system: {hostname: u24-pkgs}
+        user:
+          admin:
+            name: ops
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            sudo: nopasswd_yes
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert bundle.user_data is not None
+    doc = yaml.safe_load(bundle.user_data)
+    assert "ufw" in doc["autoinstall"]["packages"]
+
+
 def test_render_tailoring_matches_build_bundle_tailoring_xml() -> None:
     """render_tailoring(cfg) produces the same XML as build_bundle(cfg).tailoring_xml,
     modulo the embedded timestamp in <xccdf:version time="...">."""
