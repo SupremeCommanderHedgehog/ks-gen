@@ -148,3 +148,5 @@ def write_bundle(bundle: Bundle, out_dir: Path) -> None:
         assert bundle.user_data is not None and bundle.meta_data is not None
         (out_dir / "user-data").write_text(bundle.user_data, encoding="utf-8", newline="\n")
         (out_dir / "meta-data").write_text(bundle.meta_data, encoding="utf-8", newline="\n")
+    else:
+        assert_never(bundle.distro)
