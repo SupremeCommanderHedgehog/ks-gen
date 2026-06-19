@@ -130,3 +130,66 @@ def test_render_user_data_post_block_with_single_quotes_survives_shlex_quote(ubu
     # shlex.quote uses '"'"' style (not backslash) to escape single quotes
     assert '"\'"' in entry
     assert "hello world" in entry
+
+
+def test_render_user_data_emits_cloud_init_users_block(ubuntu_cfg_factory):
+    text = render_user_data(ubuntu_cfg_factory(admin="opsadmin"), post_blocks=[])
+    doc = yaml.safe_load(text)
+    users = doc["autoinstall"]["users"]
+    assert isinstance(users, list) and len(users) == 1
+    assert users[0]["name"] == "opsadmin"
+    assert users[0]["shell"] == "/bin/bash"
+
+
+def test_render_user_data_users_block_nopasswd_sudo(ubuntu_cfg_factory):
+    text = render_user_data(ubuntu_cfg_factory(), post_blocks=[])
+    doc = yaml.safe_load(text)
+    assert doc["autoinstall"]["users"][0]["sudo"] == "ALL=(ALL) NOPASSWD:ALL"
+
+
+def test_render_user_data_users_block_carries_authorized_keys(ubuntu_cfg_factory):
+    cfg = ubuntu_cfg_factory()
+    text = render_user_data(cfg, post_blocks=[])
+    doc = yaml.safe_load(text)
+    keys = doc["autoinstall"]["users"][0]["ssh_authorized_keys"]
+    assert keys == cfg.user.admin.authorized_keys
+
+
+def test_render_user_data_users_block_no_keys_emits_empty_list(ubuntu_cfg_factory):
+    from ks_gen.config import AdminUser, HostConfig, System, User
+
+    cfg = HostConfig(
+        distro="ubuntu2404",
+        system=System(hostname="u24-nokeys"),
+        user=User(
+            admin=AdminUser(
+                name="ops",
+                authorized_keys=[],
+                sudo="nopasswd_yes",
+                password="$6$abc$hash",
+            )
+        ),
+    )
+    text = render_user_data(cfg, post_blocks=[])
+    doc = yaml.safe_load(text)
+    assert doc["autoinstall"]["users"][0]["ssh_authorized_keys"] == []
+
+
+def test_render_user_data_users_block_password_sudo_no(ubuntu_cfg_factory):
+    from ks_gen.config import AdminUser, HostConfig, System, User
+
+    cfg = HostConfig(
+        distro="ubuntu2404",
+        system=System(hostname="u24-pwsudo"),
+        user=User(
+            admin=AdminUser(
+                name="ops",
+                authorized_keys=["ssh-ed25519 AAAA a@b"],
+                password="$6$abc$hash",
+                sudo="nopasswd_no",
+            )
+        ),
+    )
+    text = render_user_data(cfg, post_blocks=[])
+    doc = yaml.safe_load(text)
+    assert doc["autoinstall"]["users"][0]["sudo"] == "ALL=(ALL) ALL"
