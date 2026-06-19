@@ -1,4 +1,4 @@
-from ks_gen.rules.ssh_keep_open import RULE
+from ks_gen.rules.alma9.ssh_keep_open import RULE
 
 
 def test_applies_when_either_flag_set(minimal_cfg):

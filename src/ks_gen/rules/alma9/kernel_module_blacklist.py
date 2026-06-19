@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+from ks_gen.rules._meta import kernel_module_blacklist as meta
 from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 
 if TYPE_CHECKING:
@@ -11,30 +12,26 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class _Rule:
-    id: str = "time_servers"
-    summary: str = "Write chrony.conf with operator-chosen NTP servers (non-DoD by default)."
-    depends_on: list[str] = field(default_factory=list)
+    id: str = meta.ID
+    summary: str = meta.SUMMARY
+    depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
     stig_rules_affected: list[str] = field(default_factory=list)
 
     def applies(self, cfg: HostConfig) -> bool:
-        return True
+        return cfg.overrides.kernel_module_blacklist.enable
 
     def emit_tailoring(self, cfg: HostConfig) -> list[TailoringOp]:
         return []
 
     def emit_post(self, cfg: HostConfig) -> str:
-        servers = "\n".join(f"server {s} iburst" for s in cfg.time.servers)
-        thresh = cfg.time.chrony_makestep_threshold
+        modules = cfg.overrides.kernel_module_blacklist.modules
+        body = "\n".join(f"install {m} /bin/true" for m in modules)
         return f"""\
-# Chrony configuration (servers from host.yaml; STIG-compliant base)
-cat > /etc/chrony.conf <<'__KS_GEN_EOF__'
-{servers}
-driftfile /var/lib/chrony/drift
-makestep {thresh} 3
-rtcsync
-logdir /var/log/chrony
+# Disable specific kernel modules via modprobe install-trick
+cat > /etc/modprobe.d/ks-gen-blacklist.conf <<'__KS_GEN_EOF__'
+{body}
 __KS_GEN_EOF__
-chmod 644 /etc/chrony.conf
+chmod 644 /etc/modprobe.d/ks-gen-blacklist.conf
 """
 
     def emit_packages(self, cfg: HostConfig) -> list[str]:

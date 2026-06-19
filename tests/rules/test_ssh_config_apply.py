@@ -1,4 +1,4 @@
-from ks_gen.rules.ssh_config_apply import RULE
+from ks_gen.rules.alma9.ssh_config_apply import RULE
 
 
 def test_depends_on_admin_and_keep_open(minimal_cfg):

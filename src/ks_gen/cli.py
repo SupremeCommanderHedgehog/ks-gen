@@ -69,8 +69,9 @@ def lint_cmd(
 def rules_cmd(
     id_: str | None = typer.Option(None, "--id", help="Show detail for one rule id."),
     format_: str = typer.Option("table", "--format", help="table | json"),
+    distro: str = typer.Option("alma9", "--distro", help="Distro to list rules for."),
 ) -> None:
-    catalog = load_rules()
+    catalog = load_rules(distro)
     if id_:
         match = next((r for r in catalog if r.id == id_), None)
         if not match:

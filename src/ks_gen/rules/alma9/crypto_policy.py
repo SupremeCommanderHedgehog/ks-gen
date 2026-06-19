@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+from ks_gen.rules._meta import crypto_policy as meta
 from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 
 if TYPE_CHECKING:
@@ -22,9 +23,9 @@ _POLICY_NAME = {"STIG": "FIPS", "MODERN": "DEFAULT", "FUTURE": "FUTURE"}
 
 @dataclass(frozen=True)
 class _Rule:
-    id: str = "crypto_policy"
-    summary: str = "Apply system crypto-policy; optionally generate Ed25519 host keys."
-    depends_on: list[str] = field(default_factory=list)
+    id: str = meta.ID
+    summary: str = meta.SUMMARY
+    depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
     stig_rules_affected: list[str] = field(default_factory=lambda: list(_TAILORED_WHEN_NOT_STIG))
 
     def applies(self, cfg: HostConfig) -> bool:
@@ -56,7 +57,7 @@ class _Rule:
         if cfg.crypto.policy.value == "STIG":
             return None
         return ExceptionEntry(
-            rule_id="crypto_policy",
+            rule_id=meta.ID,
             summary=f"{cfg.crypto.policy.value} crypto policy",
             stig_rules_disabled=list(_TAILORED_WHEN_NOT_STIG),
             reason=(

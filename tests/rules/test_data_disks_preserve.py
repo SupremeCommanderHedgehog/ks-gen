@@ -1,5 +1,5 @@
 from ks_gen.config import DataDisk, Disk
-from ks_gen.rules.data_disks_preserve import RULE
+from ks_gen.rules.alma9.data_disks_preserve import RULE
 
 
 def test_data_disks_preserve_rule_metadata():
@@ -207,5 +207,5 @@ def test_rule_exception_entry_is_none(minimal_cfg):
 def test_rule_is_discoverable():
     from ks_gen.registry import load_rules
 
-    rule_ids = {r.id for r in load_rules()}
+    rule_ids = {r.id for r in load_rules("alma9")}
     assert "data_disks_preserve" in rule_ids
