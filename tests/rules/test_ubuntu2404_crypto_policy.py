@@ -109,3 +109,25 @@ def test_ssh_block_runs_sshd_t_validation(ubuntu_cfg_factory):
 def test_ssh_block_chmod_600(ubuntu_cfg_factory):
     out = RULE.emit_post(ubuntu_cfg_factory())
     assert "chmod 600 /etc/ssh/sshd_config.d/10-ks-gen-crypto.conf" in out
+
+
+def test_openssl_stig_minproto_tlsv1_2_seclevel_2(ubuntu_cfg_factory):
+    # STIG = MinProtocol TLSv1.2 + SECLEVEL=2. Identical to MODERN under
+    # this rule (the spec note on OpenSSL explains why).
+    from ks_gen.config import Crypto, CryptoPolicy
+
+    cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.STIG)})
+    out = RULE.emit_post(cfg)
+    assert "MinProtocol = TLSv1.2" in out
+    assert "CipherString = DEFAULT@SECLEVEL=2" in out
+
+
+def test_openssl_future_minproto_tlsv1_3_seclevel_3(ubuntu_cfg_factory):
+    # FUTURE jumps to TLS 1.3 only + SECLEVEL=3 (forces 128-bit symmetric
+    # and ECDH-only key agreement).
+    from ks_gen.config import Crypto, CryptoPolicy
+
+    cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.FUTURE)})
+    out = RULE.emit_post(cfg)
+    assert "MinProtocol = TLSv1.3" in out
+    assert "CipherString = DEFAULT@SECLEVEL=3" in out
