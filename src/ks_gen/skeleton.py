@@ -63,8 +63,9 @@ def render_skeleton(
 def render_user_data(cfg: HostConfig) -> str:
     """Render the autoinstall + cloud-init user-data for an ubuntu2404 host.
 
-    Phase 2: emits a minimal placeholder (identity + empty late-commands).
-    Phase 3 will populate late-commands from the ubuntu2404 rule registry.
+    Emits a ``#cloud-config`` document with ``autoinstall.version: 1``,
+    an ``identity`` block from ``cfg.system.hostname`` and
+    ``cfg.user.admin.name``, and an empty ``late-commands`` list.
     """
     env = _env()
     template = env.get_template("user-data.j2")
