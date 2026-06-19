@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.17.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.16.0...v0.17.0) (2026-06-19)
+
+
+### Features
+
+* **rules/ubuntu2404:** time_servers port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.3) ([#104](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/104)) ([ab3041c](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/ab3041cc16d61f2b4cc83d3f7ad99a28776b8112))
+
 ## [0.16.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.15.0...v0.16.0) (2026-06-19)
 
 
