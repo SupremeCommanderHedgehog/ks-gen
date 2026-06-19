@@ -16,4 +16,13 @@ autoinstall:
 {% for key in cfg.user.admin.authorized_keys %}
           - {{ key | tojson }}
 {% endfor %}
+{% if cfg.user.admin.password %}
+        passwd: {{ cfg.user.admin.password | tojson }}
+{% endif %}
+{% if rule_packages %}
+  packages:
+{% for pkg in rule_packages %}
+    - {{ pkg | tojson }}
+{% endfor %}
+{% endif %}
   late-commands:{{ late_commands_block }}

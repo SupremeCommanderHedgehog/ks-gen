@@ -346,6 +346,56 @@ def test_build_bundle_ubuntu2404_late_commands_includes_ufw_entry(tmp_path):
     assert "ufw allow 22/tcp" in ssh_entries[0]
 
 
+def test_build_bundle_ubuntu2404_users_passwd_carried_when_admin_password_set(tmp_path):
+    # Regression for #96: an operator setting user.admin.password (+
+    # sudo: nopasswd_no) gets a host whose admin actually has a working
+    # password to authenticate sudo. Previously the hash was silently dropped.
+    yaml_text = textwrap.dedent(
+        """\
+        distro: ubuntu2404
+        system: {hostname: u24-pw}
+        user:
+          admin:
+            name: ops
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            password: "$6$abc$hash"
+            sudo: nopasswd_no
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert bundle.user_data is not None
+    doc = yaml.safe_load(bundle.user_data)
+    assert doc["autoinstall"]["user-data"]["users"][0]["passwd"] == "$6$abc$hash"
+
+
+def test_build_bundle_ubuntu2404_packages_block_includes_ufw_when_ssh_keep_open_applies(tmp_path):
+    # Regression for #95: ssh_keep_open.emit_packages -> ["ufw"], so a
+    # ubuntu2404 bundle must surface "ufw" in autoinstall.packages. Without
+    # this, late-commands run `ufw allow 22/tcp` against an install where
+    # ufw isn't guaranteed installed -> curtin aborts.
+    yaml_text = textwrap.dedent(
+        """\
+        distro: ubuntu2404
+        system: {hostname: u24-pkgs}
+        user:
+          admin:
+            name: ops
+            authorized_keys: ["ssh-ed25519 AAAA a@b"]
+            sudo: nopasswd_yes
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert bundle.user_data is not None
+    doc = yaml.safe_load(bundle.user_data)
+    assert "ufw" in doc["autoinstall"]["packages"]
+
+
 def test_render_tailoring_matches_build_bundle_tailoring_xml() -> None:
     """render_tailoring(cfg) produces the same XML as build_bundle(cfg).tailoring_xml,
     modulo the embedded timestamp in <xccdf:version time="...">."""

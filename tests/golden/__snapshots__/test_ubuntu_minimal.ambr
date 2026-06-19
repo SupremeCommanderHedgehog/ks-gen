@@ -7,12 +7,13 @@
   Host: `u24-min`
   
   ## Summary
-  - Applied rules: 3
+  - Applied rules: 4
   - Tailored XCCDF rules: 0
   - Declared exceptions: 0
   
   ## Applied rules
   - `admin_user_and_keys` — Create wheel admin, drop authorized_keys, sudoers fragment.
+  - `banner_text` — Write civilian-equivalent login banner; suppress DoD-text oscap rules.
   - `ssh_keep_open` — Ensure ssh.port reachable in firewalld + SELinux before sshd starts.
   - `ssh_config_apply` — Write sshd drop-in config for Port/PermitRootLogin/PasswordAuthentication.
   
@@ -187,7 +188,7 @@
   '''
   <?xml version='1.0' encoding='UTF-8'?>
   <xccdf:Tailoring xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" id="xccdf_ks-gen_tailoring_default">
-    <xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml"/>
+    <xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml"/>
     <xccdf:version time="SNAP">1</xccdf:version>
     <xccdf:Profile id="xccdf_ks-gen_profile_tailored" extends="xccdf_org.ssgproject.content_profile_stig">
       <xccdf:title xml:lang="en-US">ks-gen tailored xccdf_org.ssgproject.content_profile_stig</xccdf:title>
@@ -214,7 +215,30 @@
           shell: /bin/bash
           ssh_authorized_keys:
             - "ssh-ed25519 AAAA a@b"
+    packages:
+      - "ufw"
     late-commands:
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:banner_text
+      # Civilian-equivalent login banner
+      cat > /etc/issue <<'"'"'__KS_GEN_EOF__'"'"'
+      WARNING: This is a private computer system. Unauthorized access is
+      prohibited. All activity on this system may be monitored and logged.
+      Use of this system constitutes consent to such monitoring.
+      __KS_GEN_EOF__
+      chmod 644 /etc/issue
+      cat > /etc/issue.net <<'"'"'__KS_GEN_EOF__'"'"'
+      WARNING: This is a private computer system. Unauthorized access is
+      prohibited. All activity on this system may be monitored and logged.
+      Use of this system constitutes consent to such monitoring.
+      __KS_GEN_EOF__
+      chmod 644 /etc/issue.net
+      cat > /etc/ssh/sshd-banner <<'"'"'__KS_GEN_EOF__'"'"'
+      WARNING: This is a private computer system. Unauthorized access is
+      prohibited. All activity on this system may be monitored and logged.
+      Use of this system constitutes consent to such monitoring.
+      __KS_GEN_EOF__
+      chmod 644 /etc/ssh/sshd-banner'
     - |
       curtin in-target --target=/target -- bash -c '# rule:ssh_keep_open
       ufw allow 22/tcp'

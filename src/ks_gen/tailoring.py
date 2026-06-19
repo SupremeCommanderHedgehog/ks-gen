@@ -9,7 +9,7 @@ _HEADER = (
     "<?xml version='1.0' encoding='UTF-8'?>\n"
     '<xccdf:Tailoring xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" '
     'id="xccdf_ks-gen_tailoring_default">\n'
-    '  <xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml"/>\n'
+    '  <xccdf:benchmark href="/usr/share/xml/scap/ssg/content/{scap_content}"/>\n'
     '  <xccdf:version time="{timestamp}">1</xccdf:version>\n'
     '  <xccdf:Profile id="xccdf_ks-gen_profile_tailored" extends="{profile_id}">\n'
     '    <xccdf:title xml:lang="en-US">ks-gen tailored {profile_id}</xccdf:title>\n'
@@ -19,7 +19,7 @@ _HEADER = (
 _FOOTER = "  </xccdf:Profile>\n</xccdf:Tailoring>\n"
 
 
-def build_tailoring_xml(ops: Iterable[TailoringOp], *, profile_id: str) -> str:
+def build_tailoring_xml(ops: Iterable[TailoringOp], *, profile_id: str, scap_content: str) -> str:
     body: list[str] = []
     for op in ops:
         if op.action == "disable":
@@ -32,6 +32,7 @@ def build_tailoring_xml(ops: Iterable[TailoringOp], *, profile_id: str) -> str:
     head = _HEADER.format(
         timestamp=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         profile_id=profile_id,
+        scap_content=scap_content,
     )
     return head + ("\n".join(body) + "\n" if body else "") + _FOOTER
 
