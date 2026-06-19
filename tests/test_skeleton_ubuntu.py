@@ -135,7 +135,7 @@ def test_render_user_data_post_block_with_single_quotes_survives_shlex_quote(ubu
 def test_render_user_data_emits_cloud_init_users_block(ubuntu_cfg_factory):
     text = render_user_data(ubuntu_cfg_factory(admin="opsadmin"), post_blocks=[])
     doc = yaml.safe_load(text)
-    users = doc["autoinstall"]["users"]
+    users = doc["autoinstall"]["user-data"]["users"]
     assert isinstance(users, list) and len(users) == 1
     assert users[0]["name"] == "opsadmin"
     assert users[0]["shell"] == "/bin/bash"
@@ -144,14 +144,14 @@ def test_render_user_data_emits_cloud_init_users_block(ubuntu_cfg_factory):
 def test_render_user_data_users_block_nopasswd_sudo(ubuntu_cfg_factory):
     text = render_user_data(ubuntu_cfg_factory(), post_blocks=[])
     doc = yaml.safe_load(text)
-    assert doc["autoinstall"]["users"][0]["sudo"] == "ALL=(ALL) NOPASSWD:ALL"
+    assert doc["autoinstall"]["user-data"]["users"][0]["sudo"] == "ALL=(ALL) NOPASSWD:ALL"
 
 
 def test_render_user_data_users_block_carries_authorized_keys(ubuntu_cfg_factory):
     cfg = ubuntu_cfg_factory()
     text = render_user_data(cfg, post_blocks=[])
     doc = yaml.safe_load(text)
-    keys = doc["autoinstall"]["users"][0]["ssh_authorized_keys"]
+    keys = doc["autoinstall"]["user-data"]["users"][0]["ssh_authorized_keys"]
     assert keys == cfg.user.admin.authorized_keys
 
 
@@ -172,7 +172,7 @@ def test_render_user_data_users_block_no_keys_emits_empty_list(ubuntu_cfg_factor
     )
     text = render_user_data(cfg, post_blocks=[])
     doc = yaml.safe_load(text)
-    assert doc["autoinstall"]["users"][0]["ssh_authorized_keys"] == []
+    assert doc["autoinstall"]["user-data"]["users"][0]["ssh_authorized_keys"] == []
 
 
 def test_render_user_data_users_block_password_sudo_no(ubuntu_cfg_factory):
@@ -192,4 +192,4 @@ def test_render_user_data_users_block_password_sudo_no(ubuntu_cfg_factory):
     )
     text = render_user_data(cfg, post_blocks=[])
     doc = yaml.safe_load(text)
-    assert doc["autoinstall"]["users"][0]["sudo"] == "ALL=(ALL) ALL"
+    assert doc["autoinstall"]["user-data"]["users"][0]["sudo"] == "ALL=(ALL) ALL"

@@ -206,12 +206,13 @@
       realname: "opsadmin"
       username: "opsadmin"
       password: "*"
-    users:
-      - name: "opsadmin"
-        sudo: "ALL=(ALL) NOPASSWD:ALL"
-        shell: /bin/bash
-        ssh_authorized_keys:
-          - "ssh-ed25519 AAAA a@b"
+    user-data:
+      users:
+        - name: "opsadmin"
+          sudo: "ALL=(ALL) NOPASSWD:ALL"
+          shell: /bin/bash
+          ssh_authorized_keys:
+            - "ssh-ed25519 AAAA a@b"
     late-commands:
     - |
       curtin in-target --target=/target -- bash -c '# rule:ssh_keep_open
