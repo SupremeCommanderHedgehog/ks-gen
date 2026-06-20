@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.22.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.21.0...v0.22.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** kernel_module_blacklist port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.8) ([#114](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/114)) ([8134c0b](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/8134c0bded818d15d691ee0b35bccbfebb36bae5))
+
 ## [0.21.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.20.0...v0.21.0) (2026-06-20)
 
 
