@@ -16,10 +16,10 @@
 #
 # Target: Ubuntu 24.04 LTS / Podman. Must be run as root.
 #
-# Note: this is the Ubuntu sibling of create-rootless-user.sh — the
-# alma9 SELinux-specific operations (semanage fcontext equivalence,
-# restorecon relabels) are removed. Without a custom AppArmor profile
-# extension that permits /srv/containers, podman's stock
+# Note: this is the Ubuntu sibling of the alma9 helper — SELinux
+# fcontext equivalence rules and file-label restore calls are stripped
+# (AppArmor confines processes, not files). Without a custom AppArmor
+# profile extension that permits /srv/containers, podman's stock
 # containers-default profile may DENY access to the per-user storage
 # tree; track via the AppArmor follow-up issue.
 
