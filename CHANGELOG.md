@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.28.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.27.0...v0.28.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** wire emit_tailoring + exception_entry ([#127](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/127) PR A) ([#130](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/130)) ([2f7dbfe](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/2f7dbfe3b5235023f1a054339660bb7d6758670d))
+
 ## [0.27.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.26.0...v0.27.0) (2026-06-20)
 
 
