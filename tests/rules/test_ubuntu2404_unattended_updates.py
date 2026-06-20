@@ -271,3 +271,73 @@ def test_reboot_timer_oncalendar_reflects_cfg(ubuntu_cfg_factory):
     assert "/etc/systemd/system/ks-gen-reboot-if-needed.timer" in out
     assert "OnCalendar=Sun *-*-* 06:00:00" in out
     assert "OnCalendar=Sun *-*-* 03:00:00" not in out
+
+
+def test_emit_packages_returns_unattended_upgrades_when_either_timer_enabled(
+    ubuntu_cfg_factory,
+):
+    from ks_gen.config import (
+        MonthlyFullCfg,
+        NightlySecurityCfg,
+        Overrides,
+        RebootWindowCfg,
+        UnattendedUpdatesCfg,
+    )
+
+    # Default: both timers on -> package required.
+    assert RULE.emit_packages(ubuntu_cfg_factory()) == ["unattended-upgrades"]
+
+    # Only nightly -> package still required.
+    cfg_nightly_only = ubuntu_cfg_factory().model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    nightly_security=NightlySecurityCfg(),
+                    monthly_full=MonthlyFullCfg(enable=False),
+                    reboot_window=RebootWindowCfg(),
+                ),
+            )
+        }
+    )
+    assert RULE.emit_packages(cfg_nightly_only) == ["unattended-upgrades"]
+
+    # Only monthly -> package still required.
+    cfg_monthly_only = ubuntu_cfg_factory().model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    nightly_security=NightlySecurityCfg(enable=False),
+                    monthly_full=MonthlyFullCfg(),
+                    reboot_window=RebootWindowCfg(),
+                ),
+            )
+        }
+    )
+    assert RULE.emit_packages(cfg_monthly_only) == ["unattended-upgrades"]
+
+    # Both update timers off + reboot off (validator forbids reboot-only)
+    # -> no package required.
+    cfg_all_off = ubuntu_cfg_factory().model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    nightly_security=NightlySecurityCfg(enable=False),
+                    monthly_full=MonthlyFullCfg(enable=False),
+                    reboot_window=RebootWindowCfg(enable=False),
+                ),
+            )
+        }
+    )
+    assert RULE.emit_packages(cfg_all_off) == []
+
+
+def test_id_and_summary_and_contract_come_from_shared_meta(ubuntu_cfg_factory):
+    from ks_gen.rules._meta import unattended_updates as meta
+
+    assert RULE.id == meta.ID
+    assert RULE.summary == meta.SUMMARY
+    # Mirrors meta's empty DEPENDS_ON.
+    assert RULE.depends_on == []
+    # Deferred until ssg-ubuntu2404-ds.xml rule survey lands.
+    assert RULE.emit_tailoring(ubuntu_cfg_factory()) == []
+    assert RULE.exception_entry(ubuntu_cfg_factory()) is None
