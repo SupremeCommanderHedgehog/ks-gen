@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.29.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.29.0...v0.29.1) (2026-06-20)
+
+
+### Bug Fixes
+
+* **config:** normalize Packages fields when preset=lean ([#134](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/134)) ([#135](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/135)) ([84a460b](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/84a460b0b6651c03e85712b108dd4dcde9cffc79))
+
 ## [0.29.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.28.0...v0.29.0) (2026-06-20)
 
 
