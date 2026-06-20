@@ -76,3 +76,29 @@ def test_post_reflects_deny_override(ubuntu_cfg_factory):
     out = RULE.emit_post(cfg)
     assert "deny = 5" in out
     assert "deny = 3" not in out
+
+
+def test_post_writes_pam_configs_profile_at_ks_gen_faillock(ubuntu_cfg_factory):
+    # The "ks-gen-" prefix is unique so the profile name doesn't collide
+    # with any future Debian-shipped pam-faillock profile.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "/usr/share/pam-configs/ks-gen-faillock" in out
+
+
+def test_post_profile_contains_preauth_and_authfail_lines(ubuntu_cfg_factory):
+    # preauth runs before pam_unix (counts failures), authfail runs
+    # after a failure to record it. Both required for pam_faillock to
+    # be functional.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "pam_faillock.so preauth" in out
+    assert "pam_faillock.so authfail" in out
+
+
+def test_post_profile_contains_account_required_line(ubuntu_cfg_factory):
+    # Account: required pam_faillock.so — runs on every account check
+    # and zeroes the counter on success. Without this, the counter
+    # would only grow.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "Account-Type: Primary" in out
+    assert "required" in out
+    assert "pam_faillock.so" in out
