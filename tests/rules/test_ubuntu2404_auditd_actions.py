@@ -108,3 +108,30 @@ def test_post_appends_with_grep_fallback_for_all_three_directives(ubuntu_cfg_fac
         "grep -q '^max_log_file_action' /etc/audit/auditd.conf"
         " || echo 'max_log_file_action = ROTATE'"
     ) in out
+
+
+def test_emit_packages_returns_auditd(ubuntu_cfg_factory):
+    # Ubuntu Server's seed doesn't include auditd. Without this pull,
+    # /etc/audit/auditd.conf doesn't exist and the sed-replace fails.
+    assert RULE.emit_packages(ubuntu_cfg_factory()) == ["auditd"]
+
+
+def test_emit_tailoring_returns_empty_deferred(ubuntu_cfg_factory):
+    # Deferred: ssg-ubuntu2404-ds.xml var_auditd_* variable IDs land
+    # in the audit-story PR.
+    assert RULE.emit_tailoring(ubuntu_cfg_factory()) == []
+
+
+def test_exception_entry_returns_none_deferred(ubuntu_cfg_factory):
+    # Deferred: runtime-computed English (mirroring alma9's
+    # HALT/HALT/keep_logs strict check) lands in the audit-story PR.
+    assert RULE.exception_entry(ubuntu_cfg_factory()) is None
+
+
+def test_id_and_summary_come_from_shared_meta(ubuntu_cfg_factory):
+    from ks_gen.rules._meta import auditd_actions as meta
+
+    assert RULE.id == meta.ID
+    assert RULE.summary == meta.SUMMARY
+    # Mirrors meta's empty DEPENDS_ON.
+    assert RULE.depends_on == []
