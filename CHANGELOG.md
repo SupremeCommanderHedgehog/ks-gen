@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.24.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.23.0...v0.24.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** data_disks_preserve + container_host minimal ports ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.12, [#88](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/88)) ([#119](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/119)) ([10aa2da](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/10aa2dab763850545a05168848c0041a9fc4b02b))
+
 ## [0.23.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.22.0...v0.23.0) (2026-06-20)
 
 
