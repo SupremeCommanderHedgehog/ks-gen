@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.27.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.26.0...v0.27.0) (2026-06-20)
+
+
+### Features
+
+* **audit-story:** phase 1 — SSG datastream rule-ID introspection ([#127](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/127)) ([#128](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/128)) ([92c7c48](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/92c7c483335fb273190fd511cc21b4b4f7ca128f))
+
 ## [0.26.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.25.0...v0.26.0) (2026-06-20)
 
 
