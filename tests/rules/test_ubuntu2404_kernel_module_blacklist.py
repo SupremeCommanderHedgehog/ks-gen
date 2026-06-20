@@ -104,3 +104,33 @@ def test_post_reflects_empty_modules_override(ubuntu_cfg_factory):
     assert "chmod 644 /etc/modprobe.d/ks-gen-blacklist.conf" in out
     # But no install-trick line lands.
     assert "install " not in out
+
+
+def test_emit_packages_returns_empty(ubuntu_cfg_factory):
+    # `modprobe` ships in `kmod` (Essential: yes on Ubuntu Server) —
+    # always present, no apt deps required.
+    assert RULE.emit_packages(ubuntu_cfg_factory()) == []
+
+
+def test_emit_tailoring_returns_empty_deferred(ubuntu_cfg_factory):
+    # Deferred: ssg-ubuntu2404-ds.xml kernel_module_<m>_disabled
+    # rule IDs land in the audit-story PR.
+    assert RULE.emit_tailoring(ubuntu_cfg_factory()) == []
+
+
+def test_exception_entry_returns_none_deferred(ubuntu_cfg_factory):
+    # Deferred: paired with emit_tailoring above. May remain None
+    # permanently if there's no operator-facing exception story.
+    assert RULE.exception_entry(ubuntu_cfg_factory()) is None
+
+
+def test_depends_on_is_empty(ubuntu_cfg_factory):
+    # Mirrors meta's empty DEPENDS_ON.
+    assert RULE.depends_on == []
+
+
+def test_id_and_summary_come_from_shared_meta(ubuntu_cfg_factory):
+    from ks_gen.rules._meta import kernel_module_blacklist as meta
+
+    assert RULE.id == meta.ID
+    assert RULE.summary == meta.SUMMARY
