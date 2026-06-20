@@ -63,3 +63,44 @@ def test_post_includes_all_eight_default_modules(ubuntu_cfg_factory):
         "udf",
     ):
         assert f"install {module} /bin/true" in out
+
+
+def test_post_reflects_modules_override_replaces_default_list(ubuntu_cfg_factory):
+    # Override is a full replacement, NOT a merge — operator gets
+    # exactly the modules they specified, no implicit defaults.
+    from ks_gen.config import KernelModuleBlacklistCfg, Overrides
+
+    cfg = ubuntu_cfg_factory().model_copy(
+        update={
+            "overrides": Overrides(
+                kernel_module_blacklist=KernelModuleBlacklistCfg(modules=["dccp", "rds"]),
+            )
+        }
+    )
+    out = RULE.emit_post(cfg)
+    assert "install dccp /bin/true" in out
+    assert "install rds /bin/true" in out
+    # Default modules MUST NOT leak in.
+    assert "install usb-storage /bin/true" not in out
+    assert "install cramfs /bin/true" not in out
+
+
+def test_post_reflects_empty_modules_override(ubuntu_cfg_factory):
+    # Operator can configure modules=[] to keep the rule applied
+    # (file exists, audit checks pass) but disable any specific
+    # module. The heredoc still runs; just no install lines.
+    from ks_gen.config import KernelModuleBlacklistCfg, Overrides
+
+    cfg = ubuntu_cfg_factory().model_copy(
+        update={
+            "overrides": Overrides(
+                kernel_module_blacklist=KernelModuleBlacklistCfg(modules=[]),
+            )
+        }
+    )
+    out = RULE.emit_post(cfg)
+    # File still created + chmod'd.
+    assert "/etc/modprobe.d/ks-gen-blacklist.conf" in out
+    assert "chmod 644 /etc/modprobe.d/ks-gen-blacklist.conf" in out
+    # But no install-trick line lands.
+    assert "install " not in out
