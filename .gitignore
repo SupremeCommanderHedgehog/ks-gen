@@ -34,3 +34,9 @@ Thumbs.db
 # Claude Code local state (per-developer; do not publish)
 .claude/
 .scratch/
+
+# Local scratch logs from CI parity runs (mypy, pytest, ruff)
+ci-out.txt
+mypy-out.txt
+mypy.log
+pytest-out.txt
