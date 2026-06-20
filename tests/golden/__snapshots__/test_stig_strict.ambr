@@ -8,7 +8,7 @@
   
   ## Summary
   - Applied rules: 13
-  - Tailored XCCDF rules: 4
+  - Tailored XCCDF rules: 3
   - Declared exceptions: 0
   
   ## Applied rules
@@ -32,7 +32,6 @@
   | `xccdf_org.ssgproject.content_rule_banner_etc_issue` | `banner_text` |
   | `xccdf_org.ssgproject.content_rule_banner_etc_issue_net` | `banner_text` |
   | `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled` | `banner_text` |
-  | `xccdf_org.ssgproject.content_rule_install_DoD_intermediate_certificates` | `dod_root_ca` |
   
   ## Rule exception details
   ### `banner_text` — Substitutes private-system banner for DISA-mandated DoD text.
@@ -47,9 +46,6 @@
   ### `dod_root_ca` — DoD root/intermediate CA bundle not installed.
   
   _Reason:_ Server is not a DoD asset; bundle is not applicable.
-  
-  Disabled XCCDF rules:
-  - `xccdf_org.ssgproject.content_rule_install_DoD_intermediate_certificates`
   
   ## Declared exceptions (from host.yaml)
   _(none)_
@@ -389,7 +385,6 @@
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_banner_etc_issue" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_banner_etc_issue_net" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_install_DoD_intermediate_certificates" selected="false"/>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time">0</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_deny">3</xccdf:set-value>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_package_usbguard_installed" selected="true"/>

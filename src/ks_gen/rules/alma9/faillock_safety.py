@@ -12,7 +12,12 @@ if TYPE_CHECKING:
 _PREFIX = "xccdf_org.ssgproject.content_"
 _VAR_UNLOCK = f"{_PREFIX}value_var_accounts_passwords_pam_faillock_unlock_time"
 _VAR_DENY = f"{_PREFIX}value_var_accounts_passwords_pam_faillock_deny"
-_RULE_EVEN_DENY_ROOT = f"{_PREFIX}rule_accounts_passwords_pam_faillock_even_deny_root"
+# Renamed via #127 PR B SSG-drift sweep: the upstream SSG rule dropped
+# the "even_" prefix in `_even_deny_root` → `_deny_root` between the SSG
+# version this code was originally written against and current
+# ssg-almalinux9-ds.xml (0.1.80). The cfg.overrides.faillock.even_deny_root
+# field name is unchanged — that's the operator-facing knob.
+_RULE_DENY_ROOT = f"{_PREFIX}rule_accounts_passwords_pam_faillock_deny_root"
 
 
 @dataclass(frozen=True)
@@ -20,7 +25,7 @@ class _Rule:
     id: str = meta.ID
     summary: str = meta.SUMMARY
     depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
-    stig_rules_affected: list[str] = field(default_factory=lambda: [_RULE_EVEN_DENY_ROOT])
+    stig_rules_affected: list[str] = field(default_factory=lambda: [_RULE_DENY_ROOT])
 
     def applies(self, cfg: HostConfig) -> bool:
         return cfg.overrides.faillock.enable
@@ -32,7 +37,7 @@ class _Rule:
             TailoringOp(rule_id=_VAR_DENY, action="set_value", value=str(f.deny)),
         ]
         if not f.even_deny_root:
-            ops.append(TailoringOp(rule_id=_RULE_EVEN_DENY_ROOT, action="disable"))
+            ops.append(TailoringOp(rule_id=_RULE_DENY_ROOT, action="disable"))
         return ops
 
     def emit_post(self, cfg: HostConfig) -> str:
@@ -58,7 +63,7 @@ class _Rule:
         f = cfg.overrides.faillock
         if f.even_deny_root and f.unlock_time == 0:
             return None
-        disabled = [_RULE_EVEN_DENY_ROOT] if not f.even_deny_root else []
+        disabled = [_RULE_DENY_ROOT] if not f.even_deny_root else []
         return ExceptionEntry(
             rule_id=meta.ID,
             summary=f"unlock_time={f.unlock_time}, even_deny_root={f.even_deny_root}",
