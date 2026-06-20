@@ -23,7 +23,7 @@ class Bundle:
     the invariant so callers downstream of construction can rely on it.
     """
 
-    distro: Literal["alma9", "ubuntu2404"]
+    distro: Literal["alma9", "alma8", "ubuntu2404"]
     tailoring_xml: str
     host_yaml: str
     exceptions_md: str
@@ -32,13 +32,13 @@ class Bundle:
     meta_data: str | None = None
 
     def __post_init__(self) -> None:
-        if self.distro == "alma9":
+        if self.distro in ("alma9", "alma8"):
             if self.ks_cfg is None:
-                raise ValueError("alma9 bundle requires ks_cfg")
+                raise ValueError(f"{self.distro} bundle requires ks_cfg")
             if self.user_data is not None:
-                raise ValueError("alma9 bundle must not set user_data")
+                raise ValueError(f"{self.distro} bundle must not set user_data")
             if self.meta_data is not None:
-                raise ValueError("alma9 bundle must not set meta_data")
+                raise ValueError(f"{self.distro} bundle must not set meta_data")
         elif self.distro == "ubuntu2404":
             if self.user_data is None:
                 raise ValueError("ubuntu2404 bundle requires user_data")
@@ -68,14 +68,14 @@ def render_tailoring(cfg: HostConfig) -> str:
 
 
 def build_bundle(cfg: HostConfig) -> Bundle:
-    if cfg.distro == "alma9":
-        return _build_alma9_bundle(cfg)
+    if cfg.distro == "alma9" or cfg.distro == "alma8":
+        return _build_rhel_family_bundle(cfg)
     if cfg.distro == "ubuntu2404":
         return _build_ubuntu2404_bundle(cfg)
     assert_never(cfg.distro)
 
 
-def _build_alma9_bundle(cfg: HostConfig) -> Bundle:
+def _build_rhel_family_bundle(cfg: HostConfig) -> Bundle:
     rules = topo_sort(load_rules(cfg.distro))
     applicable = [r for r in rules if r.applies(cfg)]
 
@@ -103,7 +103,7 @@ def _build_alma9_bundle(cfg: HostConfig) -> Bundle:
     )
     exceptions_md = render_exceptions_md(cfg, applicable)
     return Bundle(
-        distro="alma9",
+        distro=cfg.distro,
         ks_cfg=ks_cfg,
         tailoring_xml=tailoring_xml,
         host_yaml=host_yaml,
@@ -154,7 +154,7 @@ def write_bundle(bundle: Bundle, out_dir: Path) -> None:
     (out_dir / "tailoring.xml").write_text(bundle.tailoring_xml, encoding="utf-8", newline="\n")
     (out_dir / "host.yaml").write_text(bundle.host_yaml, encoding="utf-8", newline="\n")
     (out_dir / "exceptions.md").write_text(bundle.exceptions_md, encoding="utf-8", newline="\n")
-    if bundle.distro == "alma9":
+    if bundle.distro == "alma9" or bundle.distro == "alma8":
         assert bundle.ks_cfg is not None  # Bundle.__post_init__ guarantees this
         (out_dir / "ks.cfg").write_text(bundle.ks_cfg, encoding="utf-8", newline="\n")
     elif bundle.distro == "ubuntu2404":
