@@ -45,3 +45,21 @@ def test_post_uses_install_trick_with_bin_true(ubuntu_cfg_factory):
     out = RULE.emit_post(ubuntu_cfg_factory())
     assert "install " in out
     assert " /bin/true" in out
+
+
+def test_post_includes_all_eight_default_modules(ubuntu_cfg_factory):
+    # Default list comes from KernelModuleBlacklistCfg.modules — eight
+    # filesystem/removable-media modules required disabled by the STIG
+    # profile. Each must appear as a full install-trick line.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    for module in (
+        "usb-storage",
+        "cramfs",
+        "freevxfs",
+        "jffs2",
+        "hfs",
+        "hfsplus",
+        "squashfs",
+        "udf",
+    ):
+        assert f"install {module} /bin/true" in out
