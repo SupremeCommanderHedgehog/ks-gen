@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from ks_gen.config import (
+    LEAN_EXTRA_PACKAGES,
     AdminUser,
     AuditdActionsCfg,
     AuditdMaxFileAction,
@@ -1097,6 +1098,71 @@ def test_effective_properties_are_not_serialized():
     dumped = p.model_dump()
     assert "effective_base_groups" not in dumped
     assert "effective_required" not in dumped
+
+
+# #134 — lean preset normalization at model construction time so
+# model_dump() (host.yaml) reflects the actual install state.
+
+
+def test_lean_preset_normalizes_base_groups_into_field():
+    # base_groups field reflects the lean-normalized set, not the raw default.
+    # Pre-#134 this was ["@^minimal-environment", "@standard"] even with lean.
+    p = Packages(preset="lean")
+    assert p.base_groups == ["@^minimal-environment"]
+
+
+def test_lean_preset_normalizes_required_into_field():
+    # required field includes the LEAN_EXTRA_PACKAGES, not just the defaults.
+    p = Packages(preset="lean")
+    for pkg in LEAN_EXTRA_PACKAGES:
+        assert pkg in p.required
+
+
+def test_lean_preset_normalization_reflected_in_model_dump():
+    # The whole point of #134: dumping a lean cfg shows the install-time
+    # truth, not the raw defaults. host.yaml is consumed by ks-gen verify
+    # and audited by operators; it must not lie.
+    p = Packages(preset="lean")
+    dumped = p.model_dump()
+    assert "@standard" not in dumped["base_groups"]
+    for pkg in LEAN_EXTRA_PACKAGES:
+        assert pkg in dumped["required"]
+
+
+def test_lean_preset_normalization_is_idempotent_on_roundtrip():
+    # Re-validating the dumped form must produce the same cfg — no infinite
+    # mutation loop, no surprise drift after one round-trip.
+    p1 = Packages(preset="lean")
+    p2 = Packages(**p1.model_dump())
+    assert p1.base_groups == p2.base_groups
+    assert p1.required == p2.required
+
+
+def test_lean_preset_normalization_preserves_user_required_order():
+    # User-specified required entries stay in order; LEAN_EXTRA_PACKAGES
+    # append after, deduplicated.
+    p = Packages(preset="lean", required=["scap-security-guide", "logrotate", "aide"])
+    assert p.required[:3] == ["scap-security-guide", "logrotate", "aide"]
+    assert p.required.count("logrotate") == 1
+    for pkg in ("postfix", "cronie", "crontabs", "parted"):
+        assert pkg in p.required[3:]
+
+
+def test_lean_preset_normalization_handles_custom_base_groups():
+    # User-supplied custom @group is preserved; @standard still dropped.
+    p = Packages(
+        preset="lean",
+        base_groups=["@^minimal-environment", "@standard", "@development"],
+    )
+    assert p.base_groups == ["@^minimal-environment", "@development"]
+
+
+def test_standard_preset_does_not_normalize():
+    # Only LEAN triggers normalization. STANDARD keeps raw defaults intact.
+    p = Packages()
+    assert "@standard" in p.base_groups
+    for pkg in LEAN_EXTRA_PACKAGES:
+        assert pkg not in p.required
 
 
 def test_container_volume_defaults():
