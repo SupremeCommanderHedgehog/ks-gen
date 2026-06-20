@@ -102,3 +102,18 @@ def test_post_profile_contains_account_required_line(ubuntu_cfg_factory):
     assert "Account-Type: Primary" in out
     assert "required" in out
     assert "pam_faillock.so" in out
+
+
+def test_post_enables_profile_via_pam_auth_update(ubuntu_cfg_factory):
+    # --enable activates the profile we just wrote.
+    # --package tells pam-auth-update this is a package-managed,
+    # non-interactive run -> survives libpam-runtime upgrades that
+    # regenerate the common-* files.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "pam-auth-update --enable ks-gen-faillock --package" in out
+
+
+def test_post_uses_debian_frontend_noninteractive(ubuntu_cfg_factory):
+    # No TTY in late-commands, so any prompt would hang the install.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "DEBIAN_FRONTEND=noninteractive pam-auth-update" in out
