@@ -45,8 +45,9 @@ def gen(
     bundle = build_bundle(cfg)
     write_bundle(bundle, out)
     # lint_kickstart validates ks.cfg invariants; skip for ubuntu2404 until
-    # phase 4 introduces a user-data lint.
-    if bundle.distro == "alma9":
+    # phase 4 introduces a user-data lint. alma8 produces a ks.cfg with the
+    # same shape as alma9, so the same lint applies.
+    if bundle.distro in ("alma9", "alma8"):
         report = lint_kickstart(out / "ks.cfg")
         if not report.ok:
             for f in report.failures:
@@ -123,8 +124,9 @@ def new_cmd(
     bundle = build_bundle(cfg)
     write_bundle(bundle, host_dir)
     # lint_kickstart validates ks.cfg invariants; skip for ubuntu2404 until
-    # phase 4 introduces a user-data lint.
-    if bundle.distro == "alma9":
+    # phase 4 introduces a user-data lint. alma8 produces a ks.cfg with the
+    # same shape as alma9, so the same lint applies.
+    if bundle.distro in ("alma9", "alma8"):
         report = lint_kickstart(host_dir / "ks.cfg")
         if not report.ok:
             for f in report.failures:
