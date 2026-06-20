@@ -10,15 +10,38 @@ if TYPE_CHECKING:
     from ks_gen.config import HostConfig
 
 _PREFIX = "xccdf_org.ssgproject.content_rule_"
+# Cleaned up via #127 PR B SSG-drift sweep: dropped sshd_use_approved_kex,
+# sshd_use_approved_macs, and sshd_use_approved_mac_ordered — none of
+# those exist in current ssg-almalinux9-ds.xml (0.1.80). The two surviving
+# IDs (enable_fips_mode, sshd_use_approved_ciphers) are the only crypto
+# checks our policy override moots on current AL9 SSG.
 _TAILORED_WHEN_NOT_STIG = [
     f"{_PREFIX}enable_fips_mode",
     f"{_PREFIX}sshd_use_approved_ciphers",
-    f"{_PREFIX}sshd_use_approved_kex",
-    f"{_PREFIX}sshd_use_approved_macs",
-    f"{_PREFIX}sshd_use_approved_mac_ordered",
 ]
 
 _POLICY_NAME = {"STIG": "FIPS", "MODERN": "DEFAULT", "FUTURE": "FUTURE"}
+
+
+def _emit_post(cfg: HostConfig) -> str:
+    """Render the %post body for the crypto policy.
+
+    Module-level so the alma8 sibling can reuse it (the post body is
+    identical on AL8 and AL9 — `update-crypto-policies` shipped in
+    RHEL 8.0). alma8's emit_tailoring diverges (extra cipher rules in
+    ssg-almalinux8 that ssg-almalinux9 doesn't have) but emit_post is
+    byte-for-byte the same.
+    """
+    policy = cfg.crypto.policy.value
+    target = _POLICY_NAME[policy]
+    lines = [
+        f"# Apply system-wide crypto policy: {policy} ({target})",
+        f"update-crypto-policies --set {target}",
+    ]
+    if policy != "STIG":
+        lines.append("# Generate any missing host keys (incl. Ed25519, not produced under FIPS)")
+        lines.append("ssh-keygen -A")
+    return "\n".join(lines) + "\n"
 
 
 @dataclass(frozen=True)
@@ -37,18 +60,7 @@ class _Rule:
         return [TailoringOp(rule_id=r, action="disable") for r in _TAILORED_WHEN_NOT_STIG]
 
     def emit_post(self, cfg: HostConfig) -> str:
-        policy = cfg.crypto.policy.value
-        target = _POLICY_NAME[policy]
-        lines = [
-            f"# Apply system-wide crypto policy: {policy} ({target})",
-            f"update-crypto-policies --set {target}",
-        ]
-        if policy != "STIG":
-            lines.append(
-                "# Generate any missing host keys (incl. Ed25519, not produced under FIPS)"
-            )
-            lines.append("ssh-keygen -A")
-        return "\n".join(lines) + "\n"
+        return _emit_post(cfg)
 
     def emit_packages(self, cfg: HostConfig) -> list[str]:
         return []
