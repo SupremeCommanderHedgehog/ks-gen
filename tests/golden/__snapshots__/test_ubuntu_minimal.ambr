@@ -7,7 +7,7 @@
   Host: `u24-min`
   
   ## Summary
-  - Applied rules: 10
+  - Applied rules: 13
   - Tailored XCCDF rules: 0
   - Declared exceptions: 0
   
@@ -16,12 +16,15 @@
   - `auditd_actions` — auditd disk_full/disk_error/max_log_file actions (SUSPEND/ROTATE default).
   - `banner_text` — Write civilian-equivalent login banner; suppress DoD-text oscap rules.
   - `crypto_policy` — Apply system crypto-policy; optionally generate Ed25519 host keys.
+  - `dod_root_ca` — Skip DoD root CA bundle installation.
   - `faillock_safety` — Set faillock unlock_time and disable even_deny_root for remote safety.
   - `kernel_module_blacklist` — Write modprobe blacklist for unused/disallowed kernel modules.
+  - `package_purge` — Remove disallowed packages after install (catches transitive pulls).
   - `ssh_keep_open` — Ensure ssh.port reachable in firewalld + SELinux before sshd starts.
   - `ssh_config_apply` — Write sshd drop-in config for Port/PermitRootLogin/PasswordAuthentication.
   - `time_servers` — Write chrony.conf with operator-chosen NTP servers (non-DoD by default).
   - `unattended_updates` — Configure dnf-automatic for nightly security + monthly full updates, with reboot inside a maintenance window.
+  - `usbguard` — Enable or disable USBGuard install + service per overrides.
   
   ## Tailored XCCDF rules (oscap rules disabled or value-tailored)
   _(none)_
@@ -326,6 +329,10 @@
       install udf /bin/true
       __KS_GEN_EOF__
       chmod 644 /etc/modprobe.d/ks-gen-blacklist.conf'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:package_purge
+      # Remove disallowed packages (no-op if not installed)
+      DEBIAN_FRONTEND=noninteractive apt-get -y purge telnet-server rsh-server tftp-server vsftpd ypserv || true'
     - |
       curtin in-target --target=/target -- bash -c '# rule:ssh_keep_open
       ufw allow 22/tcp'
