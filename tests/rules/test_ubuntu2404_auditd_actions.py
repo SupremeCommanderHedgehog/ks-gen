@@ -80,3 +80,31 @@ def test_post_reflects_max_log_file_action_keep_logs_lowercase(ubuntu_cfg_factor
     out = RULE.emit_post(cfg)
     assert "max_log_file_action = keep_logs" in out
     assert "max_log_file_action = ROTATE" not in out
+
+
+def test_post_uses_defensive_sed_prefix_for_all_three_directives(ubuntu_cfg_factory):
+    # The ^[# ]* prefix handles three states defensively: line
+    # uncommented, line commented (e.g., "# disk_full_action = ..."),
+    # and line entirely absent (the grep-fallback covers this last
+    # case — see the next test).
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "^[# ]*disk_full_action" in out
+    assert "^[# ]*disk_error_action" in out
+    assert "^[# ]*max_log_file_action" in out
+
+
+def test_post_appends_with_grep_fallback_for_all_three_directives(ubuntu_cfg_factory):
+    # When the line is entirely absent (e.g., Debian downstream
+    # rebuild dropped a default), the grep || echo fallback appends
+    # the line so the directive is always set.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert (
+        "grep -q '^disk_full_action' /etc/audit/auditd.conf || echo 'disk_full_action = SUSPEND'"
+    ) in out
+    assert (
+        "grep -q '^disk_error_action' /etc/audit/auditd.conf || echo 'disk_error_action = SUSPEND'"
+    ) in out
+    assert (
+        "grep -q '^max_log_file_action' /etc/audit/auditd.conf"
+        " || echo 'max_log_file_action = ROTATE'"
+    ) in out
