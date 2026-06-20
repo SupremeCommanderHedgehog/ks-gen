@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.26.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.25.0...v0.26.0) (2026-06-20)
+
+
+### Features
+
+* **rules/alma8:** phase 2 — re-export all 15 alma9 rules ([#121](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/121) phase 2) ([#124](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/124)) ([5a436eb](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/5a436ebc9f844c470b805a8c437cf9ec4a5283e0))
+
 ## [0.25.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.24.0...v0.25.0) (2026-06-20)
 
 
