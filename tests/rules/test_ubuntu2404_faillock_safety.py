@@ -117,3 +117,32 @@ def test_post_uses_debian_frontend_noninteractive(ubuntu_cfg_factory):
     # No TTY in late-commands, so any prompt would hang the install.
     out = RULE.emit_post(ubuntu_cfg_factory())
     assert "DEBIAN_FRONTEND=noninteractive pam-auth-update" in out
+
+
+def test_emit_packages_returns_empty(ubuntu_cfg_factory):
+    # pam_faillock.so ships in libpam-modules, pam-auth-update in
+    # libpam-runtime — both Essential: yes. No apt deps.
+    assert RULE.emit_packages(ubuntu_cfg_factory()) == []
+
+
+def test_emit_tailoring_returns_empty_deferred(ubuntu_cfg_factory):
+    # Deferred until ssg-ubuntu2404-ds.xml faillock rule survey lands
+    # in the audit-story PR.
+    assert RULE.emit_tailoring(ubuntu_cfg_factory()) == []
+
+
+def test_exception_entry_returns_none_deferred(ubuntu_cfg_factory):
+    # Deferred until ssg-ubuntu2404-ds.xml faillock rule survey lands.
+    assert RULE.exception_entry(ubuntu_cfg_factory()) is None
+
+
+def test_depends_on_is_empty(ubuntu_cfg_factory):
+    # Mirrors meta's empty DEPENDS_ON.
+    assert RULE.depends_on == []
+
+
+def test_id_and_summary_come_from_shared_meta(ubuntu_cfg_factory):
+    from ks_gen.rules._meta import faillock_safety as meta
+
+    assert RULE.id == meta.ID
+    assert RULE.summary == meta.SUMMARY
