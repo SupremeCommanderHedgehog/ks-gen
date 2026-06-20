@@ -7,7 +7,7 @@
   Host: `u24-min`
   
   ## Summary
-  - Applied rules: 9
+  - Applied rules: 10
   - Tailored XCCDF rules: 0
   - Declared exceptions: 0
   
@@ -17,6 +17,7 @@
   - `banner_text` — Write civilian-equivalent login banner; suppress DoD-text oscap rules.
   - `crypto_policy` — Apply system crypto-policy; optionally generate Ed25519 host keys.
   - `faillock_safety` — Set faillock unlock_time and disable even_deny_root for remote safety.
+  - `kernel_module_blacklist` — Write modprobe blacklist for unused/disallowed kernel modules.
   - `ssh_keep_open` — Ensure ssh.port reachable in firewalld + SELinux before sshd starts.
   - `ssh_config_apply` — Write sshd drop-in config for Port/PermitRootLogin/PasswordAuthentication.
   - `time_servers` — Write chrony.conf with operator-chosen NTP servers (non-DoD by default).
@@ -311,6 +312,20 @@
       __KS_GEN_EOF__
       chmod 644 /usr/share/pam-configs/ks-gen-faillock
       DEBIAN_FRONTEND=noninteractive pam-auth-update --enable ks-gen-faillock --package'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:kernel_module_blacklist
+      # Disable specific kernel modules via modprobe install-trick
+      cat > /etc/modprobe.d/ks-gen-blacklist.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      install usb-storage /bin/true
+      install cramfs /bin/true
+      install freevxfs /bin/true
+      install jffs2 /bin/true
+      install hfs /bin/true
+      install hfsplus /bin/true
+      install squashfs /bin/true
+      install udf /bin/true
+      __KS_GEN_EOF__
+      chmod 644 /etc/modprobe.d/ks-gen-blacklist.conf'
     - |
       curtin in-target --target=/target -- bash -c '# rule:ssh_keep_open
       ufw allow 22/tcp'
