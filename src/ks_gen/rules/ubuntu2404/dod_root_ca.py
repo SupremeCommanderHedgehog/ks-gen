@@ -32,8 +32,11 @@ class _Rule:
         return not cfg.overrides.dod_root_ca.install
 
     def emit_tailoring(self, cfg: HostConfig) -> list[TailoringOp]:
-        # Deferred: ssg-ubuntu2404-ds.xml DoD certificate rule ID
-        # lands in the audit-story PR.
+        # ssg-ubuntu2404-ds.xml has no `install_DoD_intermediate_certificates`
+        # equivalent. The closest hits (`only_allow_dod_certs`,
+        # `install_smartcard_packages`) check different things. Nothing to
+        # disable; the exception_entry below still records the operator's
+        # opt-out for the audit trail.
         return []
 
     def emit_post(self, cfg: HostConfig) -> str:
@@ -43,8 +46,12 @@ class _Rule:
         return []
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
-        # Deferred: paired with emit_tailoring above; see audit-story PR.
-        return None
+        return ExceptionEntry(
+            rule_id=meta.ID,
+            summary=meta.EXCEPTION_SUMMARY,
+            stig_rules_disabled=[],  # no Ubuntu DoD-CA SSG rule exists to record
+            reason=meta.EXCEPTION_REASON,
+        )
 
 
 RULE: Rule = cast(Rule, _Rule())

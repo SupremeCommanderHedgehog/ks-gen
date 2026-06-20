@@ -116,16 +116,46 @@ def test_emit_packages_returns_auditd(ubuntu_cfg_factory):
     assert RULE.emit_packages(ubuntu_cfg_factory()) == ["auditd"]
 
 
-def test_emit_tailoring_returns_empty_deferred(ubuntu_cfg_factory):
-    # Deferred: ssg-ubuntu2404-ds.xml var_auditd_* variable IDs land
-    # in the audit-story PR.
-    assert RULE.emit_tailoring(ubuntu_cfg_factory()) == []
+def test_emit_tailoring_sets_three_auditd_vars(ubuntu_cfg_factory):
+    # All three var_auditd_* IDs exist verbatim on ubuntu2404 (phase 1
+    # confirmed) — directly portable from alma9.
+    ops = RULE.emit_tailoring(ubuntu_cfg_factory())  # defaults: SUSPEND/SUSPEND/ROTATE
+    assert len(ops) == 3
+    by_id = {op.rule_id: op for op in ops}
+    df = by_id["xccdf_org.ssgproject.content_value_var_auditd_disk_full_action"]
+    de = by_id["xccdf_org.ssgproject.content_value_var_auditd_disk_error_action"]
+    mf = by_id["xccdf_org.ssgproject.content_value_var_auditd_max_log_file_action"]
+    assert df.action == "set_value" and df.value == "SUSPEND"
+    assert de.action == "set_value" and de.value == "SUSPEND"
+    assert mf.action == "set_value" and mf.value == "ROTATE"
 
 
-def test_exception_entry_returns_none_deferred(ubuntu_cfg_factory):
-    # Deferred: runtime-computed English (mirroring alma9's
-    # HALT/HALT/keep_logs strict check) lands in the audit-story PR.
-    assert RULE.exception_entry(ubuntu_cfg_factory()) is None
+def test_exception_entry_populated_on_default(ubuntu_cfg_factory):
+    # Defaults (SUSPEND/SUSPEND/ROTATE) don't match the strict-STIG
+    # (HALT/HALT/keep_logs) so the exception_entry returns a populated record.
+    entry = RULE.exception_entry(ubuntu_cfg_factory())
+    assert entry is not None
+    assert "disk_full=SUSPEND" in entry.summary
+    assert "disk_error=SUSPEND" in entry.summary
+    assert "max_log_file=ROTATE" in entry.summary
+    assert "remote server" in entry.reason
+
+
+def test_exception_entry_returns_none_for_strict_stig(ubuntu_cfg_factory):
+    from ks_gen.config import AuditdActionsCfg, AuditdMaxFileAction, AuditdSystemAction, Overrides
+
+    cfg = ubuntu_cfg_factory().model_copy(
+        update={
+            "overrides": Overrides(
+                auditd=AuditdActionsCfg(
+                    disk_full_action=AuditdSystemAction.HALT,
+                    disk_error_action=AuditdSystemAction.HALT,
+                    max_log_file_action=AuditdMaxFileAction.KEEP_LOGS,
+                )
+            )
+        }
+    )
+    assert RULE.exception_entry(cfg) is None
 
 
 def test_id_and_summary_come_from_shared_meta(ubuntu_cfg_factory):

@@ -47,9 +47,26 @@ class _Rule:
         return True
 
     def emit_tailoring(self, cfg: HostConfig) -> list[TailoringOp]:
-        # Deferred: ssg-ubuntu2404-ds.xml var_auditd_* variable IDs
-        # land in the audit-story PR.
-        return []
+        # All three var_auditd_* IDs exist verbatim on ubuntu2404 (variables
+        # are typically SSG-shared across distros).
+        a = cfg.overrides.auditd
+        return [
+            TailoringOp(
+                rule_id="xccdf_org.ssgproject.content_value_var_auditd_disk_full_action",
+                action="set_value",
+                value=a.disk_full_action.value,
+            ),
+            TailoringOp(
+                rule_id="xccdf_org.ssgproject.content_value_var_auditd_disk_error_action",
+                action="set_value",
+                value=a.disk_error_action.value,
+            ),
+            TailoringOp(
+                rule_id="xccdf_org.ssgproject.content_value_var_auditd_max_log_file_action",
+                action="set_value",
+                value=a.max_log_file_action.value,
+            ),
+        ]
 
     def emit_post(self, cfg: HostConfig) -> str:
         return _emit(cfg)
@@ -59,8 +76,28 @@ class _Rule:
         return ["auditd"]
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
-        # Deferred: paired with emit_tailoring above; see audit-story PR.
-        return None
+        # Mirror alma9: STIG-strict HALT/HALT/keep_logs → no exception.
+        a = cfg.overrides.auditd
+        strict = (
+            a.disk_full_action.value == "HALT"
+            and a.disk_error_action.value == "HALT"
+            and a.max_log_file_action.value == "keep_logs"
+        )
+        if strict:
+            return None
+        return ExceptionEntry(
+            rule_id=meta.ID,
+            summary=(
+                f"disk_full={a.disk_full_action.value}, "
+                f"disk_error={a.disk_error_action.value}, "
+                f"max_log_file={a.max_log_file_action.value}"
+            ),
+            stig_rules_disabled=[],
+            reason=(
+                "STIG defaults (HALT / keep_logs) can kill a remote server on a log-volume "
+                "spike. SUSPEND/ROTATE keeps audit semantics while keeping the box reachable."
+            ),
+        )
 
 
 RULE: Rule = cast(Rule, _Rule())
