@@ -7,7 +7,7 @@
   Host: `u24-min`
   
   ## Summary
-  - Applied rules: 6
+  - Applied rules: 7
   - Tailored XCCDF rules: 0
   - Declared exceptions: 0
   
@@ -15,6 +15,7 @@
   - `admin_user_and_keys` — Create wheel admin, drop authorized_keys, sudoers fragment.
   - `banner_text` — Write civilian-equivalent login banner; suppress DoD-text oscap rules.
   - `crypto_policy` — Apply system crypto-policy; optionally generate Ed25519 host keys.
+  - `faillock_safety` — Set faillock unlock_time and disable even_deny_root for remote safety.
   - `ssh_keep_open` — Ensure ssh.port reachable in firewalld + SELinux before sshd starts.
   - `ssh_config_apply` — Write sshd drop-in config for Port/PermitRootLogin/PasswordAuthentication.
   - `time_servers` — Write chrony.conf with operator-chosen NTP servers (non-DoD by default).
@@ -272,6 +273,31 @@
       SECURE128
       __KS_GEN_EOF__
       chmod 644 /etc/gnutls/default-priorities'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:faillock_safety
+      # faillock.conf — soften lockout for remote-safe operation
+      sed -i -E '"'"'s/^[# ]*unlock_time *=.*/unlock_time = 900/'"'"' /etc/security/faillock.conf
+      grep -q '"'"'^unlock_time'"'"' /etc/security/faillock.conf || echo '"'"'unlock_time = 900'"'"' >> /etc/security/faillock.conf
+      sed -i -E '"'"'s/^[# ]*deny *=.*/deny = 3/'"'"' /etc/security/faillock.conf
+      grep -q '"'"'^deny'"'"' /etc/security/faillock.conf || echo '"'"'deny = 3'"'"' >> /etc/security/faillock.conf
+      sed -i -E '"'"'s/^[# ]*even_deny_root.*/# even_deny_root removed by ks-gen: no/'"'"' /etc/security/faillock.conf
+      # pam-auth-update profile (wires pam_faillock into common-auth/common-account)
+      install -d -m 755 /usr/share/pam-configs
+      cat > /usr/share/pam-configs/ks-gen-faillock <<'"'"'__KS_GEN_EOF__'"'"'
+      Name: pam_faillock (ks-gen)
+      Default: yes
+      Priority: 1024
+      Auth-Type: Primary
+      Auth-Initial:
+              [default=die]                  pam_faillock.so authfail
+      Auth:
+              [success=1 default=ignore]     pam_faillock.so preauth
+      Account-Type: Primary
+      Account:
+              required                       pam_faillock.so
+      __KS_GEN_EOF__
+      chmod 644 /usr/share/pam-configs/ks-gen-faillock
+      DEBIAN_FRONTEND=noninteractive pam-auth-update --enable ks-gen-faillock --package'
     - |
       curtin in-target --target=/target -- bash -c '# rule:ssh_keep_open
       ufw allow 22/tcp'
