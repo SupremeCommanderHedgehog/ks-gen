@@ -44,19 +44,41 @@ def test_registry_ubuntu2404_package_exists():
     assert pkg.__path__  # truthy => is a real package
 
 
-def test_registry_alma8_returns_empty_for_phase_1():
-    """alma8 package exists post-phase-1 but ships no rules yet.
+def test_registry_alma8_returns_same_rule_ids_as_alma9():
+    """alma8 phase 2 re-exports all alma9 rules.
 
-    Phase 1 of #121 added the empty package marker so `load_rules("alma8")`
-    returns [] via the real-but-empty-package branch (not the
-    ModuleNotFoundError branch). Phase 2 starts populating per-rule
-    siblings of the alma9 rules.
+    Until any rule's alma8 file becomes a real implementation
+    (e.g., when the audit-story PR requires per-distro divergence),
+    the two registries return the same set of rule IDs.
     """
-    assert load_rules("alma8") == []
+    alma9_ids = {r.id for r in load_rules("alma9")}
+    alma8_ids = {r.id for r in load_rules("alma8")}
+    assert alma8_ids == alma9_ids
+
+
+def test_registry_alma8_re_exports_same_rule_instances_as_alma9():
+    """Pins re-export semantics: same Python object per rule.
+
+    When an alma8 rule file says `from ks_gen.rules.alma9.foo import RULE`,
+    the registry walks both packages and finds the SAME singleton RULE.
+    This is the load-bearing invariant that lets a future audit-story PR
+    branch behavior on `cfg.distro` inside a single shared RULE
+    implementation. When a rule's alma8 file eventually becomes a real
+    implementation (creating a distinct RULE instance), update or split
+    this test.
+    """
+    alma9_rules = {r.id: r for r in load_rules("alma9")}
+    alma8_rules = {r.id: r for r in load_rules("alma8")}
+    for rid, alma8_rule in alma8_rules.items():
+        assert alma8_rule is alma9_rules[rid], (
+            f"alma8 rule {rid!r} should re-export the alma9 instance "
+            f"(same Python object). If this rule diverged intentionally, "
+            f"update the test."
+        )
 
 
 def test_registry_alma8_package_exists():
-    """alma8 package marker exists so phase 2 has a home."""
+    """alma8 package marker exists; phase 2 populated it with re-exports."""
     import importlib
 
     pkg = importlib.import_module("ks_gen.rules.alma8")
