@@ -236,3 +236,38 @@ def test_monthly_timer_oncalendar_reflects_cfg(ubuntu_cfg_factory):
 def test_monthly_enables_full_upgrade_timer(ubuntu_cfg_factory):
     out = RULE.emit_post(ubuntu_cfg_factory())
     assert "systemctl enable ks-gen-apt-full-upgrade.timer" in out
+
+
+def test_reboot_script_tests_var_run_reboot_required(ubuntu_cfg_factory):
+    # /var/run/reboot-required is the standard Ubuntu signal written by
+    # base apt postinst hooks for kernel/glibc/libssl etc. The script
+    # tests for it and uses systemctl reboot if present.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "/usr/local/sbin/ks-gen-reboot-if-needed" in out
+    assert "chmod 755 /usr/local/sbin/ks-gen-reboot-if-needed" in out
+    assert "[ -f /var/run/reboot-required ]" in out
+    assert "systemctl reboot" in out
+    # logger writes journal lines tagged "ks-gen" — auditable.
+    assert "logger -t ks-gen" in out
+
+
+def test_reboot_timer_oncalendar_reflects_cfg(ubuntu_cfg_factory):
+    from ks_gen.config import (
+        Overrides,
+        RebootWindowCfg,
+        UnattendedUpdatesCfg,
+    )
+
+    cfg = ubuntu_cfg_factory().model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    reboot_window=RebootWindowCfg(on_calendar="Sun *-*-* 06:00:00"),
+                ),
+            )
+        }
+    )
+    out = RULE.emit_post(cfg)
+    assert "/etc/systemd/system/ks-gen-reboot-if-needed.timer" in out
+    assert "OnCalendar=Sun *-*-* 06:00:00" in out
+    assert "OnCalendar=Sun *-*-* 03:00:00" not in out
