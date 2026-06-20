@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.23.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.22.0...v0.23.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** usbguard + package_purge + dod_root_ca ports ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phases 3.9-3.11) ([#116](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/116)) ([58e95fd](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/58e95fdcc3dafb08cf9b058f05075b504fcfe413))
+
 ## [0.22.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.21.0...v0.22.0) (2026-06-20)
 
 
