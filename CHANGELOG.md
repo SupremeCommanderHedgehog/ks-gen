@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.29.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.28.0...v0.29.0) (2026-06-20)
+
+
+### Features
+
+* **rules:** alma8 crypto_policy divergence + alma9 SSG-drift sweep ([#127](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/127) PR B) ([#132](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/132)) ([ce88b84](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/ce88b84747e18b8ac6ebd03061672f1a0ef3ffd6))
+
 ## [0.28.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.27.0...v0.28.0) (2026-06-20)
 
 
