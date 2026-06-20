@@ -125,15 +125,60 @@ def test_emit_packages_returns_empty(ubuntu_cfg_factory):
     assert RULE.emit_packages(ubuntu_cfg_factory()) == []
 
 
-def test_emit_tailoring_returns_empty_deferred(ubuntu_cfg_factory):
-    # Deferred until ssg-ubuntu2404-ds.xml faillock rule survey lands
-    # in the audit-story PR.
-    assert RULE.emit_tailoring(ubuntu_cfg_factory()) == []
+def test_emit_tailoring_sets_unlock_time_and_deny_vars(ubuntu_cfg_factory):
+    # The SSG variables (xccdf:Value) for unlock_time + deny exist verbatim
+    # on ubuntu2404 — phase 1 audit confirmed. The alma9-disabled
+    # even_deny_root rule does NOT exist on ubuntu, so we just emit the
+    # two set_value ops.
+    ops = RULE.emit_tailoring(ubuntu_cfg_factory())  # default unlock_time=900, deny=3
+    assert len(ops) == 2
+    by_id = {op.rule_id: op for op in ops}
+    unlock = by_id[
+        "xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time"
+    ]
+    deny = by_id["xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_deny"]
+    assert unlock.action == "set_value"
+    assert unlock.value == "900"
+    assert deny.action == "set_value"
+    assert deny.value == "3"
 
 
-def test_exception_entry_returns_none_deferred(ubuntu_cfg_factory):
-    # Deferred until ssg-ubuntu2404-ds.xml faillock rule survey lands.
-    assert RULE.exception_entry(ubuntu_cfg_factory()) is None
+def test_emit_tailoring_reflects_cfg_overrides(ubuntu_cfg_factory):
+    from ks_gen.config import FaillockCfg, Overrides
+
+    cfg = ubuntu_cfg_factory().model_copy(
+        update={"overrides": Overrides(faillock=FaillockCfg(unlock_time=600, deny=5))}
+    )
+    ops = RULE.emit_tailoring(cfg)
+    by_id = {op.rule_id: op.value for op in ops}
+    assert (
+        by_id["xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time"]
+        == "600"
+    )
+    assert (
+        by_id["xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_deny"] == "5"
+    )
+
+
+def test_exception_entry_populated_on_default(ubuntu_cfg_factory):
+    # Default cfg (unlock_time=900, even_deny_root=False) doesn't match
+    # the strict-STIG (unlock_time=0, even_deny_root=True) so the
+    # exception_entry returns a populated record.
+    entry = RULE.exception_entry(ubuntu_cfg_factory())
+    assert entry is not None
+    assert "unlock_time=900" in entry.summary
+    assert "even_deny_root=False" in entry.summary
+    # stig_rules_disabled is empty: no even_deny_root rule on ubuntu2404.
+    assert entry.stig_rules_disabled == []
+
+
+def test_exception_entry_returns_none_for_strict_stig(ubuntu_cfg_factory):
+    from ks_gen.config import FaillockCfg, Overrides
+
+    cfg = ubuntu_cfg_factory().model_copy(
+        update={"overrides": Overrides(faillock=FaillockCfg(unlock_time=0, even_deny_root=True))}
+    )
+    assert RULE.exception_entry(cfg) is None
 
 
 def test_depends_on_is_empty(ubuntu_cfg_factory):

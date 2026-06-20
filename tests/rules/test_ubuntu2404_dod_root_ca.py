@@ -34,10 +34,27 @@ def test_emit_packages_returns_empty(ubuntu_cfg_factory):
     assert RULE.emit_packages(ubuntu_cfg_factory()) == []
 
 
-def test_tailoring_and_exception_deferred(ubuntu_cfg_factory):
-    # Both deferred to audit-story PR per phase 3.x pattern.
+def test_emit_tailoring_returns_empty_no_ubuntu_dod_ca_rule(ubuntu_cfg_factory):
+    # Phase 1 audit confirmed ssg-ubuntu2404-ds.xml has no
+    # install_DoD_intermediate_certificates equivalent. The closest hits
+    # (only_allow_dod_certs, install_smartcard_packages) check different
+    # things. Nothing to disable; the exception_entry below still records
+    # the operator's opt-out for the audit trail.
     assert RULE.emit_tailoring(ubuntu_cfg_factory()) == []
-    assert RULE.exception_entry(ubuntu_cfg_factory()) is None
+
+
+def test_exception_entry_populated_on_default(ubuntu_cfg_factory):
+    # Default cfg has dod_root_ca.install=False, so applies() is True and
+    # the exception_entry returns a populated record.
+    from ks_gen.rules._meta import dod_root_ca as meta_mod
+
+    entry = RULE.exception_entry(ubuntu_cfg_factory())
+    assert entry is not None
+    assert entry.rule_id == meta_mod.ID
+    assert entry.summary == meta_mod.EXCEPTION_SUMMARY
+    assert entry.reason == meta_mod.EXCEPTION_REASON
+    # stig_rules_disabled empty: no Ubuntu DoD-CA SSG rule exists.
+    assert entry.stig_rules_disabled == []
 
 
 def test_id_and_summary_come_from_shared_meta(ubuntu_cfg_factory):
