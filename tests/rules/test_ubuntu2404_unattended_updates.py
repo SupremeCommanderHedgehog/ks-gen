@@ -184,3 +184,55 @@ def test_nightly_reflects_on_calendar_override(ubuntu_cfg_factory):
     assert "OnCalendar=\nOnCalendar=*-*-* 04:00:00" in out
     # The default time must NOT appear anywhere.
     assert "OnCalendar=*-*-* 02:00:00" not in out
+
+
+def test_monthly_writes_ks_gen_apt_full_upgrade_script(ubuntu_cfg_factory):
+    # Wrapper script at /usr/local/sbin executed by the timer's service.
+    # chmod 755 makes it executable.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "/usr/local/sbin/ks-gen-apt-full-upgrade" in out
+    assert "chmod 755 /usr/local/sbin/ks-gen-apt-full-upgrade" in out
+    # Shebang + strict bash + non-interactive frontend so dpkg never prompts.
+    assert "#!/bin/bash" in out
+    assert "set -euo pipefail" in out
+    assert "export DEBIAN_FRONTEND=noninteractive" in out
+
+
+def test_monthly_script_uses_dist_upgrade_with_dpkg_confdef_and_confold(ubuntu_cfg_factory):
+    # dist-upgrade (not plain upgrade) for STIG full-coverage parity
+    # with alma9's dnf-automatic upgrade_type=default. The pair of
+    # Dpkg::Options preserves admin's edits on conffile conflicts so
+    # the unit never blocks on stdin.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "apt-get update" in out
+    assert "dist-upgrade" in out
+    assert "Dpkg::Options::='--force-confdef'" in out
+    assert "Dpkg::Options::='--force-confold'" in out
+
+
+def test_monthly_timer_oncalendar_reflects_cfg(ubuntu_cfg_factory):
+    from ks_gen.config import (
+        MonthlyFullCfg,
+        Overrides,
+        UnattendedUpdatesCfg,
+    )
+
+    cfg = ubuntu_cfg_factory().model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    monthly_full=MonthlyFullCfg(on_calendar="Sun *-*-1..7 05:00:00"),
+                ),
+            )
+        }
+    )
+    out = RULE.emit_post(cfg)
+    assert "/etc/systemd/system/ks-gen-apt-full-upgrade.timer" in out
+    assert "OnCalendar=Sun *-*-1..7 05:00:00" in out
+    # Default monthly OnCalendar must NOT appear.
+    assert "OnCalendar=Sun *-*-1..7 02:30:00" not in out
+
+
+def test_monthly_enables_full_upgrade_timer(ubuntu_cfg_factory):
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "systemctl enable ks-gen-apt-full-upgrade.timer" in out
