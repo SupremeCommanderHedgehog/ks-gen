@@ -7,12 +7,13 @@
   Host: `u24-min`
   
   ## Summary
-  - Applied rules: 8
+  - Applied rules: 9
   - Tailored XCCDF rules: 0
   - Declared exceptions: 0
   
   ## Applied rules
   - `admin_user_and_keys` — Create wheel admin, drop authorized_keys, sudoers fragment.
+  - `auditd_actions` — auditd disk_full/disk_error/max_log_file actions (SUSPEND/ROTATE default).
   - `banner_text` — Write civilian-equivalent login banner; suppress DoD-text oscap rules.
   - `crypto_policy` — Apply system crypto-policy; optionally generate Ed25519 host keys.
   - `faillock_safety` — Set faillock unlock_time and disable even_deny_root for remote safety.
@@ -220,10 +221,20 @@
           ssh_authorized_keys:
             - "ssh-ed25519 AAAA a@b"
     packages:
+      - "auditd"
       - "ufw"
       - "chrony"
       - "unattended-upgrades"
     late-commands:
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:auditd_actions
+      # Re-assert auditd actions (defensive sed + append-if-missing)
+      sed -i -E '"'"'s|^[# ]*disk_full_action.*|disk_full_action = SUSPEND|'"'"' /etc/audit/auditd.conf
+      grep -q '"'"'^disk_full_action'"'"' /etc/audit/auditd.conf || echo '"'"'disk_full_action = SUSPEND'"'"' >> /etc/audit/auditd.conf
+      sed -i -E '"'"'s|^[# ]*disk_error_action.*|disk_error_action = SUSPEND|'"'"' /etc/audit/auditd.conf
+      grep -q '"'"'^disk_error_action'"'"' /etc/audit/auditd.conf || echo '"'"'disk_error_action = SUSPEND'"'"' >> /etc/audit/auditd.conf
+      sed -i -E '"'"'s|^[# ]*max_log_file_action.*|max_log_file_action = ROTATE|'"'"' /etc/audit/auditd.conf
+      grep -q '"'"'^max_log_file_action'"'"' /etc/audit/auditd.conf || echo '"'"'max_log_file_action = ROTATE'"'"' >> /etc/audit/auditd.conf'
     - |
       curtin in-target --target=/target -- bash -c '# rule:banner_text
       # Civilian-equivalent login banner
