@@ -7,7 +7,7 @@
   Host: `u24-min`
   
   ## Summary
-  - Applied rules: 7
+  - Applied rules: 8
   - Tailored XCCDF rules: 0
   - Declared exceptions: 0
   
@@ -19,6 +19,7 @@
   - `ssh_keep_open` — Ensure ssh.port reachable in firewalld + SELinux before sshd starts.
   - `ssh_config_apply` — Write sshd drop-in config for Port/PermitRootLogin/PasswordAuthentication.
   - `time_servers` — Write chrony.conf with operator-chosen NTP servers (non-DoD by default).
+  - `unattended_updates` — Configure dnf-automatic for nightly security + monthly full updates, with reboot inside a maintenance window.
   
   ## Tailored XCCDF rules (oscap rules disabled or value-tailored)
   _(none)_
@@ -221,6 +222,7 @@
     packages:
       - "ufw"
       - "chrony"
+      - "unattended-upgrades"
     late-commands:
     - |
       curtin in-target --target=/target -- bash -c '# rule:banner_text
@@ -329,6 +331,109 @@
       logdir /var/log/chrony
       __KS_GEN_EOF__
       chmod 644 /etc/chrony/chrony.conf'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:unattended_updates
+      # unattended_updates: nightly security via stock unattended-upgrades timers
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'"'"'__KS_GEN_EOF__'"'"'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      __KS_GEN_EOF__
+      chmod 644 /etc/apt/apt.conf.d/20auto-upgrades
+  
+      cat > /etc/apt/apt.conf.d/52ks-gen-unattended <<'"'"'__KS_GEN_EOF__'"'"'
+      Unattended-Upgrade::MailReport "never";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      __KS_GEN_EOF__
+      chmod 644 /etc/apt/apt.conf.d/52ks-gen-unattended
+  
+      mkdir -p /etc/systemd/system/apt-daily.timer.d
+      cat > /etc/systemd/system/apt-daily.timer.d/ks-gen.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      [Timer]
+      OnCalendar=
+      OnCalendar=*-*-* 02:00:00
+      RandomizedDelaySec=0
+      __KS_GEN_EOF__
+  
+      mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d
+      cat > /etc/systemd/system/apt-daily-upgrade.timer.d/ks-gen.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      [Timer]
+      OnCalendar=
+      OnCalendar=*-*-* 02:00:00
+      RandomizedDelaySec=0
+      __KS_GEN_EOF__
+  
+      systemctl daemon-reload
+      systemctl enable apt-daily.timer apt-daily-upgrade.timer
+  
+      # unattended_updates: monthly full update via custom ks-gen timer
+      cat > /usr/local/sbin/ks-gen-apt-full-upgrade <<'"'"'__KS_GEN_EOF__'"'"'
+      #!/bin/bash
+      set -euo pipefail
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get -y \
+        -o Dpkg::Options::='"'"'--force-confdef'"'"' \
+        -o Dpkg::Options::='"'"'--force-confold'"'"' \
+        dist-upgrade
+      __KS_GEN_EOF__
+      chmod 755 /usr/local/sbin/ks-gen-apt-full-upgrade
+  
+      cat > /etc/systemd/system/ks-gen-apt-full-upgrade.service <<'"'"'__KS_GEN_EOF__'"'"'
+      [Unit]
+      Description=ks-gen monthly full apt dist-upgrade run
+      After=network-online.target
+      Wants=network-online.target
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/ks-gen-apt-full-upgrade
+      __KS_GEN_EOF__
+  
+      cat > /etc/systemd/system/ks-gen-apt-full-upgrade.timer <<'"'"'__KS_GEN_EOF__'"'"'
+      [Unit]
+      Description=ks-gen monthly full apt dist-upgrade schedule
+      [Timer]
+      OnCalendar=Sun *-*-1..7 02:30:00
+      Persistent=true
+      [Install]
+      WantedBy=timers.target
+      __KS_GEN_EOF__
+  
+      systemctl daemon-reload
+      systemctl enable ks-gen-apt-full-upgrade.timer
+  
+      # unattended_updates: reboot inside maintenance window if /var/run/reboot-required exists
+      cat > /usr/local/sbin/ks-gen-reboot-if-needed <<'"'"'__KS_GEN_EOF__'"'"'
+      #!/bin/bash
+      set -euo pipefail
+      if [ -f /var/run/reboot-required ]; then
+        logger -t ks-gen "reboot needed (/var/run/reboot-required present), rebooting at $(date -Is)"
+        systemctl reboot
+      else
+        logger -t ks-gen "no reboot needed at $(date -Is)"
+      fi
+      __KS_GEN_EOF__
+      chmod 755 /usr/local/sbin/ks-gen-reboot-if-needed
+  
+      cat > /etc/systemd/system/ks-gen-reboot-if-needed.service <<'"'"'__KS_GEN_EOF__'"'"'
+      [Unit]
+      Description=ks-gen reboot if pending kernel/glibc/etc.
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/ks-gen-reboot-if-needed
+      __KS_GEN_EOF__
+  
+      cat > /etc/systemd/system/ks-gen-reboot-if-needed.timer <<'"'"'__KS_GEN_EOF__'"'"'
+      [Unit]
+      Description=ks-gen reboot-if-needed schedule
+      [Timer]
+      OnCalendar=Sun *-*-* 03:00:00
+      Persistent=true
+      [Install]
+      WantedBy=timers.target
+      __KS_GEN_EOF__
+  
+      systemctl daemon-reload
+      systemctl enable ks-gen-reboot-if-needed.timer'
   
   '''
 # ---
