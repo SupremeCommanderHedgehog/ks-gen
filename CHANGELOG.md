@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.21.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.20.0...v0.21.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** auditd_actions port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.7) ([#112](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/112)) ([e22a591](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/e22a591cbbcd601e7cda659e46708f0540aa2a5c))
+
 ## [0.20.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.19.0...v0.20.0) (2026-06-20)
 
 
