@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.19.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.18.0...v0.19.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** faillock_safety port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.5) ([#108](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/108)) ([5a1c876](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/5a1c8761d58f0b6b4f067956107535f0ca45cb44))
+
 ## [0.18.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.17.0...v0.18.0) (2026-06-19)
 
 
