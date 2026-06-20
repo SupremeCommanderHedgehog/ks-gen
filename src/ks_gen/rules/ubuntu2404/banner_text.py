@@ -15,20 +15,33 @@ _TARGET = {
     "motd": "/etc/ssh/sshd-banner",
 }
 
+# ssg-ubuntu2404-ds.xml splits the banner checks into CIS and non-CIS variants.
+# Our civilian banner moots all of them. `sshd_enable_warning_banner_net` is
+# intentionally NOT in this list — ssh_config_apply's sshd drop-in enables
+# the Banner directive, so that check is satisfied, not mooted.
+_PREFIX = "xccdf_org.ssgproject.content_rule_"
+_TAILORED = [
+    f"{_PREFIX}banner_etc_issue_cis",
+    f"{_PREFIX}banner_etc_issue_net",
+    f"{_PREFIX}banner_etc_issue_net_cis",
+    f"{_PREFIX}banner_etc_motd_cis",
+    f"{_PREFIX}dconf_gnome_banner_enabled",
+    f"{_PREFIX}dconf_gnome_login_banner_text",
+]
+
 
 @dataclass(frozen=True)
 class _Rule:
     id: str = meta.ID
     summary: str = meta.SUMMARY
     depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
-    stig_rules_affected: list[str] = field(default_factory=list)
+    stig_rules_affected: list[str] = field(default_factory=lambda: list(_TAILORED))
 
     def applies(self, cfg: HostConfig) -> bool:
         return True
 
     def emit_tailoring(self, cfg: HostConfig) -> list[TailoringOp]:
-        # Deferred: ssg-ubuntu2404-ds.xml banner-rule survey lands in the audit-story PR.
-        return []
+        return [TailoringOp(rule_id=r, action="disable") for r in _TAILORED]
 
     def emit_post(self, cfg: HostConfig) -> str:
         text = cfg.banner.text.rstrip("\n") + "\n"
@@ -48,8 +61,12 @@ class _Rule:
         return []
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
-        # Deferred: paired with emit_tailoring above; see audit-story PR.
-        return None
+        return ExceptionEntry(
+            rule_id=meta.ID,
+            summary=meta.EXCEPTION_SUMMARY,
+            stig_rules_disabled=list(_TAILORED),
+            reason=meta.EXCEPTION_REASON,
+        )
 
 
 RULE: Rule = cast(Rule, _Rule())

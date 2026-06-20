@@ -163,15 +163,44 @@ def test_emit_packages_returns_empty(ubuntu_cfg_factory):
     assert RULE.emit_packages(ubuntu_cfg_factory()) == []
 
 
-def test_emit_tailoring_returns_empty_deferred(ubuntu_cfg_factory):
-    # Deferred until ssg-ubuntu2404-ds.xml crypto rule survey lands in
-    # the audit-story PR.
-    assert RULE.emit_tailoring(ubuntu_cfg_factory()) == []
+def test_emit_tailoring_disables_four_cipher_rules_when_not_stig(ubuntu_cfg_factory):
+    # When cfg.crypto.policy != STIG, the ks-gen drop-in overrides what
+    # SSG's approved-cipher checks expect. Mirror alma9's branching:
+    # emit disable for is_fips_mode_enabled + the 3 _ordered_stig
+    # cipher/kex/macs rules. Note Ubuntu naming — `_ordered_stig` suffix
+    # vs alma9's bare names.
+    ops = RULE.emit_tailoring(ubuntu_cfg_factory())  # default policy: MODERN
+    assert {op.rule_id for op in ops} == {
+        "xccdf_org.ssgproject.content_rule_is_fips_mode_enabled",
+        "xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers_ordered_stig",
+        "xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig",
+        "xccdf_org.ssgproject.content_rule_sshd_use_approved_macs_ordered_stig",
+    }
+    assert all(op.action == "disable" for op in ops)
 
 
-def test_exception_entry_returns_none_deferred(ubuntu_cfg_factory):
-    # Deferred until ssg-ubuntu2404-ds.xml crypto rule survey lands.
-    assert RULE.exception_entry(ubuntu_cfg_factory()) is None
+def test_emit_tailoring_returns_empty_when_stig_policy(ubuntu_cfg_factory):
+    from ks_gen.config import Crypto, CryptoPolicy
+
+    cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.STIG)})
+    assert RULE.emit_tailoring(cfg) == []
+
+
+def test_exception_entry_returns_none_when_stig_policy(ubuntu_cfg_factory):
+    from ks_gen.config import Crypto, CryptoPolicy
+
+    cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.STIG)})
+    assert RULE.exception_entry(cfg) is None
+
+
+def test_exception_entry_populated_when_not_stig(ubuntu_cfg_factory):
+    # Default policy is MODERN. The audit entry records the operator's chosen
+    # policy + the four SSG rules disabled.
+    entry = RULE.exception_entry(ubuntu_cfg_factory())
+    assert entry is not None
+    assert entry.summary == "MODERN crypto policy"
+    assert "FIPS 140-3" in entry.reason
+    assert len(entry.stig_rules_disabled) == 4
 
 
 def test_depends_on_is_empty(ubuntu_cfg_factory):

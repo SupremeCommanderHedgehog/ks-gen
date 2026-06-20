@@ -61,6 +61,15 @@ def _emit(cfg: HostConfig) -> str:
     return "".join([_emit_faillock_conf(cfg), _emit_pam_profile(cfg), _emit_pam_enable(cfg)])
 
 
+# SSG variables (xccdf:Value, not xccdf:Rule) exist verbatim on ubuntu2404
+# — confirmed in phase 1's datastream extraction. The
+# accounts_passwords_pam_faillock_even_deny_root rule alma9 disables does
+# NOT exist on ubuntu2404; we just skip emitting that op.
+_PREFIX = "xccdf_org.ssgproject.content_value_"
+_VAR_UNLOCK = f"{_PREFIX}var_accounts_passwords_pam_faillock_unlock_time"
+_VAR_DENY = f"{_PREFIX}var_accounts_passwords_pam_faillock_deny"
+
+
 @dataclass(frozen=True)
 class _Rule:
     id: str = meta.ID
@@ -72,8 +81,11 @@ class _Rule:
         return cfg.overrides.faillock.enable
 
     def emit_tailoring(self, cfg: HostConfig) -> list[TailoringOp]:
-        # Deferred: ssg-ubuntu2404-ds.xml faillock rule survey lands in the audit-story PR.
-        return []
+        f = cfg.overrides.faillock
+        return [
+            TailoringOp(rule_id=_VAR_UNLOCK, action="set_value", value=str(f.unlock_time)),
+            TailoringOp(rule_id=_VAR_DENY, action="set_value", value=str(f.deny)),
+        ]
 
     def emit_post(self, cfg: HostConfig) -> str:
         return _emit(cfg)
@@ -82,8 +94,15 @@ class _Rule:
         return []
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
-        # Deferred: paired with emit_tailoring above; see audit-story PR.
-        return None
+        f = cfg.overrides.faillock
+        if f.even_deny_root and f.unlock_time == 0:
+            return None
+        return ExceptionEntry(
+            rule_id=meta.ID,
+            summary=f"unlock_time={f.unlock_time}, even_deny_root={f.even_deny_root}",
+            stig_rules_disabled=[],  # no equivalent even_deny_root rule on ubuntu2404
+            reason=meta.EXCEPTION_REASON,
+        )
 
 
 RULE: Rule = cast(Rule, _Rule())

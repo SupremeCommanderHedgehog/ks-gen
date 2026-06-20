@@ -272,10 +272,12 @@ def test_build_bundle_ubuntu2404_returns_distro_tagged_bundle(tmp_path):
     assert meta["instance-id"] == "u24-test"
 
 
-def test_build_bundle_ubuntu2404_tailoring_is_valid_xccdf_skeleton(tmp_path):
-    # No ubuntu2404 rules exist yet (phase 3 ports them), so the tailoring
-    # should be a valid XCCDF document with no select/disable ops — just
-    # the profile skeleton. Phase 3 starts populating it.
+def test_build_bundle_ubuntu2404_tailoring_contains_audit_story_ops(tmp_path):
+    # After #127 PR A wired emit_tailoring for the ported ubuntu2404 rules,
+    # a default ubuntu2404 bundle's tailoring.xml contains real ops:
+    # banner_text disables 6 banner rules, crypto_policy disables 4 cipher
+    # rules (default policy is MODERN), faillock_safety sets 2 vars,
+    # auditd_actions sets 3 vars. Pin the skeleton + the load-bearing ops.
     yaml_text = textwrap.dedent(
         """\
         distro: ubuntu2404
@@ -292,8 +294,14 @@ def test_build_bundle_ubuntu2404_tailoring_is_valid_xccdf_skeleton(tmp_path):
     cfg = load_host_config(cfg_path, sets=[])
     bundle = build_bundle(cfg)
     assert "<xccdf:Tailoring" in bundle.tailoring_xml
-    # No rule overrides yet — no <xccdf:select> tags.
-    assert "<xccdf:select" not in bundle.tailoring_xml
+    # banner_text disables (one spot-check from each rule with tailoring)
+    assert "banner_etc_issue_cis" in bundle.tailoring_xml
+    # crypto_policy disable on default (MODERN) policy
+    assert "sshd_use_approved_ciphers_ordered_stig" in bundle.tailoring_xml
+    # auditd_actions set-value
+    assert "var_auditd_disk_full_action" in bundle.tailoring_xml
+    # faillock_safety set-value
+    assert "var_accounts_passwords_pam_faillock_unlock_time" in bundle.tailoring_xml
 
 
 def test_build_bundle_alma9_default_unchanged_when_distro_omitted(tmp_path):

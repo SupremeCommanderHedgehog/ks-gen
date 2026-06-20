@@ -31,15 +31,34 @@ def test_applies_always_true(ubuntu_cfg_factory):
     assert RULE.applies(ubuntu_cfg_factory()) is True
 
 
-def test_emit_tailoring_returns_empty_deferred(ubuntu_cfg_factory):
-    # Deferred until ssg-ubuntu2404-ds.xml survey lands. Future audit-story
-    # PR will populate this — when it does, this test gets updated.
-    assert RULE.emit_tailoring(ubuntu_cfg_factory()) == []
+def test_emit_tailoring_disables_six_ubuntu_banner_rules(ubuntu_cfg_factory):
+    # ssg-ubuntu2404-ds.xml splits banner checks into CIS + non-CIS variants.
+    # Our civilian banner moots all six. sshd_enable_warning_banner_net is
+    # intentionally NOT disabled — ssh_config_apply's sshd drop-in enables
+    # the Banner directive, so that check is satisfied.
+    ops = RULE.emit_tailoring(ubuntu_cfg_factory())
+    expected_rule_ids = {
+        "xccdf_org.ssgproject.content_rule_banner_etc_issue_cis",
+        "xccdf_org.ssgproject.content_rule_banner_etc_issue_net",
+        "xccdf_org.ssgproject.content_rule_banner_etc_issue_net_cis",
+        "xccdf_org.ssgproject.content_rule_banner_etc_motd_cis",
+        "xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled",
+        "xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text",
+    }
+    assert {op.rule_id for op in ops} == expected_rule_ids
+    assert all(op.action == "disable" for op in ops)
 
 
-def test_exception_entry_returns_none_deferred(ubuntu_cfg_factory):
-    # Deferred until ssg-ubuntu2404-ds.xml survey lands.
-    assert RULE.exception_entry(ubuntu_cfg_factory()) is None
+def test_exception_entry_carries_meta_summary_and_reason(ubuntu_cfg_factory):
+    from ks_gen.rules._meta import banner_text as meta_mod
+
+    entry = RULE.exception_entry(ubuntu_cfg_factory())
+    assert entry is not None
+    assert entry.rule_id == meta_mod.ID
+    assert entry.summary == meta_mod.EXCEPTION_SUMMARY
+    assert entry.reason == meta_mod.EXCEPTION_REASON
+    # All six tailored rule IDs reproduced in the exception entry's audit list.
+    assert len(entry.stig_rules_disabled) == 6
 
 
 def test_emit_packages_is_empty(ubuntu_cfg_factory):

@@ -36,8 +36,10 @@ class _Rule:
         return True
 
     def emit_tailoring(self, cfg: HostConfig) -> list[TailoringOp]:
-        # Deferred: ssg-ubuntu2404-ds.xml usbguard rule IDs land in
-        # the audit-story PR.
+        # ssg-ubuntu2404-ds.xml (0.1.79-1) ships no usbguard rules — phase 1
+        # audit confirmed `grep usbguard` returns empty against the Ubuntu
+        # rule-IDs list. Nothing to select / disable here; the exception_entry
+        # below still records the operator's opt-out for the audit trail.
         return []
 
     def emit_post(self, cfg: HostConfig) -> str:
@@ -49,8 +51,14 @@ class _Rule:
         return []
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
-        # Deferred: paired with emit_tailoring above; see audit-story PR.
-        return None
+        if cfg.overrides.usbguard.enable:
+            return None
+        return ExceptionEntry(
+            rule_id=meta.ID,
+            summary=meta.EXCEPTION_SUMMARY,
+            stig_rules_disabled=[],  # no Ubuntu usbguard SSG rules exist to record
+            reason=meta.EXCEPTION_REASON,
+        )
 
 
 RULE: Rule = cast(Rule, _Rule())

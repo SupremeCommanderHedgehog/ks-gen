@@ -19,15 +19,36 @@ def test_emit_packages_returns_empty(ubuntu_cfg_factory):
     assert RULE.emit_packages(ubuntu_cfg_factory()) == []
 
 
-def test_emit_tailoring_returns_empty_deferred(ubuntu_cfg_factory):
-    # Deferred: ssg-ubuntu2404-ds.xml usbguard rule IDs land in
-    # the audit-story PR.
+def test_emit_tailoring_returns_empty_no_ubuntu_usbguard_rules(ubuntu_cfg_factory):
+    # Phase 1 audit confirmed ssg-ubuntu2404-ds.xml has NO usbguard rules
+    # — `grep usbguard docs/audit-story/ubuntu2404-rule-ids.txt` is empty.
+    # Nothing to select/disable. The exception_entry still applies (audit
+    # trail records the operator opt-out) but tailoring stays empty.
     assert RULE.emit_tailoring(ubuntu_cfg_factory()) == []
 
 
-def test_exception_entry_returns_none_deferred(ubuntu_cfg_factory):
-    # Deferred: paired with emit_tailoring above.
-    assert RULE.exception_entry(ubuntu_cfg_factory()) is None
+def test_exception_entry_returns_entry_when_disabled(ubuntu_cfg_factory):
+    # Default cfg has usbguard.enable=False, so the exception_entry returns
+    # a populated record — audit trail captures the opt-out even though
+    # there's no Ubuntu SSG rule to record as "disabled".
+    from ks_gen.rules._meta import usbguard as meta_mod
+
+    entry = RULE.exception_entry(ubuntu_cfg_factory())
+    assert entry is not None
+    assert entry.rule_id == meta_mod.ID
+    assert entry.summary == meta_mod.EXCEPTION_SUMMARY
+    assert entry.reason == meta_mod.EXCEPTION_REASON
+    # stig_rules_disabled empty: no Ubuntu usbguard SSG rules exist.
+    assert entry.stig_rules_disabled == []
+
+
+def test_exception_entry_returns_none_when_enabled(ubuntu_cfg_factory):
+    from ks_gen.config import Overrides, UsbguardCfg
+
+    cfg = ubuntu_cfg_factory().model_copy(
+        update={"overrides": Overrides(usbguard=UsbguardCfg(enable=True))}
+    )
+    assert RULE.exception_entry(cfg) is None
 
 
 def test_id_and_summary_come_from_shared_meta(ubuntu_cfg_factory):
