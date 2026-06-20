@@ -669,12 +669,13 @@ class ExceptionDecl(StrictModel):
 
 _DEFAULT_SCAP_CONTENT_BY_DISTRO: dict[str, str] = {
     "alma9": "ssg-almalinux9-ds.xml",
+    "alma8": "ssg-almalinux8-ds.xml",
     "ubuntu2404": "ssg-ubuntu2404-ds.xml",
 }
 
 
 class HostConfig(StrictModel):
-    distro: Literal["alma9", "ubuntu2404"] = "alma9"
+    distro: Literal["alma9", "alma8", "ubuntu2404"] = "alma9"
     meta: Meta = Field(default_factory=Meta)
     system: System
     network: Network = Field(default_factory=Network)

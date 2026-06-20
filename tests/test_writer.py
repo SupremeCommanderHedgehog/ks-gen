@@ -169,6 +169,44 @@ def test_bundle_alma9_requires_ks_cfg_and_rejects_user_data():
         )
 
 
+def test_bundle_alma8_requires_ks_cfg_and_rejects_user_data():
+    # alma8 bundle MUST have ks_cfg set; MUST NOT have user_data or meta_data.
+    # Same shape as alma9 (both produce kickstarts).
+    Bundle(
+        distro="alma8",
+        tailoring_xml="<x/>",
+        host_yaml="meta: {}\n",
+        exceptions_md="# x\n",
+        ks_cfg="cmdline\n%end\n",
+    )  # OK
+    with pytest.raises(ValueError, match=r"^alma8 bundle requires ks_cfg$"):
+        Bundle(
+            distro="alma8",
+            tailoring_xml="<x/>",
+            host_yaml="meta: {}\n",
+            exceptions_md="# x\n",
+            ks_cfg=None,
+        )
+    with pytest.raises(ValueError, match=r"^alma8 bundle must not set user_data$"):
+        Bundle(
+            distro="alma8",
+            tailoring_xml="<x/>",
+            host_yaml="meta: {}\n",
+            exceptions_md="# x\n",
+            ks_cfg="cmdline\n",
+            user_data="#cloud-config\n",
+        )
+    with pytest.raises(ValueError, match=r"^alma8 bundle must not set meta_data$"):
+        Bundle(
+            distro="alma8",
+            tailoring_xml="<x/>",
+            host_yaml="meta: {}\n",
+            exceptions_md="# x\n",
+            ks_cfg="cmdline\n",
+            meta_data="instance-id: x\n",
+        )
+
+
 def test_bundle_ubuntu2404_requires_user_data_meta_data_and_rejects_ks_cfg():
     # ubuntu2404 bundle MUST have user_data AND meta_data; MUST NOT have ks_cfg.
     Bundle(

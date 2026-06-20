@@ -1,0 +1,9 @@
+distro: alma8
+system:
+  hostname: a8-min
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAA a@b"
+    sudo: nopasswd_yes
