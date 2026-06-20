@@ -29,3 +29,101 @@ def test_applies_short_circuits_when_disabled(ubuntu_cfg_factory):
         }
     )
     assert RULE.applies(cfg) is False
+
+
+def test_post_includes_nightly_block_by_default(ubuntu_cfg_factory):
+    # The "nightly security via stock unattended-upgrades timers" header
+    # is a stable marker for the nightly block.
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "nightly security via stock unattended-upgrades timers" in out
+
+
+def test_post_includes_monthly_block_by_default(ubuntu_cfg_factory):
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "monthly full update via custom ks-gen timer" in out
+
+
+def test_post_includes_reboot_block_by_default(ubuntu_cfg_factory):
+    out = RULE.emit_post(ubuntu_cfg_factory())
+    assert "reboot inside maintenance window if /var/run/reboot-required exists" in out
+
+
+def test_post_omits_nightly_block_when_disabled(ubuntu_cfg_factory):
+    from ks_gen.config import (
+        MonthlyFullCfg,
+        NightlySecurityCfg,
+        Overrides,
+        RebootWindowCfg,
+        UnattendedUpdatesCfg,
+    )
+
+    cfg = ubuntu_cfg_factory().model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    nightly_security=NightlySecurityCfg(enable=False),
+                    monthly_full=MonthlyFullCfg(),
+                    reboot_window=RebootWindowCfg(),
+                ),
+            )
+        }
+    )
+    out = RULE.emit_post(cfg)
+    assert "nightly security via stock unattended-upgrades timers" not in out
+    # Monthly + reboot still present.
+    assert "monthly full update via custom ks-gen timer" in out
+    assert "reboot inside maintenance window" in out
+
+
+def test_post_omits_monthly_block_when_disabled(ubuntu_cfg_factory):
+    from ks_gen.config import (
+        MonthlyFullCfg,
+        NightlySecurityCfg,
+        Overrides,
+        RebootWindowCfg,
+        UnattendedUpdatesCfg,
+    )
+
+    cfg = ubuntu_cfg_factory().model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    nightly_security=NightlySecurityCfg(),
+                    monthly_full=MonthlyFullCfg(enable=False),
+                    reboot_window=RebootWindowCfg(),
+                ),
+            )
+        }
+    )
+    out = RULE.emit_post(cfg)
+    assert "monthly full update via custom ks-gen timer" not in out
+    # Nightly + reboot still present.
+    assert "nightly security via stock unattended-upgrades timers" in out
+    assert "reboot inside maintenance window" in out
+
+
+def test_post_omits_reboot_block_when_disabled(ubuntu_cfg_factory):
+    from ks_gen.config import (
+        MonthlyFullCfg,
+        NightlySecurityCfg,
+        Overrides,
+        RebootWindowCfg,
+        UnattendedUpdatesCfg,
+    )
+
+    cfg = ubuntu_cfg_factory().model_copy(
+        update={
+            "overrides": Overrides(
+                unattended_updates=UnattendedUpdatesCfg(
+                    nightly_security=NightlySecurityCfg(),
+                    monthly_full=MonthlyFullCfg(),
+                    reboot_window=RebootWindowCfg(enable=False),
+                ),
+            )
+        }
+    )
+    out = RULE.emit_post(cfg)
+    assert "reboot inside maintenance window" not in out
+    # Nightly + monthly still present.
+    assert "nightly security via stock unattended-upgrades timers" in out
+    assert "monthly full update via custom ks-gen timer" in out
