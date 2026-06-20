@@ -506,25 +506,32 @@ LEAN_EXTRA_PACKAGES: tuple[str, ...] = (
     "parted",
 )
 
+# Module-level defaults for Packages so the lean-normalization
+# `model_validator(mode="before")` can reference them when the input dict
+# omits the field. Pydantic doesn't apply Field default_factory at
+# mode="before" time — the validator sees the raw input dict only. The
+# field default_factory below reuses these constants so the source of
+# truth stays single.
+_PACKAGES_DEFAULT_BASE_GROUPS: list[str] = ["@^minimal-environment", "@standard"]
+_PACKAGES_DEFAULT_REQUIRED: list[str] = [
+    "scap-security-guide",
+    "openscap-scanner",
+    "aide",
+    "audit",
+    "rsyslog",
+    "chrony",
+    "firewalld",
+    "sudo",
+    "policycoreutils-python-utils",
+    "dnf-automatic",
+    "dnf-utils",
+]
+
 
 class Packages(StrictModel):
     preset: PackagesPreset = PackagesPreset.STANDARD
-    base_groups: list[str] = Field(default_factory=lambda: ["@^minimal-environment", "@standard"])
-    required: list[str] = Field(
-        default_factory=lambda: [
-            "scap-security-guide",
-            "openscap-scanner",
-            "aide",
-            "audit",
-            "rsyslog",
-            "chrony",
-            "firewalld",
-            "sudo",
-            "policycoreutils-python-utils",
-            "dnf-automatic",
-            "dnf-utils",
-        ]
-    )
+    base_groups: list[str] = Field(default_factory=lambda: list(_PACKAGES_DEFAULT_BASE_GROUPS))
+    required: list[str] = Field(default_factory=lambda: list(_PACKAGES_DEFAULT_REQUIRED))
     extra: list[str] = Field(default_factory=list)
     excluded: list[str] = Field(
         default_factory=lambda: [
@@ -536,14 +543,53 @@ class Packages(StrictModel):
         ]
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_lean_preset(cls, data: Any) -> Any:
+        """When preset is LEAN, normalize base_groups + required into the
+        stored fields so model_dump() (used by writer.py to produce
+        host.yaml) reflects what's actually installed. Without this,
+        host.yaml continues to show the raw defaults (`@standard` in
+        base_groups, no LEAN_EXTRA_PACKAGES in required) while the
+        kickstart's `%packages` block uses the corrected effective set
+        — host.yaml ends up lying about what's on the box. Fixes #134.
+
+        Runs in mode="before" because StrictModel is frozen — Pydantic v2
+        forbids `mode="after"` validators from returning a different
+        instance on a frozen model. Mutating the input dict before
+        construction is the supported path.
+
+        Idempotent: re-validating an already-normalized cfg is a no-op.
+        The `effective_*` properties below keep their old contract for
+        backward compat — after normalization they just echo the fields.
+        """
+        if not isinstance(data, dict):
+            return data
+        preset = data.get("preset", PackagesPreset.STANDARD)
+        # Normalize StrEnum-or-str so the comparison is robust either way.
+        preset_value = preset.value if isinstance(preset, PackagesPreset) else preset
+        if preset_value != PackagesPreset.LEAN.value:
+            return data
+        base_groups = data.get("base_groups", list(_PACKAGES_DEFAULT_BASE_GROUPS))
+        data = {**data, "base_groups": [g for g in base_groups if g != "@standard"]}
+        required = data.get("required", list(_PACKAGES_DEFAULT_REQUIRED))
+        existing = set(required)
+        data["required"] = list(required) + [p for p in LEAN_EXTRA_PACKAGES if p not in existing]
+        return data
+
     @property
     def effective_base_groups(self) -> list[str]:
+        # Post-#134 normalization makes this equivalent to base_groups on
+        # a lean cfg; preserved as a property so existing call sites
+        # (writer.py, rules/) keep working with no behavior change.
         if self.preset == PackagesPreset.LEAN:
             return [g for g in self.base_groups if g != "@standard"]
         return list(self.base_groups)
 
     @property
     def effective_required(self) -> list[str]:
+        # Post-#134 normalization makes this equivalent to required on a
+        # lean cfg; preserved as a property for backward compat.
         if self.preset != PackagesPreset.LEAN:
             return list(self.required)
         existing = set(self.required)
