@@ -72,7 +72,7 @@ def build_bundle(cfg: HostConfig) -> Bundle:
         return _build_rhel_family_bundle(cfg)
     if cfg.distro == "ubuntu2404":
         return _build_ubuntu2404_bundle(cfg)
-    assert_never(cfg.distro)
+    return assert_never(cfg.distro)
 
 
 def _build_rhel_family_bundle(cfg: HostConfig) -> Bundle:
