@@ -425,9 +425,17 @@
   
       # Persistent SELinux label so the bind-mounted volume data is usable by
       # containers. One regex rule covers <root>/<any-user>/appdata for everyone.
-      if ! semanage fcontext -l | grep -qF "${CONTAINERS_ROOT}/[^/]+/appdata"; then
+      #
+      # The spec is written against /var/lib/containers, NOT $CONTAINERS_ROOT:
+      # we registered an fcontext *equivalency* ($CONTAINERS_ROOT -> /var/lib/
+      # containers) above, and semanage rejects a local fcontext spec that would
+      # shadow an equivalency-covered path ("conflicts with equivalency rule").
+      # Writing the rule against the equivalency target still labels
+      # $CONTAINERS_ROOT/<user>/appdata correctly at restorecon time, because
+      # restorecon resolves that path through the equivalency first.
+      if ! semanage fcontext -l | grep -qF "/var/lib/containers/[^/]+/appdata"; then
           info "adding container_file_t fcontext rule for per-user appdata dirs"
-          semanage fcontext -a -t container_file_t "${CONTAINERS_ROOT}/[^/]+/appdata(/.*)?"
+          semanage fcontext -a -t container_file_t "/var/lib/containers/[^/]+/appdata(/.*)?"
       fi
       info "creating volume backing dir $appdata"
       install -d -m 0700 -o "$user" -g "$user" "$appdata"
