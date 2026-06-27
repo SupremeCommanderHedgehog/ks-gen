@@ -8,7 +8,7 @@
   
   ## Summary
   - Applied rules: 13
-  - Tailored XCCDF rules: 10
+  - Tailored XCCDF rules: 6
   - Declared exceptions: 0
   
   ## Applied rules
@@ -34,11 +34,7 @@
   | `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled` | `banner_text` |
   | `xccdf_org.ssgproject.content_rule_enable_fips_mode` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers` | `crypto_policy` |
-  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_kex` | `crypto_policy` |
-  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_macs` | `crypto_policy` |
-  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_mac_ordered` | `crypto_policy` |
-  | `xccdf_org.ssgproject.content_rule_install_DoD_intermediate_certificates` | `dod_root_ca` |
-  | `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_even_deny_root` | `faillock_safety` |
+  | `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root` | `faillock_safety` |
   
   ## Rule exception details
   ### `auditd_actions` — disk_full=SUSPEND, disk_error=SUSPEND, max_log_file=ROTATE
@@ -61,23 +57,17 @@
   Disabled XCCDF rules:
   - `xccdf_org.ssgproject.content_rule_enable_fips_mode`
   - `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers`
-  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_kex`
-  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_macs`
-  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_mac_ordered`
   
   ### `dod_root_ca` — DoD root/intermediate CA bundle not installed.
   
   _Reason:_ Server is not a DoD asset; bundle is not applicable.
-  
-  Disabled XCCDF rules:
-  - `xccdf_org.ssgproject.content_rule_install_DoD_intermediate_certificates`
   
   ### `faillock_safety` — unlock_time=900, even_deny_root=False
   
   _Reason:_ Prevents permanent lockout of the sole remote admin on a missed-key event.
   
   Disabled XCCDF rules:
-  - `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_even_deny_root`
+  - `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root`
   
   ## Declared exceptions (from host.yaml)
   _(none)_
@@ -98,6 +88,7 @@
   network --device=eno1 --bootproto=static --ip=192.168.50.10 --netmask=255.255.255.0 --gateway=192.168.50.1 --nameserver=1.1.1.1,9.9.9.9 --hostname=baremetal01.example.com --onboot=yes
   
   rootpw --lock
+  user --name=physadmin --lock --groups=wheel --gecos="" --shell=/bin/bash
   bootloader --location=mbr --append="audit=1 audit_backlog_limit=8192"
   
   zerombr
@@ -421,13 +412,9 @@
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_enable_fips_mode" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_kex" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_macs" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_mac_ordered" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_install_DoD_intermediate_certificates" selected="false"/>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time">900</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_deny">3</xccdf:set-value>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_even_deny_root" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_package_usbguard_installed" selected="true"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_service_usbguard_enabled" selected="true"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_configure_usbguard_auditbackend" selected="true"/>

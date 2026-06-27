@@ -557,7 +557,7 @@ Python 3.11 / 3.12 / 3.13. Target wall-clock: under 30 seconds.
 ## 7. Repository layout
 
 ```
-alma-linux-security/
+ks-gen/
 ├── pyproject.toml
 ├── README.md
 ├── LICENSE                           # Apache-2.0

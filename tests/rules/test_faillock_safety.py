@@ -1,4 +1,4 @@
-from ks_gen.rules.faillock_safety import RULE
+from ks_gen.rules.alma9.faillock_safety import RULE
 
 
 def test_applies_when_enabled(minimal_cfg):
@@ -24,10 +24,13 @@ def test_tailoring_sets_unlock_time(minimal_cfg):
     )
 
 
-def test_tailoring_disables_even_deny_root_when_false(minimal_cfg):
+def test_tailoring_disables_deny_root_when_false(minimal_cfg):
+    # Per #127 PR B SSG-drift sweep: the upstream SSG rule dropped the
+    # "even_" prefix between when this rule was originally written and
+    # current ssg-almalinux9 (0.1.80). cfg field name unchanged.
     ops = RULE.emit_tailoring(minimal_cfg)
     disabled = {o.rule_id for o in ops if o.action == "disable"}
-    assert any("even_deny_root" in r for r in disabled)
+    assert "xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root" in disabled
 
 
 def test_post_reasserts_unlock_time(minimal_cfg):
@@ -36,10 +39,14 @@ def test_post_reasserts_unlock_time(minimal_cfg):
     assert "/etc/security/faillock.conf" in out
 
 
-def test_exception_entry_named_when_disabling_even_deny_root(minimal_cfg):
+def test_exception_entry_lists_deny_root_disable(minimal_cfg):
+    # Renamed via #127 PR B (alma9 SSG-drift sweep): _even_deny_root → _deny_root.
     entry = RULE.exception_entry(minimal_cfg)
     assert entry is not None
-    assert "even_deny_root" in " ".join(entry.stig_rules_disabled)
+    assert (
+        "xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root"
+        in entry.stig_rules_disabled
+    )
 
 
 def test_no_exception_when_strict(minimal_cfg):

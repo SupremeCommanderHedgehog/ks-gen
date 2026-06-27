@@ -1,0 +1,536 @@
+# serializer version: 1
+# name: test_ubuntu_minimal[exceptions.md]
+  '''
+  # Exceptions report
+  
+  Generated: SNAP
+  Host: `u24-min`
+  
+  ## Summary
+  - Applied rules: 13
+  - Tailored XCCDF rules: 10
+  - Declared exceptions: 0
+  
+  ## Applied rules
+  - `admin_user_and_keys` — Create wheel admin, drop authorized_keys, sudoers fragment.
+  - `auditd_actions` — auditd disk_full/disk_error/max_log_file actions (SUSPEND/ROTATE default).
+  - `banner_text` — Write civilian-equivalent login banner; suppress DoD-text oscap rules.
+  - `crypto_policy` — Apply system crypto-policy; optionally generate Ed25519 host keys.
+  - `dod_root_ca` — Skip DoD root CA bundle installation.
+  - `faillock_safety` — Set faillock unlock_time and disable even_deny_root for remote safety.
+  - `kernel_module_blacklist` — Write modprobe blacklist for unused/disallowed kernel modules.
+  - `package_purge` — Remove disallowed packages after install (catches transitive pulls).
+  - `ssh_keep_open` — Ensure ssh.port reachable in firewalld + SELinux before sshd starts.
+  - `ssh_config_apply` — Write sshd drop-in config for Port/PermitRootLogin/PasswordAuthentication.
+  - `time_servers` — Write chrony.conf with operator-chosen NTP servers (non-DoD by default).
+  - `unattended_updates` — Configure dnf-automatic for nightly security + monthly full updates, with reboot inside a maintenance window.
+  - `usbguard` — Enable or disable USBGuard install + service per overrides.
+  
+  ## Tailored XCCDF rules (oscap rules disabled or value-tailored)
+  | XCCDF rule | Tailored by |
+  |---|---|
+  | `xccdf_org.ssgproject.content_rule_banner_etc_issue_cis` | `banner_text` |
+  | `xccdf_org.ssgproject.content_rule_banner_etc_issue_net` | `banner_text` |
+  | `xccdf_org.ssgproject.content_rule_banner_etc_issue_net_cis` | `banner_text` |
+  | `xccdf_org.ssgproject.content_rule_banner_etc_motd_cis` | `banner_text` |
+  | `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled` | `banner_text` |
+  | `xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text` | `banner_text` |
+  | `xccdf_org.ssgproject.content_rule_is_fips_mode_enabled` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers_ordered_stig` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_macs_ordered_stig` | `crypto_policy` |
+  
+  ## Rule exception details
+  ### `auditd_actions` — disk_full=SUSPEND, disk_error=SUSPEND, max_log_file=ROTATE
+  
+  _Reason:_ STIG defaults (HALT / keep_logs) can kill a remote server on a log-volume spike. SUSPEND/ROTATE keeps audit semantics while keeping the box reachable.
+  
+  ### `banner_text` — Substitutes private-system banner for DISA-mandated DoD text.
+  
+  _Reason:_ Server is not a U.S. Government Information System; literal DoD banner would make false legal claims. Civilian text satisfies the rule intent (warn unauthorized users; consent to monitoring).
+  
+  Disabled XCCDF rules:
+  - `xccdf_org.ssgproject.content_rule_banner_etc_issue_cis`
+  - `xccdf_org.ssgproject.content_rule_banner_etc_issue_net`
+  - `xccdf_org.ssgproject.content_rule_banner_etc_issue_net_cis`
+  - `xccdf_org.ssgproject.content_rule_banner_etc_motd_cis`
+  - `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled`
+  - `xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text`
+  
+  ### `crypto_policy` — MODERN crypto policy
+  
+  _Reason:_ MODERN accepts loss of FIPS 140-3 certification in exchange for Curve25519 / Ed25519 / ChaCha20-Poly1305 support.
+  
+  Disabled XCCDF rules:
+  - `xccdf_org.ssgproject.content_rule_is_fips_mode_enabled`
+  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers_ordered_stig`
+  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig`
+  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_macs_ordered_stig`
+  
+  ### `dod_root_ca` — DoD root/intermediate CA bundle not installed.
+  
+  _Reason:_ Server is not a DoD asset; bundle is not applicable.
+  
+  ### `faillock_safety` — unlock_time=900, even_deny_root=False
+  
+  _Reason:_ Prevents permanent lockout of the sole remote admin on a missed-key event.
+  
+  ### `usbguard` — USBGuard not installed/enabled.
+  
+  _Reason:_ Cloud/headless VMs have no USB; USBGuard is overhead with no benefit. Enable explicitly on bare-metal hosts.
+  
+  ## Declared exceptions (from host.yaml)
+  _(none)_
+  
+  '''
+# ---
+# name: test_ubuntu_minimal[host.yaml]
+  '''
+  distro: ubuntu2404
+  meta:
+    release: '9'
+    profile: stig
+    scap_content: ssg-ubuntu2404-ds.xml
+  system:
+    hostname: u24-min
+    timezone: UTC
+    locale: en_US.UTF-8
+    keyboard: us
+  network:
+    interfaces:
+    - device: link
+      bootproto: dhcp
+      onboot: true
+      ip: null
+      netmask: null
+      gateway: null
+      nameservers: []
+    dns_search: []
+    hostname_from_dhcp: false
+  disk:
+    preset: stig_server
+    layout: null
+    luks:
+      preset: none
+      passphrase: null
+      passphrase_file: null
+      tang: null
+    wipe: true
+    bootloader_password: null
+    target: null
+    data_disks: []
+  user:
+    admin:
+      name: opsadmin
+      gecos: ''
+      groups:
+      - wheel
+      shell: /bin/bash
+      password: null
+      sudo: nopasswd_yes
+      authorized_keys:
+      - ssh-ed25519 AAAA a@b
+  ssh:
+    port: 22
+    permit_root_login: 'no'
+    password_authentication: false
+    client_alive_interval: 600
+    client_alive_count_max: 1
+    max_auth_tries: 4
+    use_pam: true
+  banner:
+    text: 'WARNING: This is a private computer system. Unauthorized access is
+  
+      prohibited. All activity on this system may be monitored and logged.
+  
+      Use of this system constitutes consent to such monitoring.
+  
+      '
+    apply_to:
+    - issue
+    - issue_net
+    - motd
+    - gdm
+  time:
+    servers:
+    - pool.ntp.org
+    chrony_makestep_threshold: 1.0
+  crypto:
+    policy: MODERN
+  packages:
+    preset: standard
+    base_groups:
+    - '@^minimal-environment'
+    - '@standard'
+    required:
+    - scap-security-guide
+    - openscap-scanner
+    - aide
+    - audit
+    - rsyslog
+    - chrony
+    - firewalld
+    - sudo
+    - policycoreutils-python-utils
+    - dnf-automatic
+    - dnf-utils
+    extra: []
+    excluded:
+    - telnet-server
+    - rsh-server
+    - tftp-server
+    - vsftpd
+    - ypserv
+  overrides:
+    fips_mode: false
+    faillock:
+      enable: true
+      deny: 3
+      unlock_time: 900
+      even_deny_root: false
+    auditd:
+      disk_full_action: SUSPEND
+      disk_error_action: SUSPEND
+      max_log_file_action: ROTATE
+    ssh_keep_open:
+      ensure_firewalld_port: true
+      ensure_selinux_port: true
+      ensure_ufw_port: true
+    usbguard:
+      enable: false
+    kernel_module_blacklist:
+      enable: true
+      modules:
+      - usb-storage
+      - cramfs
+      - freevxfs
+      - jffs2
+      - hfs
+      - hfsplus
+      - squashfs
+      - udf
+    package_purge:
+      enable: true
+    dod_root_ca:
+      install: false
+    unattended_updates:
+      enable: true
+      nightly_security:
+        enable: true
+        on_calendar: '*-*-* 02:00:00'
+      monthly_full:
+        enable: true
+        on_calendar: Sun *-*-1..7 02:30:00
+      reboot_window:
+        enable: true
+        on_calendar: Sun *-*-* 03:00:00
+  custom_post: []
+  exceptions: []
+  containers:
+    enabled: false
+    users: []
+    volume:
+      size: 20G
+      fsoptions: nodev,nosuid
+  
+  '''
+# ---
+# name: test_ubuntu_minimal[meta-data]
+  '''
+  instance-id: "u24-min"
+  local-hostname: "u24-min"
+  
+  '''
+# ---
+# name: test_ubuntu_minimal[tailoring.xml]
+  '''
+  <?xml version='1.0' encoding='UTF-8'?>
+  <xccdf:Tailoring xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" id="xccdf_ks-gen_tailoring_default">
+    <xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml"/>
+    <xccdf:version time="SNAP">1</xccdf:version>
+    <xccdf:Profile id="xccdf_ks-gen_profile_tailored" extends="xccdf_org.ssgproject.content_profile_stig">
+      <xccdf:title xml:lang="en-US">ks-gen tailored xccdf_org.ssgproject.content_profile_stig</xccdf:title>
+      <xccdf:description xml:lang="en-US">Tailoring generated by ks-gen.</xccdf:description>
+      <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_auditd_disk_full_action">SUSPEND</xccdf:set-value>
+      <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_auditd_disk_error_action">SUSPEND</xccdf:set-value>
+      <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_auditd_max_log_file_action">ROTATE</xccdf:set-value>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_banner_etc_issue_cis" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_banner_etc_issue_net" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_banner_etc_issue_net_cis" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_banner_etc_motd_cis" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_is_fips_mode_enabled" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers_ordered_stig" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_macs_ordered_stig" selected="false"/>
+      <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time">900</xccdf:set-value>
+      <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_deny">3</xccdf:set-value>
+    </xccdf:Profile>
+  </xccdf:Tailoring>
+  
+  '''
+# ---
+# name: test_ubuntu_minimal[user-data]
+  '''
+  #cloud-config
+  autoinstall:
+    version: 1
+    identity:
+      hostname: "u24-min"
+      realname: "opsadmin"
+      username: "opsadmin"
+      password: "*"
+    user-data:
+      users:
+        - name: "opsadmin"
+          sudo: "ALL=(ALL) NOPASSWD:ALL"
+          shell: /bin/bash
+          ssh_authorized_keys:
+            - "ssh-ed25519 AAAA a@b"
+    packages:
+      - "auditd"
+      - "ufw"
+      - "chrony"
+      - "unattended-upgrades"
+    late-commands:
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:auditd_actions
+      # Re-assert auditd actions (defensive sed + append-if-missing)
+      sed -i -E '"'"'s|^[# ]*disk_full_action.*|disk_full_action = SUSPEND|'"'"' /etc/audit/auditd.conf
+      grep -q '"'"'^disk_full_action'"'"' /etc/audit/auditd.conf || echo '"'"'disk_full_action = SUSPEND'"'"' >> /etc/audit/auditd.conf
+      sed -i -E '"'"'s|^[# ]*disk_error_action.*|disk_error_action = SUSPEND|'"'"' /etc/audit/auditd.conf
+      grep -q '"'"'^disk_error_action'"'"' /etc/audit/auditd.conf || echo '"'"'disk_error_action = SUSPEND'"'"' >> /etc/audit/auditd.conf
+      sed -i -E '"'"'s|^[# ]*max_log_file_action.*|max_log_file_action = ROTATE|'"'"' /etc/audit/auditd.conf
+      grep -q '"'"'^max_log_file_action'"'"' /etc/audit/auditd.conf || echo '"'"'max_log_file_action = ROTATE'"'"' >> /etc/audit/auditd.conf'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:banner_text
+      # Civilian-equivalent login banner
+      cat > /etc/issue <<'"'"'__KS_GEN_EOF__'"'"'
+      WARNING: This is a private computer system. Unauthorized access is
+      prohibited. All activity on this system may be monitored and logged.
+      Use of this system constitutes consent to such monitoring.
+      __KS_GEN_EOF__
+      chmod 644 /etc/issue
+      cat > /etc/issue.net <<'"'"'__KS_GEN_EOF__'"'"'
+      WARNING: This is a private computer system. Unauthorized access is
+      prohibited. All activity on this system may be monitored and logged.
+      Use of this system constitutes consent to such monitoring.
+      __KS_GEN_EOF__
+      chmod 644 /etc/issue.net
+      cat > /etc/ssh/sshd-banner <<'"'"'__KS_GEN_EOF__'"'"'
+      WARNING: This is a private computer system. Unauthorized access is
+      prohibited. All activity on this system may be monitored and logged.
+      Use of this system constitutes consent to such monitoring.
+      __KS_GEN_EOF__
+      chmod 644 /etc/ssh/sshd-banner'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:crypto_policy
+      # SSH crypto policy (MODERN)
+      install -d -m 755 /etc/ssh/sshd_config.d
+      cat > /etc/ssh/sshd_config.d/10-ks-gen-crypto.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+      KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group16-sha512,diffie-hellman-group14-sha256
+      MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+      HostKeyAlgorithms ssh-ed25519,ssh-rsa,rsa-sha2-512,rsa-sha2-256,ecdsa-sha2-nistp521,ecdsa-sha2-nistp384,ecdsa-sha2-nistp256
+      PubkeyAcceptedAlgorithms ssh-ed25519,ssh-rsa,rsa-sha2-512,rsa-sha2-256,ecdsa-sha2-nistp521,ecdsa-sha2-nistp384,ecdsa-sha2-nistp256
+      __KS_GEN_EOF__
+      chmod 600 /etc/ssh/sshd_config.d/10-ks-gen-crypto.conf
+      ssh-keygen -A
+      sshd -t
+      # OpenSSL crypto policy (MODERN)
+      install -d -m 755 /etc/ssl/openssl.cnf.d
+      cat > /etc/ssl/openssl.cnf.d/10-ks-gen.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      [default_sect]
+      activate = 1
+      [system_default_sect]
+      MinProtocol = TLSv1.2
+      CipherString = DEFAULT@SECLEVEL=2
+      __KS_GEN_EOF__
+      chmod 644 /etc/ssl/openssl.cnf.d/10-ks-gen.conf
+      # GnuTLS crypto policy (MODERN)
+      install -d -m 755 /etc/gnutls
+      cat > /etc/gnutls/default-priorities <<'"'"'__KS_GEN_EOF__'"'"'
+      SECURE128
+      __KS_GEN_EOF__
+      chmod 644 /etc/gnutls/default-priorities'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:faillock_safety
+      # faillock.conf — soften lockout for remote-safe operation
+      sed -i -E '"'"'s/^[# ]*unlock_time *=.*/unlock_time = 900/'"'"' /etc/security/faillock.conf
+      grep -q '"'"'^unlock_time'"'"' /etc/security/faillock.conf || echo '"'"'unlock_time = 900'"'"' >> /etc/security/faillock.conf
+      sed -i -E '"'"'s/^[# ]*deny *=.*/deny = 3/'"'"' /etc/security/faillock.conf
+      grep -q '"'"'^deny'"'"' /etc/security/faillock.conf || echo '"'"'deny = 3'"'"' >> /etc/security/faillock.conf
+      sed -i -E '"'"'s/^[# ]*even_deny_root.*/# even_deny_root removed by ks-gen: no/'"'"' /etc/security/faillock.conf
+      # pam-auth-update profile (wires pam_faillock into common-auth/common-account)
+      install -d -m 755 /usr/share/pam-configs
+      cat > /usr/share/pam-configs/ks-gen-faillock <<'"'"'__KS_GEN_EOF__'"'"'
+      Name: pam_faillock (ks-gen)
+      Default: yes
+      Priority: 1024
+      Auth-Type: Primary
+      Auth-Initial:
+              [default=die]                  pam_faillock.so authfail
+      Auth:
+              [success=1 default=ignore]     pam_faillock.so preauth
+      Account-Type: Primary
+      Account:
+              required                       pam_faillock.so
+      __KS_GEN_EOF__
+      chmod 644 /usr/share/pam-configs/ks-gen-faillock
+      DEBIAN_FRONTEND=noninteractive pam-auth-update --enable ks-gen-faillock --package'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:kernel_module_blacklist
+      # Disable specific kernel modules via modprobe install-trick
+      cat > /etc/modprobe.d/ks-gen-blacklist.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      install usb-storage /bin/true
+      install cramfs /bin/true
+      install freevxfs /bin/true
+      install jffs2 /bin/true
+      install hfs /bin/true
+      install hfsplus /bin/true
+      install squashfs /bin/true
+      install udf /bin/true
+      __KS_GEN_EOF__
+      chmod 644 /etc/modprobe.d/ks-gen-blacklist.conf'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:package_purge
+      # Remove disallowed packages (no-op if not installed)
+      DEBIAN_FRONTEND=noninteractive apt-get -y purge telnet-server rsh-server tftp-server vsftpd ypserv || true'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:ssh_keep_open
+      ufw allow 22/tcp'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:ssh_config_apply
+      # Drop-in SSH server config (active on first boot)
+      install -d -m 755 /etc/ssh/sshd_config.d
+      cat > /etc/ssh/sshd_config.d/00-ks-gen.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      Port 22
+      PermitRootLogin no
+      PasswordAuthentication no
+      ClientAliveInterval 600
+      ClientAliveCountMax 1
+      MaxAuthTries 4
+      UsePAM yes
+      Banner /etc/ssh/sshd-banner
+      __KS_GEN_EOF__
+      chmod 600 /etc/ssh/sshd_config.d/00-ks-gen.conf
+      sshd -t'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:time_servers
+      # Chrony configuration (servers from host.yaml; STIG-compliant base)
+      install -d -m 755 /etc/chrony
+      cat > /etc/chrony/chrony.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      server pool.ntp.org iburst
+      driftfile /var/lib/chrony/chrony.drift
+      makestep 1.0 3
+      rtcsync
+      logdir /var/log/chrony
+      __KS_GEN_EOF__
+      chmod 644 /etc/chrony/chrony.conf'
+    - |
+      curtin in-target --target=/target -- bash -c '# rule:unattended_updates
+      # unattended_updates: nightly security via stock unattended-upgrades timers
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'"'"'__KS_GEN_EOF__'"'"'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      __KS_GEN_EOF__
+      chmod 644 /etc/apt/apt.conf.d/20auto-upgrades
+  
+      cat > /etc/apt/apt.conf.d/52ks-gen-unattended <<'"'"'__KS_GEN_EOF__'"'"'
+      Unattended-Upgrade::MailReport "never";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      __KS_GEN_EOF__
+      chmod 644 /etc/apt/apt.conf.d/52ks-gen-unattended
+  
+      mkdir -p /etc/systemd/system/apt-daily.timer.d
+      cat > /etc/systemd/system/apt-daily.timer.d/ks-gen.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      [Timer]
+      OnCalendar=
+      OnCalendar=*-*-* 02:00:00
+      RandomizedDelaySec=0
+      __KS_GEN_EOF__
+  
+      mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d
+      cat > /etc/systemd/system/apt-daily-upgrade.timer.d/ks-gen.conf <<'"'"'__KS_GEN_EOF__'"'"'
+      [Timer]
+      OnCalendar=
+      OnCalendar=*-*-* 02:00:00
+      RandomizedDelaySec=0
+      __KS_GEN_EOF__
+  
+      systemctl daemon-reload
+      systemctl enable apt-daily.timer apt-daily-upgrade.timer
+  
+      # unattended_updates: monthly full update via custom ks-gen timer
+      cat > /usr/local/sbin/ks-gen-apt-full-upgrade <<'"'"'__KS_GEN_EOF__'"'"'
+      #!/bin/bash
+      set -euo pipefail
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get -y \
+        -o Dpkg::Options::='"'"'--force-confdef'"'"' \
+        -o Dpkg::Options::='"'"'--force-confold'"'"' \
+        dist-upgrade
+      __KS_GEN_EOF__
+      chmod 755 /usr/local/sbin/ks-gen-apt-full-upgrade
+  
+      cat > /etc/systemd/system/ks-gen-apt-full-upgrade.service <<'"'"'__KS_GEN_EOF__'"'"'
+      [Unit]
+      Description=ks-gen monthly full apt dist-upgrade run
+      After=network-online.target
+      Wants=network-online.target
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/ks-gen-apt-full-upgrade
+      __KS_GEN_EOF__
+  
+      cat > /etc/systemd/system/ks-gen-apt-full-upgrade.timer <<'"'"'__KS_GEN_EOF__'"'"'
+      [Unit]
+      Description=ks-gen monthly full apt dist-upgrade schedule
+      [Timer]
+      OnCalendar=Sun *-*-1..7 02:30:00
+      Persistent=true
+      [Install]
+      WantedBy=timers.target
+      __KS_GEN_EOF__
+  
+      systemctl daemon-reload
+      systemctl enable ks-gen-apt-full-upgrade.timer
+  
+      # unattended_updates: reboot inside maintenance window if /var/run/reboot-required exists
+      cat > /usr/local/sbin/ks-gen-reboot-if-needed <<'"'"'__KS_GEN_EOF__'"'"'
+      #!/bin/bash
+      set -euo pipefail
+      if [ -f /var/run/reboot-required ]; then
+        logger -t ks-gen "reboot needed (/var/run/reboot-required present), rebooting at $(date -Is)"
+        systemctl reboot
+      else
+        logger -t ks-gen "no reboot needed at $(date -Is)"
+      fi
+      __KS_GEN_EOF__
+      chmod 755 /usr/local/sbin/ks-gen-reboot-if-needed
+  
+      cat > /etc/systemd/system/ks-gen-reboot-if-needed.service <<'"'"'__KS_GEN_EOF__'"'"'
+      [Unit]
+      Description=ks-gen reboot if pending kernel/glibc/etc.
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/ks-gen-reboot-if-needed
+      __KS_GEN_EOF__
+  
+      cat > /etc/systemd/system/ks-gen-reboot-if-needed.timer <<'"'"'__KS_GEN_EOF__'"'"'
+      [Unit]
+      Description=ks-gen reboot-if-needed schedule
+      [Timer]
+      OnCalendar=Sun *-*-* 03:00:00
+      Persistent=true
+      [Install]
+      WantedBy=timers.target
+      __KS_GEN_EOF__
+  
+      systemctl daemon-reload
+      systemctl enable ks-gen-reboot-if-needed.timer'
+  
+  '''
+# ---

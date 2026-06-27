@@ -1,4 +1,4 @@
-from ks_gen.rules.time_servers import RULE
+from ks_gen.rules.alma9.time_servers import RULE
 
 
 def test_post_writes_chrony_conf(minimal_cfg):

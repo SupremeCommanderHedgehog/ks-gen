@@ -328,6 +328,14 @@ every partition line — so the install cannot touch sibling drives on
 multi-disk hosts. Leave unset to keep today's behavior (anaconda picks
 disks by enumeration order).
 
+As of v0.13, `disk.target` accepts persistent identifiers under
+`/dev/disk/by-id/` and `/dev/disk/by-path/` — drop the leading `/dev/`
+when writing the value (e.g. `disk/by-id/ata-FOO`). The same regex
+covers bare kernel names (`sda`, `nvme0n1`) so existing host.yaml
+files load unchanged. By-id targeting is strongly recommended on
+hosts where SATA-port enumeration is unstable (the kernel-name `sda`
+can swap to `sdb` on reseat).
+
 #### `disk.layout` (alternative to `disk.preset`)
 
 For operators who need to customize partition sizes or add extra
@@ -379,6 +387,67 @@ missing any of them fails with a specific error.
 
 Per-LV encryption (`lvs[].encrypted: true`) is not supported — use the
 `disk.luks` block below for PV-level LUKS that covers all LVs.
+
+#### `disk.data_disks` (secondary mounts, v0.13+)
+
+`disk.data_disks` is a list of secondary physical disks. Each entry
+declares one disk:
+
+```yaml
+disk:
+  target: disk/by-id/ata-SYSTEM_SSD
+  preset: stig_server
+  data_disks:
+    - target: disk/by-id/ata-DATA_HDD     # by-id strongly recommended
+      mount: /data                         # must start with /
+      fstype: xfs                          # xfs (default) or ext4
+      fsoptions: nodev,nosuid              # STIG-aligned default; null for none
+      wipe: true                           # true (default) | false
+      # wipe: false adds exactly one of:
+      # partition: 1                       # /dev/<target>-partN; target must be by-id or by-path
+      # partition_uuid: 0f2a-1c3b-...      # UUID=... in fstab
+      # partition_label: my_data_lbl       # LABEL=... in fstab
+```
+
+When `wipe: true` (the default), anaconda formats the disk via a
+`part <mount> --fstype=<fs> --grow --size=1 --ondisk=<target>` line and
+mounts it during install — the resulting `/etc/fstab` entry is
+generated for free.
+
+When `wipe: false`, the disk is **omitted from `ignoredisk --only-use=`
+and `clearpart --drives=`** so anaconda ignores it entirely. The
+`data_disks_preserve` rule then writes one fstab entry from `%post`
+using the chosen identifier (partition number, UUID, or label),
+followed by `mount -a` + `restorecon -R <mounts>`. Pick the
+identifier that survives the operation: `partition_uuid` is most
+robust; `partition_label` is the friendliest when you control the
+label; `partition: 1` is the implicit default and assumes the legacy
+single-partition layout. **`partition: N` requires a stable target
+(`disk/by-id/...` or `disk/by-path/...`)** — bare kernel-name
+targets like `sdb` don't have a `/dev/disk/by-id/sdb-partN` symlink,
+so use `partition_uuid` or `partition_label` for those.
+
+Cross-field rules enforced at config load:
+
+- `data_disks` requires `disk.target` to be set (without a system
+  target, anaconda's `clearpart --all` would clobber the data disks).
+- Targets must be distinct across `disk.target` and all
+  `data_disks[*].target`.
+- Mounts must be distinct and must not collide with `/`, `/boot`,
+  `/boot/efi`, the active layout/preset's LV mounts, or
+  `/srv/containers` (when `containers.enabled`).
+- The `minimal` preset is incompatible with `data_disks` — use
+  `stig_server` or `disk.layout`.
+
+##### Install-regression recommendation
+
+This feature touches every "DO recommend" path in `CLAUDE.md`'s
+install-regression guidance: schema defaults, template fan-out, and a
+new `%post`-writing rule. Before merging a host that uses `data_disks`
+in anger, run the install-regression harness with a two-disk QEMU VM —
+once for each of the `wipe: true` and `wipe: false` paths. The
+harness recipe lives at `.scratch/install-regression/` (gitignored,
+per-developer).
 
 #### `disk.luks` (PV-level LUKS encryption)
 
@@ -518,6 +587,7 @@ See §3.5 for what each value means.
 
 ```yaml
 packages:
+  preset: standard               # "standard" (default) or "lean"
   base_groups: ["@^minimal-environment", "@standard"]
   required:                        # STIG/oscap dependencies + ops baseline
     - scap-security-guide
@@ -542,7 +612,95 @@ packages:
 and purged via `dnf -y remove` in `%post`. Belt and braces, because
 some get pulled in transitively by groups.
 
-### 4.11 `overrides` — the conflict-point matrix
+#### `preset: standard` vs `preset: lean`
+
+- **`standard`** (default) emits `base_groups` as written. The RHEL/Alma
+  `@standard` group lands on the system: vim-enhanced, mlocate, sos,
+  smartmontools, postfix, parted, and ~80 other conventional admin tools.
+  Closest to the AlmaLinux DVD interactive install.
+- **`lean`** strips `@standard` from the emitted base groups and
+  auto-adds the packages the STIG profile expects to find regardless
+  (`logrotate`, `postfix`, `cronie`, `crontabs`, `parted`). Cuts ~75
+  packages off the install footprint with no oscap-remediation cost.
+  Choose this for single-purpose appliance hosts (container hosts,
+  edge nodes, bastions) where the full admin toolset is not wanted.
+
+The preset is purely additive over `required` — explicitly listing any
+of the lean compensating packages in `required` is safe; they are
+deduped, not double-added.
+
+`excluded` wins over the preset. If you set `preset: lean` and also
+list one of the compensating packages (e.g. `postfix`) in `excluded`,
+the package is excluded from `%packages` and purged in `%post` — you
+opt out of that part of the lean preset's STIG-compliance guarantee.
+
+### 4.11 `containers` — rootless container host preset
+
+A complete worked example combining this preset with `packages.preset: lean`
+lives at [`examples/host-container.yaml`](examples/host-container.yaml) — copy
+it, swap in your hostname and SSH keys, and run `ks-gen gen`.
+
+```yaml
+containers:
+  enabled: true                  # default false
+  users:                         # may be empty; script still installs at /root
+    - name: webapp
+      gecos: "Web app workloads"
+      authorized_keys:
+        - "ssh-ed25519 AAAA... webapp@bastion"
+        - "ssh-ed25519 BBBB... webapp@laptop"
+    - name: dbproxy
+      authorized_keys:
+        - "ssh-ed25519 CCCC... dbproxy@bastion"
+  volume:
+    size: "20G"                  # default 20G; pattern ^\d+(M|G|T)$
+    fsoptions: "nodev,nosuid"    # default; `noexec` token is rejected
+```
+
+When `enabled: true`, the generated kickstart:
+
+1. Auto-injects an extra logvol `/srv/containers` (XFS, sized per `volume.size`, mounted with `volume.fsoptions`) into the partition layout. Works for both `disk.preset` and `disk.layout` shapes.
+2. Adds the rootless-podman package stack to `%packages`: `podman`, `crun`, `slirp4netns`, `fuse-overlayfs`, `containers-common`, `podman-plugins`. (`policycoreutils-python-utils` for `semanage` is already in the standard required list and gets deduped.)
+3. Drops `/root/create-rootless-user.sh` (mode 0550, root:root) — the same script the kickstart uses to create users is available to the operator for post-install user provisioning.
+4. Writes `/etc/containers/storage.conf` with `rootless_storage_path = "/srv/containers/$USER/storage"` so podman lands new users' graphroot on the mirror automatically.
+5. For each `users[]` entry: calls the script with `-l` (linger always-on) and the configured `gecos`, then writes the full `authorized_keys` file. Container users have no sudo, no wheel group, and a real shell (`/bin/bash`) for SSH login.
+
+#### Recommended pairing with `packages.preset: lean`
+
+A container-host typically wants the lean package baseline (see §4.10). The two presets compose orthogonally:
+
+```yaml
+packages:
+  preset: lean
+containers:
+  enabled: true
+  users:
+    - name: webapp
+      authorized_keys: ["..."]
+```
+
+#### Post-install user provisioning
+
+After install, the operator can add additional rootless container users with the same script kickstart used:
+
+```bash
+sudo /root/create-rootless-user.sh -l -c "Analytics workloads" analytics
+# add a public key:
+sudo /root/create-rootless-user.sh -l -k "$(cat ~/.ssh/id_ed25519.pub)" deploy
+# scaffold a starter Quadlet set for testing:
+sudo /root/create-rootless-user.sh -l -q -c "Sandbox" sandbox
+```
+
+The script is idempotent — re-running it on an existing user is safe and will just (re)apply any options you pass.
+
+#### Constraints
+
+- Container users' names must be distinct from `user.admin.name` (container users are for rootless workloads; admins manage the host).
+- If you're using `disk.layout` (not `disk.preset`), don't add a `/srv/containers` LV yourself — the container-host preset auto-injects it.
+- `volume.fsoptions` rejects `noexec`. Container image layers must execute.
+- **Disk-size budget.** With `disk.preset: stig_server`, the fixed STIG LVs already consume ~44 GiB (`/` 15, `/var` 10, `/home` 5, `/var/log` 5, `/var/log/audit` 3, `/var/tmp` 2, `/tmp` 3) plus `--recommended` swap and `/boot` + EFI. The default `volume.size: 20G` for `/srv/containers` therefore needs a disk of roughly **70 GiB or larger** to install cleanly. On smaller disks, shrink `volume.size` accordingly or move the container LV onto a separate disk via `disk.layout`.
+
+### 4.12 `overrides` — the conflict-point matrix
 
 Each knob has a safe-by-default value. You override to either tighten
 or loosen the STIG/remote-safe tradeoff for a specific host.
@@ -596,7 +754,7 @@ than disabling and replacing the unit.
 
 See §6 for what each rule does with these inputs.
 
-### 4.12 `custom_post`
+### 4.13 `custom_post`
 
 ```yaml
 custom_post:
@@ -609,7 +767,7 @@ Each list entry becomes its own `%post` block separated by
 `# ===== custom_post =====` markers. Runs **after** every ks-gen
 rule's `emit_post`.
 
-### 4.13 `exceptions`
+### 4.14 `exceptions`
 
 ```yaml
 exceptions:
@@ -970,6 +1128,8 @@ default after a 5-second timeout. If you need to recover the
 interactive Anaconda flow, arrow-down to "Install AlmaLinux 9" within
 the timeout window.
 
+For writing the resulting ISO to a USB stick on Windows, see §8.6.
+
 ### 8.4 First-boot verification
 
 Once the system reboots and you can SSH in:
@@ -1266,6 +1426,87 @@ Use both together when appropriate.
 top-level `baseline` key with `path`, `captured_utc`, and `orphans`.
 The key is omitted when `--baseline` isn't set.
 
+### 8.6 Writing a ks-gen ISO to USB on Windows (Rufus)
+
+Boot media for `ks-gen iso` output on Windows. Verified against
+Rufus 4.x on Windows 11. (`ks-gen iso` itself still needs `xorriso`,
+which on Windows means a WSL Ubuntu install with `apt install
+xorriso` — see §2 for the venv setup. This section is about turning
+the resulting `.iso` into a bootable USB stick.)
+
+#### Step 1 — Reset the USB stick if it was previously DD-written
+
+A USB that's been previously written with Rufus's "DD image" mode
+(or any tool that wrote a raw hybrid ISO to the block device)
+carries a partition table that Windows tools can't reliably
+re-partition. `diskpart`'s `clean` command wipes the table and
+disk signatures so Rufus can treat the stick as a blank target.
+
+Open an elevated PowerShell, find the USB by size:
+
+```powershell
+Get-Disk
+```
+
+Then, substituting the correct disk number for `N`:
+
+```powershell
+Clear-Disk -Number N -RemoveData -RemoveOEM -Confirm:$false
+```
+
+Double-check the disk number before running. Picking the system
+drive's number wipes your OS.
+
+#### Step 2 — Run Rufus
+
+1. **Device:** the USB stick.
+2. **Boot selection:** click *Select* and pick your ks-gen ISO.
+3. **Partition scheme:** **MBR**. Produces a USB bootable on both
+   BIOS-CSM and UEFI targets. Pick GPT only if you know the target
+   firmware has no CSM/legacy path.
+4. **Target system:** *BIOS or UEFI* (auto-set by the MBR choice).
+5. **Volume label:** must read exactly `ALMA9`. Rufus reads this
+   from the ISO's volid (which `ks-gen iso` sets via `-volid`), so
+   it should already be correct — but glance at the field before
+   clicking *Start*. **If it's anything else, type `ALMA9` in
+   manually.** The bootloader cmdline that ks-gen wrote references
+   `hd:LABEL=ALMA9` for both `inst.stage2=`, `inst.repo=`, and
+   `inst.ks=`. A label mismatch means anaconda can't find the
+   install tree, the kickstart, or both.
+6. **File system:** *FAT32* (Rufus default for hybrid Linux ISOs).
+7. Click *Start*. At the ISOHybrid prompt, choose **Write in ISO
+   Image mode (Recommended)**. **Do not pick DD Image mode** —
+   some UEFI firmwares only enumerate the ESP partition of a DD-
+   written hybrid ISO, hiding `/ks.cfg` from anaconda entirely.
+
+Eject the USB cleanly from Explorer when Rufus finishes. Plug it
+into the target, boot, pick the USB in the firmware boot menu.
+The ks-gen menu entry runs by default after a 5-second timeout.
+
+#### When this isn't enough
+
+For multi-disk targets where the kernel's `sda`/`sdb`/`sdc`
+enumeration shuffles between boots, the kickstart needs stable disk
+identifiers (`/dev/disk/by-id/...`) instead of kernel device names.
+Anaconda accepts these in `--ondisk=`, `--drives=`, and
+`--boot-drive=`. Hand-edit the post-`ks-gen gen` `ks.cfg` to
+substitute kernel names with by-id paths, then re-run `ks-gen iso`.
+See §9.6 for the recommended patch-tracking workflow that keeps the
+substitution version-controlled and reproducible across
+regenerations.
+
+#### Alternatives if Rufus still doesn't work
+
+- **OEMDRV USB** (§8.2) — skip `ks-gen iso` entirely. Boot from a
+  vanilla AlmaLinux DVD ISO (write to USB with any tool, including
+  Rufus's straightforward path for an unmodified AlmaLinux ISO),
+  with a second FAT-formatted USB labeled `OEMDRV` carrying just
+  `ks.cfg` and `tailoring.xml`. Anaconda auto-discovers the
+  kickstart by label. No bootloader rewrite, no label-matching
+  gymnastics, no xorriso requirement on the workstation.
+- **HTTP delivery** (§8.1) — for cloud / network-boot environments,
+  serving the bundle over HTTP sidesteps physical media entirely.
+
 ## 9. Common workflows
 
 ### 9.1 Spin up a new cloud VM
@@ -1330,6 +1571,95 @@ report only changes when the *security posture* changes.
 ```bash
 diff build/web01/exceptions.md build/web02/exceptions.md
 ```
+
+### 9.6 Hand-edit the kickstart via a tracked patch
+
+When you need to extend the generated kickstart beyond what
+`host.yaml` models — RAID layouts, stable disk identifiers
+(`/dev/disk/by-id/...` substituted for `sda`/`sdb`/`sdc`),
+bootloader cmdline tweaks, custom `%pre` blocks — the right pattern
+is **not** to hand-edit `ks.cfg` once and call it done. Hand-edits
+get lost the next time you regenerate. Instead, capture the delta
+as a `patch` file checked into the same place `host.yaml` lives,
+and re-apply it as a build step.
+
+#### Capture the patch once (after your first hand-edit)
+
+```bash
+ks-gen gen --config host.yaml --out build/
+
+cd build/<hostname>
+cp ks.cfg ks.cfg.orig
+# Hand-edit ks.cfg: RAID layout, by-id paths, whatever you need.
+diff -u ks.cfg.orig ks.cfg > ../../kickstart.patch
+cd ../..
+
+git add host.yaml kickstart.patch
+git commit -m "track <hostname> kickstart customization"
+```
+
+#### Apply on every regeneration
+
+```bash
+ks-gen gen  --config host.yaml --out build/
+patch -d build/<hostname>/ -p0 < kickstart.patch
+ks-gen lint build/<hostname>/ks.cfg
+ks-gen iso \
+  --src AlmaLinux-9-latest-x86_64-dvd.iso \
+  --ks build/<hostname>/ks.cfg \
+  --tailoring build/<hostname>/tailoring.xml \
+  --out build/<hostname>/installer.iso
+```
+
+#### Wrapper script
+
+Drop this next to `host.yaml` and `kickstart.patch` in your operator
+repo as `build-installer.sh`. Run from WSL on Windows (or any Linux
+shell) — `ks-gen iso` needs `xorriso`.
+
+```bash
+#!/usr/bin/env bash
+# Build an installer ISO from host.yaml + kickstart.patch.
+set -euo pipefail
+
+HOST="${1:?usage: $0 <hostname> [host.yaml] [kickstart.patch] [src.iso]}"
+HOST_YAML="${2:-host.yaml}"
+PATCH_FILE="${3:-kickstart.patch}"
+SRC_ISO="${4:-AlmaLinux-9-latest-x86_64-dvd.iso}"
+
+BUNDLE="build/$HOST"
+
+ks-gen gen --config "$HOST_YAML" --out build/
+[[ -f "$PATCH_FILE" ]] && patch -d "$BUNDLE" -p0 < "$PATCH_FILE"
+ks-gen lint "$BUNDLE/ks.cfg"
+ks-gen iso \
+  --src "$SRC_ISO" \
+  --ks "$BUNDLE/ks.cfg" \
+  --tailoring "$BUNDLE/tailoring.xml" \
+  --out "$BUNDLE/installer.iso"
+
+echo "ready: $BUNDLE/installer.iso"
+```
+
+#### Cautions
+
+- **Always re-lint after patching.** `ks-gen lint` re-validates the
+  three load-bearing safety invariants (§3.4). If your patch
+  reorders `admin_user_and_keys` past `ssh_config_apply`, drops the
+  oscap fetch block, or strips the `--fetch-remote-resources` flag,
+  lint exits 4 and you find out before burning an ISO. The wrapper
+  script runs lint between patch and iso for exactly this reason.
+- **Patches are line-positionally brittle.** When ks-gen upstream
+  changes lines around your edits, the patch fails to apply
+  (`Hunk #N FAILED`). When that happens, re-capture: delete
+  `kickstart.patch`, regenerate, re-edit, re-diff, re-commit.
+  Don't merge stale hunks by hand.
+- **Don't patch `%post` bodies that come from rules.** If you find
+  yourself editing shell inside a `# ===== <rule_id> =====` block,
+  that's a signal you want either a new rule (file in
+  `src/ks_gen/rules/`) or a `custom_post` block in `host.yaml` —
+  not a patch. Patches are for layout-level things ks-gen's schema
+  doesn't model yet (RAID, by-id, bootloader cmdline).
 
 ---
 
@@ -1468,6 +1798,33 @@ STIG path; if it didn't, check the log.
 
 If it's listed but its output isn't in the bundle, check
 `applies(cfg)` — it might be returning `False` for your config.
+
+### "Rufus made a USB that boots, but anaconda's install source / packages / user sections are all blank"
+
+Two near-certain causes:
+
+1. **Volume label mismatch.** The bootloader cmdline references the
+   install media by `hd:LABEL=ALMA9` for `inst.stage2=`,
+   `inst.repo=`, and `inst.ks=`. If Rufus formatted the USB's FAT32
+   partition with a label other than `ALMA9`, none of those lookups
+   resolve. Open the USB in Windows Explorer; the drive name must
+   read exactly `ALMA9`. If it doesn't, redo the write with Rufus's
+   "Volume label" field manually set to `ALMA9` before clicking
+   Start. See §8.6 step 2.
+2. **DD Image mode was picked at the ISOHybrid prompt.** Some UEFI
+   firmwares only enumerate the ESP partition of a DD-written
+   hybrid ISO, hiding `/ks.cfg` and the AlmaLinux package tree on
+   the ISO9660 partition. Symptom variant: stage2 loads but
+   anaconda shows "Error setting up base repository," or it boots
+   but only sees the UEFI filesystem. Run `Clear-Disk` on the USB
+   to reset the partition table (§8.6 step 1), then redo with
+   Rufus's **ISO Image mode**.
+
+If neither matches the symptom, check that you're running ks-gen
+v0.12.2 or later — v0.12.1 and earlier omitted `inst.repo=` from
+the bootloader cmdline and the top-level `user --name=` directive
+from the kickstart, both of which anaconda's GUI needs to satisfy
+its prerequisite gates on FAT32 USB installs.
 
 ---
 

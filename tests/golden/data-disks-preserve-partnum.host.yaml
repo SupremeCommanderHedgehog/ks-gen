@@ -1,0 +1,17 @@
+system:
+  hostname: preserve-pn.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYprspn ops@bastion"
+    sudo: nopasswd_yes
+disk:
+  target: sda
+  preset: stig_server
+  data_disks:
+    - target: disk/by-id/ata-WDC_WD1002FBYS-02A6B0_WD-WMATV5896685
+      mount: /data
+      fstype: xfs
+      wipe: false
+      partition: 1

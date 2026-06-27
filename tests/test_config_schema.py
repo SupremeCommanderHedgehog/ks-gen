@@ -4,14 +4,20 @@ import pytest
 from pydantic import ValidationError
 
 from ks_gen.config import (
+    LEAN_EXTRA_PACKAGES,
     AdminUser,
     AuditdActionsCfg,
     AuditdMaxFileAction,
     AuditdSystemAction,
     Banner,
+    Containers,
+    ContainerUser,
+    ContainerVolume,
     Crypto,
     CryptoPolicy,
     Disk,
+    DiskLayout,
+    DiskLvDef,
     DiskPreset,
     ExceptionDecl,
     HostConfig,
@@ -22,8 +28,10 @@ from ks_gen.config import (
     NightlySecurityCfg,
     Overrides,
     Packages,
+    PackagesPreset,
     RebootWindowCfg,
     Ssh,
+    SshKeepOpenCfg,
     System,
     Time,
     UnattendedUpdatesCfg,
@@ -204,6 +212,26 @@ def test_packages_include_dnf_automatic_tooling():
     assert "dnf-utils" in p.required
 
 
+def test_packages_preset_defaults_to_standard():
+    p = Packages()
+    assert p.preset == PackagesPreset.STANDARD
+
+
+def test_packages_preset_accepts_lean():
+    p = Packages(preset=PackagesPreset.LEAN)
+    assert p.preset == PackagesPreset.LEAN
+
+
+def test_packages_preset_accepts_string_value():
+    p = Packages(preset="lean")
+    assert p.preset.value == "lean"
+
+
+def test_packages_preset_rejects_unknown_value():
+    with pytest.raises(ValidationError):
+        Packages(preset="ultra-lean")
+
+
 def test_overrides_safe_defaults():
     o = Overrides()
     assert o.fips_mode is False
@@ -212,6 +240,8 @@ def test_overrides_safe_defaults():
     assert o.auditd.disk_full_action == AuditdSystemAction.SUSPEND
     assert o.auditd.max_log_file_action == AuditdMaxFileAction.ROTATE
     assert o.ssh_keep_open.ensure_firewalld_port is True
+    assert o.ssh_keep_open.ensure_selinux_port is True
+    assert o.ssh_keep_open.ensure_ufw_port is True
     assert o.usbguard.enable is False
     assert o.dod_root_ca.install is False
     assert "usb-storage" in o.kernel_module_blacklist.modules
@@ -220,6 +250,13 @@ def test_overrides_safe_defaults():
 def test_auditd_actions_reject_bogus():
     with pytest.raises(ValidationError):
         AuditdActionsCfg(disk_full_action="BURN")  # type: ignore[arg-type]
+
+
+def test_ssh_keep_open_cfg_defaults_include_ufw_port():
+    cfg = SshKeepOpenCfg()
+    assert cfg.ensure_firewalld_port is True
+    assert cfg.ensure_selinux_port is True
+    assert cfg.ensure_ufw_port is True
 
 
 def test_custom_post_passes_through():
@@ -1011,3 +1048,751 @@ def test_disk_lv_def_encrypted_true_rejected_with_pv_level_message():
         match=r"per-LV encryption is not supported; use disk\.luks\.preset",
     ):
         DiskLvDef(name="root", mount="/", size="15G", encrypted=True)
+
+
+def test_effective_base_groups_standard_passthrough():
+    p = Packages()
+    assert p.effective_base_groups == ["@^minimal-environment", "@standard"]
+
+
+def test_effective_base_groups_lean_strips_standard():
+    p = Packages(preset="lean")
+    assert p.effective_base_groups == ["@^minimal-environment"]
+
+
+def test_effective_base_groups_lean_preserves_user_custom_groups():
+    p = Packages(preset="lean", base_groups=["@^minimal-environment", "@standard", "@development"])
+    assert p.effective_base_groups == ["@^minimal-environment", "@development"]
+
+
+def test_effective_required_standard_passthrough():
+    p = Packages()
+    assert p.effective_required == list(p.required)
+
+
+def test_effective_required_lean_adds_compensating_packages():
+    p = Packages(preset="lean")
+    for pkg in ("logrotate", "postfix", "cronie", "crontabs", "parted"):
+        assert pkg in p.effective_required
+
+
+def test_effective_required_lean_preserves_required_order_and_dedupes():
+    # User already lists logrotate explicitly; should appear once, in its
+    # original position relative to the rest of `required`.
+    p = Packages(preset="lean", required=["scap-security-guide", "logrotate", "aide"])
+    assert p.effective_required.count("logrotate") == 1
+    # Original entries come first; lean extras append after, with already-
+    # present ones skipped.
+    assert p.effective_required[:3] == ["scap-security-guide", "logrotate", "aide"]
+    for pkg in ("postfix", "cronie", "crontabs", "parted"):
+        assert pkg in p.effective_required[3:]
+
+
+def test_effective_properties_are_not_serialized():
+    """Pin the plain-@property (not @computed_field) choice.
+
+    If these properties ever leak into model_dump(), host.yaml round-trips
+    change shape and downstream golden snapshots will silently drift.
+    """
+    p = Packages(preset="lean")
+    dumped = p.model_dump()
+    assert "effective_base_groups" not in dumped
+    assert "effective_required" not in dumped
+
+
+# #134 — lean preset normalization at model construction time so
+# model_dump() (host.yaml) reflects the actual install state.
+
+
+def test_lean_preset_normalizes_base_groups_into_field():
+    # base_groups field reflects the lean-normalized set, not the raw default.
+    # Pre-#134 this was ["@^minimal-environment", "@standard"] even with lean.
+    p = Packages(preset="lean")
+    assert p.base_groups == ["@^minimal-environment"]
+
+
+def test_lean_preset_normalizes_required_into_field():
+    # required field includes the LEAN_EXTRA_PACKAGES, not just the defaults.
+    p = Packages(preset="lean")
+    for pkg in LEAN_EXTRA_PACKAGES:
+        assert pkg in p.required
+
+
+def test_lean_preset_normalization_reflected_in_model_dump():
+    # The whole point of #134: dumping a lean cfg shows the install-time
+    # truth, not the raw defaults. host.yaml is consumed by ks-gen verify
+    # and audited by operators; it must not lie.
+    p = Packages(preset="lean")
+    dumped = p.model_dump()
+    assert "@standard" not in dumped["base_groups"]
+    for pkg in LEAN_EXTRA_PACKAGES:
+        assert pkg in dumped["required"]
+
+
+def test_lean_preset_normalization_is_idempotent_on_roundtrip():
+    # Re-validating the dumped form must produce the same cfg — no infinite
+    # mutation loop, no surprise drift after one round-trip.
+    p1 = Packages(preset="lean")
+    p2 = Packages(**p1.model_dump())
+    assert p1.base_groups == p2.base_groups
+    assert p1.required == p2.required
+
+
+def test_lean_preset_normalization_preserves_user_required_order():
+    # User-specified required entries stay in order; LEAN_EXTRA_PACKAGES
+    # append after, deduplicated.
+    p = Packages(preset="lean", required=["scap-security-guide", "logrotate", "aide"])
+    assert p.required[:3] == ["scap-security-guide", "logrotate", "aide"]
+    assert p.required.count("logrotate") == 1
+    for pkg in ("postfix", "cronie", "crontabs", "parted"):
+        assert pkg in p.required[3:]
+
+
+def test_lean_preset_normalization_handles_custom_base_groups():
+    # User-supplied custom @group is preserved; @standard still dropped.
+    p = Packages(
+        preset="lean",
+        base_groups=["@^minimal-environment", "@standard", "@development"],
+    )
+    assert p.base_groups == ["@^minimal-environment", "@development"]
+
+
+def test_standard_preset_does_not_normalize():
+    # Only LEAN triggers normalization. STANDARD keeps raw defaults intact.
+    p = Packages()
+    assert "@standard" in p.base_groups
+    for pkg in LEAN_EXTRA_PACKAGES:
+        assert pkg not in p.required
+
+
+def test_container_volume_defaults():
+    v = ContainerVolume()
+    assert v.size == "20G"
+    assert v.fsoptions == "nodev,nosuid"
+    assert v.size_mib == 20480
+
+
+def test_container_volume_size_mib_megabytes():
+    assert ContainerVolume(size="500M").size_mib == 500
+
+
+def test_container_volume_size_mib_terabytes():
+    assert ContainerVolume(size="1T").size_mib == 1048576
+
+
+def test_container_volume_rejects_invalid_size_pattern():
+    with pytest.raises(ValidationError):
+        ContainerVolume(size="20GB")  # only M|G|T allowed, no double-letter
+    with pytest.raises(ValidationError):
+        ContainerVolume(size="big")
+
+
+def test_container_volume_rejects_noexec_fsoption():
+    with pytest.raises(ValidationError):
+        ContainerVolume(fsoptions="nodev,nosuid,noexec")
+
+
+def test_container_volume_rejects_noexec_with_spaces():
+    with pytest.raises(ValidationError):
+        ContainerVolume(fsoptions="nodev, noexec , nosuid")
+
+
+def test_container_volume_accepts_other_options():
+    v = ContainerVolume(fsoptions="nodev,nosuid,noatime")
+    assert v.fsoptions == "nodev,nosuid,noatime"
+
+
+def test_container_volume_size_mib_not_serialized():
+    """Pin the plain-@property (not @computed_field) choice.
+
+    If size_mib ever leaks into model_dump(), host.yaml round-trips change
+    shape and downstream golden snapshots will silently drift.
+    """
+    v = ContainerVolume(size="500M")
+    dumped = v.model_dump()
+    assert "size_mib" not in dumped
+    assert dumped == {"size": "500M", "fsoptions": "nodev,nosuid"}
+
+
+def test_container_user_minimal():
+    u = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 AAAA u@h"])
+    assert u.name == "webapp"
+    assert u.gecos == ""
+
+
+def test_container_user_with_gecos():
+    u = ContainerUser(
+        name="webapp", gecos="Web app workloads", authorized_keys=["ssh-ed25519 AAAA u@h"]
+    )
+    assert u.gecos == "Web app workloads"
+
+
+def test_container_user_rejects_root():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="root", authorized_keys=["ssh-ed25519 AAAA u@h"])
+
+
+def test_container_user_rejects_invalid_name_uppercase():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="WebApp", authorized_keys=["ssh-ed25519 AAAA u@h"])
+
+
+def test_container_user_rejects_name_starting_with_digit():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="1webapp", authorized_keys=["ssh-ed25519 AAAA u@h"])
+
+
+def test_container_user_rejects_name_starting_with_dash():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="-webapp", authorized_keys=["ssh-ed25519 AAAA u@h"])
+
+
+def test_container_user_requires_at_least_one_authorized_key():
+    with pytest.raises(ValidationError):
+        ContainerUser(name="webapp", authorized_keys=[])
+
+
+def test_containers_defaults_disabled():
+    c = Containers()
+    assert c.enabled is False
+    assert c.users == []
+    assert c.volume.size == "20G"
+
+
+def test_containers_enabled_with_empty_users_ok():
+    # Script is installed at /root even when users list is empty
+    c = Containers(enabled=True)
+    assert c.enabled is True
+    assert c.users == []
+
+
+def test_containers_rejects_duplicate_user_names_when_enabled():
+    user_a = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K1 a@h"])
+    user_b = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K2 b@h"])
+    with pytest.raises(ValidationError):
+        Containers(enabled=True, users=[user_a, user_b])
+
+
+def test_containers_allows_duplicate_user_names_when_disabled():
+    # No validation when feature is off — users list is unused
+    user_a = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K1 a@h"])
+    user_b = ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K2 b@h"])
+    c = Containers(enabled=False, users=[user_a, user_b])
+    assert c.enabled is False
+
+
+def test_hostconfig_containers_defaults_disabled(minimal_cfg):
+    assert minimal_cfg.containers.enabled is False
+
+
+def test_hostconfig_rejects_container_user_matching_admin_name():
+    with pytest.raises(ValidationError) as exc_info:
+        HostConfig(
+            system=System(hostname="h"),
+            user=User(
+                admin=AdminUser(
+                    name="opsadmin",
+                    authorized_keys=["ssh-ed25519 K admin@h"],
+                    sudo="nopasswd_yes",
+                )
+            ),
+            containers=Containers(
+                enabled=True,
+                users=[ContainerUser(name="opsadmin", authorized_keys=["ssh-ed25519 K x@h"])],
+            ),
+        )
+    assert "user.admin" in str(exc_info.value)
+
+
+def test_hostconfig_allows_distinct_container_and_admin_names():
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(
+                name="opsadmin",
+                authorized_keys=["ssh-ed25519 K admin@h"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        containers=Containers(
+            enabled=True,
+            users=[ContainerUser(name="webapp", authorized_keys=["ssh-ed25519 K w@h"])],
+        ),
+    )
+    assert cfg.containers.users[0].name == "webapp"
+
+
+def test_hostconfig_rejects_layout_with_srv_containers_when_containers_enabled():
+    with pytest.raises(ValidationError) as exc_info:
+        HostConfig(
+            system=System(hostname="h"),
+            user=User(
+                admin=AdminUser(
+                    name="opsadmin",
+                    authorized_keys=["ssh-ed25519 K admin@h"],
+                    sudo="nopasswd_yes",
+                )
+            ),
+            disk=Disk(
+                layout=DiskLayout(
+                    lvs=[
+                        DiskLvDef(name="root", mount="/", size="15G"),
+                        DiskLvDef(name="home", mount="/home", size="5G"),
+                        DiskLvDef(name="tmp", mount="/tmp", size="3G"),
+                        DiskLvDef(name="var", mount="/var", size="10G"),
+                        DiskLvDef(name="varlog", mount="/var/log", size="5G"),
+                        DiskLvDef(name="varlogaudit", mount="/var/log/audit", size="3G"),
+                        DiskLvDef(name="vartmp", mount="/var/tmp", size="2G"),
+                        DiskLvDef(name="containers", mount="/srv/containers", size="20G"),
+                        DiskLvDef(name="swap", fstype="swap"),
+                    ],
+                )
+            ),
+            containers=Containers(enabled=True),
+        )
+    assert "/srv/containers" in str(exc_info.value)
+
+
+def test_hostconfig_allows_layout_without_srv_containers_when_containers_enabled():
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(
+                name="opsadmin",
+                authorized_keys=["ssh-ed25519 K admin@h"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        disk=Disk(
+            layout=DiskLayout(
+                lvs=[
+                    DiskLvDef(name="root", mount="/", size="15G"),
+                    DiskLvDef(name="home", mount="/home", size="5G"),
+                    DiskLvDef(name="tmp", mount="/tmp", size="3G"),
+                    DiskLvDef(name="var", mount="/var", size="10G"),
+                    DiskLvDef(name="varlog", mount="/var/log", size="5G"),
+                    DiskLvDef(name="varlogaudit", mount="/var/log/audit", size="3G"),
+                    DiskLvDef(name="vartmp", mount="/var/tmp", size="2G"),
+                    DiskLvDef(name="swap", fstype="swap"),
+                ],
+            )
+        ),
+        containers=Containers(enabled=True),
+    )
+    assert cfg.containers.enabled is True
+
+
+def test_hostconfig_allows_containers_with_default_disk_preset():
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(
+                name="opsadmin",
+                authorized_keys=["ssh-ed25519 K admin@h"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        containers=Containers(enabled=True),
+    )
+    assert cfg.containers.enabled is True
+    assert cfg.disk.preset is not None  # default STIG_SERVER
+
+
+def test_hostconfig_rejects_minimal_preset_with_containers_enabled():
+    with pytest.raises(ValidationError) as exc_info:
+        HostConfig(
+            system=System(hostname="h"),
+            user=User(
+                admin=AdminUser(
+                    name="opsadmin",
+                    authorized_keys=["ssh-ed25519 K admin@h"],
+                    sudo="nopasswd_yes",
+                )
+            ),
+            disk=Disk(preset=DiskPreset.MINIMAL),
+            containers=Containers(enabled=True),
+        )
+    err = str(exc_info.value)
+    assert "minimal" in err.lower()
+    assert "container" in err.lower()
+
+
+def test_hostconfig_allows_stig_server_preset_with_containers_enabled():
+    cfg = HostConfig(
+        system=System(hostname="h"),
+        user=User(
+            admin=AdminUser(
+                name="opsadmin",
+                authorized_keys=["ssh-ed25519 K admin@h"],
+                sudo="nopasswd_yes",
+            )
+        ),
+        disk=Disk(preset=DiskPreset.STIG_SERVER),
+        containers=Containers(enabled=True),
+    )
+    assert cfg.containers.enabled is True
+
+
+def test_disk_target_accepts_by_id_path():
+    d = Disk(target="disk/by-id/ata-TEAML5Lite3D240G_AB20181209A0100005")
+    assert d.target == "disk/by-id/ata-TEAML5Lite3D240G_AB20181209A0100005"
+
+
+def test_disk_target_accepts_by_path():
+    d = Disk(target="disk/by-path/pci-0000:00:1f.2-ata-1")
+    assert d.target == "disk/by-path/pci-0000:00:1f.2-ata-1"
+
+
+def test_disk_target_still_accepts_short_kernel_names():
+    assert Disk(target="sda").target == "sda"
+    assert Disk(target="nvme0n1").target == "nvme0n1"
+    assert Disk(target="vda").target == "vda"
+
+
+def test_disk_target_rejects_leading_slash():
+    with pytest.raises(ValidationError):
+        Disk(target="/dev/sda")
+
+
+def test_disk_target_rejects_leading_digit():
+    with pytest.raises(ValidationError):
+        Disk(target="1sda")
+
+
+def test_disk_target_rejects_empty():
+    with pytest.raises(ValidationError):
+        Disk(target="")
+
+
+def test_disk_target_rejects_whitespace():
+    with pytest.raises(ValidationError):
+        Disk(target="sda ")
+
+
+def test_data_disk_wipe_true_minimal():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(target="disk/by-id/ata-FOO", mount="/data")
+    assert d.wipe is True
+    assert d.fstype == "xfs"
+    assert d.fsoptions == "nodev,nosuid"
+    assert d.partition is None
+    assert d.partition_uuid is None
+    assert d.partition_label is None
+
+
+def test_data_disk_wipe_true_rejects_partition_number():
+    from ks_gen.config import DataDisk
+
+    with pytest.raises(ValidationError, match="only valid when wipe=False"):
+        DataDisk(target="sdb", mount="/data", partition=1)
+
+
+def test_data_disk_wipe_true_rejects_partition_uuid():
+    from ks_gen.config import DataDisk
+
+    with pytest.raises(ValidationError, match="only valid when wipe=False"):
+        DataDisk(target="sdb", mount="/data", partition_uuid="0f2a-1c3b")
+
+
+def test_data_disk_wipe_true_rejects_partition_label():
+    from ks_gen.config import DataDisk
+
+    with pytest.raises(ValidationError, match="only valid when wipe=False"):
+        DataDisk(target="sdb", mount="/data", partition_label="preserve_test")
+
+
+def test_data_disk_wipe_false_defaults_partition_to_1():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(target="disk/by-id/ata-FOO", mount="/data", wipe=False)
+    assert d.partition == 1
+    assert d.partition_uuid is None
+    assert d.partition_label is None
+
+
+def test_data_disk_wipe_false_explicit_partition_uuid_preserved():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(
+        target="sdb",
+        mount="/data",
+        wipe=False,
+        partition_uuid="0f2a-1c3b-4d5e-6f7a",
+    )
+    assert d.partition_uuid == "0f2a-1c3b-4d5e-6f7a"
+    assert d.partition is None
+
+
+def test_data_disk_wipe_false_rejects_uuid_and_label_together():
+    from ks_gen.config import DataDisk
+
+    with pytest.raises(ValidationError, match="at most one of"):
+        DataDisk(
+            target="sdb",
+            mount="/data",
+            wipe=False,
+            partition_uuid="0f2a-1c3b",
+            partition_label="preserve_test",
+        )
+
+
+def test_data_disk_mount_requires_leading_slash():
+    from ks_gen.config import DataDisk
+
+    with pytest.raises(ValidationError):
+        DataDisk(target="sdb", mount="data")
+
+
+def test_data_disk_target_uses_relaxed_regex():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(target="disk/by-id/ata-WDC_WD1002FBYS", mount="/data")
+    assert d.target == "disk/by-id/ata-WDC_WD1002FBYS"
+
+
+def test_data_disk_fstype_only_xfs_or_ext4():
+    from ks_gen.config import DataDisk
+
+    DataDisk(target="sdb", mount="/data", fstype="xfs")
+    DataDisk(target="sdb", mount="/data", fstype="ext4")
+    with pytest.raises(ValidationError):
+        DataDisk(target="sdb", mount="/data", fstype="btrfs")
+
+
+def test_data_disk_fsoptions_can_be_null():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(target="sdb", mount="/data", fsoptions=None)
+    assert d.fsoptions is None
+
+
+def test_data_disk_partition_requires_stable_target():
+    from ks_gen.config import DataDisk
+
+    with pytest.raises(ValidationError, match="partition number requires a stable target"):
+        DataDisk(target="sdb", mount="/data", wipe=False, partition=1)
+
+
+def test_data_disk_partition_accepts_by_id_target():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(target="disk/by-id/ata-FOO", mount="/data", wipe=False, partition=2)
+    assert d.partition == 2
+
+
+def test_data_disk_partition_accepts_by_path_target():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(
+        target="disk/by-path/pci-0000:00:1f.2-ata-1",
+        mount="/data",
+        wipe=False,
+        partition=1,
+    )
+    assert d.partition == 1
+
+
+def test_data_disk_bare_target_can_still_use_uuid():
+    from ks_gen.config import DataDisk
+
+    d = DataDisk(
+        target="sdb",
+        mount="/data",
+        wipe=False,
+        partition_uuid="0f2a-1c3b",
+    )
+    assert d.partition_uuid == "0f2a-1c3b"
+
+
+def test_data_disk_wipe_false_default_partition_rejects_bare_target():
+    from ks_gen.config import DataDisk
+
+    # wipe=False + no identifier defaults partition=1 via mode=before,
+    # then _partition_requires_stable_target rejects the bare target.
+    with pytest.raises(ValidationError, match="partition number requires a stable target"):
+        DataDisk(target="sdb", mount="/data", wipe=False)
+
+
+# --- Disk.data_disks field --------------------------------------------------
+
+
+def test_disk_data_disks_defaults_to_empty():
+    d = Disk()
+    assert d.data_disks == []
+
+
+def test_disk_data_disks_accepts_list():
+    from ks_gen.config import DataDisk
+
+    d = Disk(target="sda", data_disks=[DataDisk(target="sdb", mount="/data")])
+    assert len(d.data_disks) == 1
+    assert d.data_disks[0].target == "sdb"
+
+
+# --- HostConfig cross-validators -------------------------------------------
+
+
+def _minimal_payload(**overrides):
+    base = {
+        "system": {"hostname": "host01.example.com"},
+        "user": {
+            "admin": {
+                "name": "opsadmin",
+                "authorized_keys": ["ssh-ed25519 AAAA a@b"],
+                "sudo": "nopasswd_yes",
+            }
+        },
+    }
+    base.update(overrides)
+    return base
+
+
+def test_host_config_data_disks_require_target():
+    payload = _minimal_payload(
+        disk={
+            "data_disks": [{"target": "sdb", "mount": "/data"}],
+        },
+    )
+    with pytest.raises(ValidationError, match=r"disk\.data_disks is non-empty"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_data_disks_target_collides_with_system_target():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [{"target": "sda", "mount": "/data"}],
+        },
+    )
+    with pytest.raises(ValidationError, match="collides"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_two_data_disks_same_target_rejected():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [
+                {"target": "sdb", "mount": "/data"},
+                {"target": "sdb", "mount": "/scratch"},
+            ],
+        },
+    )
+    with pytest.raises(ValidationError, match="collides"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_data_disks_mount_collides_with_stig_lv():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [{"target": "sdb", "mount": "/home"}],
+        },
+    )
+    with pytest.raises(ValidationError, match="reserved"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_data_disks_mount_collides_with_root():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [{"target": "sdb", "mount": "/"}],
+        },
+    )
+    # "/" fails the mount pydantic pattern (needs leading / + at least one
+    # more char). The model-level reserved-mount check catches /boot etc.
+    # Use /boot to hit the cross-validator path.
+    payload2 = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [{"target": "sdb", "mount": "/boot"}],
+        },
+    )
+    with pytest.raises(ValidationError, match="should match pattern"):
+        HostConfig.model_validate(payload)
+    with pytest.raises(ValidationError, match="reserved"):
+        HostConfig.model_validate(payload2)
+
+
+def test_host_config_data_disks_mount_collides_with_containers_srv():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [{"target": "sdb", "mount": "/srv/containers"}],
+        },
+        containers={
+            "enabled": True,
+            "users": [{"name": "webapp", "authorized_keys": ["ssh-ed25519 K w@h"]}],
+        },
+    )
+    with pytest.raises(ValidationError, match="reserved"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_two_data_disks_same_mount_rejected():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [
+                {"target": "sdb", "mount": "/data"},
+                {"target": "sdc", "mount": "/data"},
+            ],
+        },
+    )
+    with pytest.raises(ValidationError, match="already-assigned"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_data_disks_mount_collides_with_custom_layout_lv():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "layout": {
+                "lvs": [
+                    {"name": "root", "mount": "/", "fstype": "xfs", "size": "15G"},
+                    {"name": "home", "mount": "/home", "fstype": "xfs", "size": "5G"},
+                    {"name": "tmp", "mount": "/tmp", "fstype": "xfs", "size": "3G"},
+                    {"name": "var", "mount": "/var", "fstype": "xfs", "size": "10G"},
+                    {"name": "varlog", "mount": "/var/log", "fstype": "xfs", "size": "5G"},
+                    {
+                        "name": "varlogaudit",
+                        "mount": "/var/log/audit",
+                        "fstype": "xfs",
+                        "size": "3G",
+                    },
+                    {"name": "vartmp", "mount": "/var/tmp", "fstype": "xfs", "size": "2G"},
+                    {"name": "srv", "mount": "/srv", "fstype": "xfs", "size": "20G"},
+                    {"name": "swap", "fstype": "swap", "size": "2G"},
+                ],
+            },
+            "data_disks": [{"target": "sdb", "mount": "/srv"}],
+        },
+    )
+    with pytest.raises(ValidationError, match="reserved"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_minimal_preset_rejects_data_disks():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "preset": "minimal",
+            "data_disks": [{"target": "sdb", "mount": "/data"}],
+        },
+    )
+    with pytest.raises(ValidationError, match=r"incompatible with disk\.data_disks"):
+        HostConfig.model_validate(payload)
+
+
+def test_host_config_data_disks_pass_through_happy_path():
+    payload = _minimal_payload(
+        disk={
+            "target": "sda",
+            "data_disks": [{"target": "sdb", "mount": "/data"}],
+        },
+    )
+    cfg = HostConfig.model_validate(payload)
+    assert len(cfg.disk.data_disks) == 1
+    assert cfg.disk.data_disks[0].mount == "/data"

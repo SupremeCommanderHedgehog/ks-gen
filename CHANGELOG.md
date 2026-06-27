@@ -3,6 +3,187 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.29.2](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.29.1...v0.29.2) (2026-06-27)
+
+
+### Bug Fixes
+
+* **writer:** satisfy CodeQL mixed-returns on build_bundle ([#137](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/137)) ([343abbd](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/343abbd29388bf7555581959feb360b1526d44b2))
+
+## [0.29.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.29.0...v0.29.1) (2026-06-20)
+
+
+### Bug Fixes
+
+* **config:** normalize Packages fields when preset=lean ([#134](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/134)) ([#135](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/135)) ([84a460b](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/84a460b0b6651c03e85712b108dd4dcde9cffc79))
+
+## [0.29.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.28.0...v0.29.0) (2026-06-20)
+
+
+### Features
+
+* **rules:** alma8 crypto_policy divergence + alma9 SSG-drift sweep ([#127](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/127) PR B) ([#132](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/132)) ([ce88b84](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/ce88b84747e18b8ac6ebd03061672f1a0ef3ffd6))
+
+## [0.28.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.27.0...v0.28.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** wire emit_tailoring + exception_entry ([#127](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/127) PR A) ([#130](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/130)) ([2f7dbfe](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/2f7dbfe3b5235023f1a054339660bb7d6758670d))
+
+## [0.27.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.26.0...v0.27.0) (2026-06-20)
+
+
+### Features
+
+* **audit-story:** phase 1 — SSG datastream rule-ID introspection ([#127](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/127)) ([#128](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/128)) ([92c7c48](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/92c7c483335fb273190fd511cc21b4b4f7ca128f))
+
+## [0.26.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.25.0...v0.26.0) (2026-06-20)
+
+
+### Features
+
+* **rules/alma8:** phase 2 — re-export all 15 alma9 rules ([#121](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/121) phase 2) ([#124](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/124)) ([5a436eb](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/5a436ebc9f844c470b805a8c437cf9ec4a5283e0))
+
+## [0.25.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.24.0...v0.25.0) (2026-06-20)
+
+
+### Features
+
+* **distro:** add alma8 — schema + dispatch ([#121](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/121) phase 1) ([#122](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/122)) ([f83399c](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/f83399c857e09bb0585d381edf72801a7e3aad44))
+
+## [0.24.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.23.0...v0.24.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** data_disks_preserve + container_host minimal ports ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.12, [#88](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/88)) ([#119](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/119)) ([10aa2da](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/10aa2dab763850545a05168848c0041a9fc4b02b))
+
+## [0.23.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.22.0...v0.23.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** usbguard + package_purge + dod_root_ca ports ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phases 3.9-3.11) ([#116](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/116)) ([58e95fd](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/58e95fdcc3dafb08cf9b058f05075b504fcfe413))
+
+## [0.22.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.21.0...v0.22.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** kernel_module_blacklist port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.8) ([#114](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/114)) ([8134c0b](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/8134c0bded818d15d691ee0b35bccbfebb36bae5))
+
+## [0.21.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.20.0...v0.21.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** auditd_actions port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.7) ([#112](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/112)) ([e22a591](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/e22a591cbbcd601e7cda659e46708f0540aa2a5c))
+
+## [0.20.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.19.0...v0.20.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** unattended_updates port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.6) ([#110](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/110)) ([8f645bb](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/8f645bb37cdd27db468e6e264fdb36773860a337))
+
+## [0.19.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.18.0...v0.19.0) (2026-06-20)
+
+
+### Features
+
+* **rules/ubuntu2404:** faillock_safety port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.5) ([#108](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/108)) ([5a1c876](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/5a1c8761d58f0b6b4f067956107535f0ca45cb44))
+
+## [0.18.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.17.0...v0.18.0) (2026-06-19)
+
+
+### Features
+
+* **rules/ubuntu2404:** crypto_policy port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.4) ([#106](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/106)) ([2ba0cc5](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/2ba0cc5346f5fed3c37c1b892c56ea288a54cb87))
+
+## [0.17.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.16.0...v0.17.0) (2026-06-19)
+
+
+### Features
+
+* **rules/ubuntu2404:** time_servers port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.3) ([#104](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/104)) ([ab3041c](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/ab3041cc16d61f2b4cc83d3f7ad99a28776b8112))
+
+## [0.16.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.15.0...v0.16.0) (2026-06-19)
+
+
+### Features
+
+* **rules/ubuntu2404:** banner_text port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.1) ([#101](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/101)) ([1df3798](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1df3798ba57c288c95609727a17ea346f34ffeff))
+* **rules/ubuntu2404:** ssh_config_apply port ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.2) ([#102](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/102)) ([1e4cd9e](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1e4cd9ee440d030724ef7a4c920386993dc310f1))
+
+
+### Bug Fixes
+
+* **tailoring:** derive benchmark href from cfg.meta.scap_content ([#97](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/97)) ([#98](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/98)) ([2def33e](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/2def33e9c7d22529e2dd9f24707d07661d77c1e3))
+* **templates:** carry cfg.user.admin.password into autoinstall users[].passwd ([#96](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/96)) ([#100](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/100)) ([0a31081](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/0a3108112b808a680b265a256a78973cd88fda72))
+* **writer/ubuntu2404:** wire rule emit_packages into autoinstall packages ([#95](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/95)) ([#99](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/99)) ([a9fbddc](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/a9fbddc26cf49a8761b30e823148e82d8d27f5ab))
+
+## [0.15.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.14.0...v0.15.0) (2026-06-19)
+
+
+### Features
+
+* **rules/ubuntu2404:** late-commands + admin_user_and_keys + ssh_keep_open ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 3.0) ([#94](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/94)) ([53140b4](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/53140b45b914b2e0492204361f70d4a94d23a0a1))
+* **writer,cli:** bundle reshape + distro dispatch ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 2) ([#92](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/92)) ([4304799](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/4304799c0d7440e6b5f3528edc4332bce421eea0))
+
+## [0.14.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.13.0...v0.14.0) (2026-06-19)
+
+
+### Features
+
+* **config,rules:** distro discriminator + per-distro registry ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81) phase 1) ([#90](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/90)) ([60d83a1](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/60d83a12fcce9d2028a03e1687ac91d37010857e))
+
+
+### Documentation
+
+* ubuntu 24.04 STIG autoinstall design spec ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81)) ([#89](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/89)) ([8d194fb](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/8d194fb941601883c51216ed9e2b9249e8be26ca))
+* unifi host kickstart rebuild — spec, plan, post-impl correction ([#80](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/80)) ([655f1a7](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/655f1a7d4362bb76c8a518aafc760b0a3c4107f4))
+* update stale alma-linux-security paths after folder rename ([#82](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/82)) ([732c7e6](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/732c7e612694bd590df0f7535af56cb4d7702c2f))
+
+## [0.13.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.12.2...v0.13.0) (2026-06-17)
+
+
+### Features
+
+* **disk:** accept by-id in disk.target; add disk.data_disks ([#79](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/79)) ([410cd03](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/410cd03ce9698119bae8933a693a7276eefd0cd3))
+
+
+### Documentation
+
+* unifi host config (spec + plan) ([#77](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/77)) ([b3caa08](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/b3caa088f91ace4672b62fbc6e0ec19d03fbe61d))
+
+## [0.12.2](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.12.1...v0.12.2) (2026-06-14)
+
+
+### Bug Fixes
+
+* **iso:** make USB installs find install source and create user ([#73](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/73)) ([ff037c7](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/ff037c7fdcf9637ceae91e5f24aa6156fa65e558))
+
+
+### Documentation
+
+* **manual:** correct version pin to v0.12.2 ([#76](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/76)) ([73fe765](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/73fe76522acb90ba4a0f1a18b94c1cee50d807de))
+
+## [0.12.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.12.0...v0.12.1) (2026-06-13)
+
+
+### Documentation
+
+* **examples:** add host-container.yaml worked example ([#71](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/71)) ([e789afa](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/e789afaf1f12c0b160e9f4213361ed1a6edd8b81))
+
+## [0.12.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.11.0...v0.12.0) (2026-06-13)
+
+
+### Features
+
+* **containers:** add container-host preset with /srv/containers and rootless user provisioning ([#70](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/70)) ([03afcb9](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/03afcb9342fe068e72ce0022e12c8a813fdc5b8c))
+* **packages:** add packages.preset (standard | lean) ([#68](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/68)) ([7f3694f](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/7f3694fdc82428408092fcfff126bbf1ab4dcdf3))
+
 ## [0.11.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.10.0...v0.11.0) (2026-06-13)
 
 

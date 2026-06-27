@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import re
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -104,6 +105,11 @@ _STIG_REQUIRED_LV_MOUNTPOINTS: frozenset[str] = frozenset(
         "/var/tmp",
     }
 )
+
+# Accepts persistent identifiers (disk/by-id/ata-FOO, disk/by-path/...)
+# and bare kernel names (sda, vda, nvme0n1). Rejects: leading "/", empty,
+# leading digit, whitespace. Strict superset of the v0.10-v0.12 regex.
+DISK_TARGET_REGEX = r"^[a-zA-Z][a-zA-Z0-9._/:-]*$"
 
 
 class DiskBootPart(StrictModel):
@@ -256,7 +262,8 @@ class Disk(StrictModel):
     luks: DiskLuks = Field(default_factory=DiskLuks)
     wipe: bool = True
     bootloader_password: str | None = None
-    target: str | None = Field(default=None, pattern=r"^[a-zA-Z][a-zA-Z0-9]*$")
+    target: str | None = Field(default=None, pattern=DISK_TARGET_REGEX)
+    data_disks: list[DataDisk] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -288,6 +295,67 @@ class Disk(StrictModel):
                 "disk.preset='custom' was reserved in v0.1-v0.3; use the disk.layout block instead."
             )
         return v
+
+
+class DataDisk(StrictModel):
+    target: str = Field(..., pattern=DISK_TARGET_REGEX)
+    mount: str = Field(..., min_length=1, pattern=r"^/[a-zA-Z0-9_/-]+$")
+    fstype: Literal["xfs", "ext4"] = "xfs"
+    fsoptions: str | None = "nodev,nosuid"
+    wipe: bool = True
+    partition: int | None = Field(default=None, ge=1)
+    partition_uuid: str | None = None
+    partition_label: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _default_partition_when_preserve(cls, data: dict[str, object]) -> dict[str, object]:
+        """When wipe=False and no identifier is given, default partition=1.
+
+        Runs at the dict-input layer because StrictModel is frozen=True;
+        the after-validator below relies on exactly one identifier being
+        set when wipe=False.
+        """
+        if not isinstance(data, dict):
+            return data
+        if data.get("wipe", True) is False:
+            ids = (
+                data.get("partition"),
+                data.get("partition_uuid"),
+                data.get("partition_label"),
+            )
+            if all(x is None for x in ids):
+                data["partition"] = 1
+        return data
+
+    @model_validator(mode="after")
+    def _validate_identifier(self) -> DataDisk:
+        ids = [self.partition, self.partition_uuid, self.partition_label]
+        n_set = sum(x is not None for x in ids)
+        if self.wipe:
+            if n_set > 0:
+                raise ValueError(
+                    "data_disks: partition / partition_uuid / partition_label "
+                    "are only valid when wipe=False"
+                )
+            return self
+        if n_set > 1:
+            raise ValueError(
+                "data_disks: specify at most one of partition / partition_uuid / partition_label"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _partition_requires_stable_target(self) -> DataDisk:
+        if self.partition is not None and not (
+            self.target.startswith("disk/by-id/") or self.target.startswith("disk/by-path/")
+        ):
+            raise ValueError(
+                "data_disks: partition number requires a stable target "
+                "(disk/by-id/... or disk/by-path/...); use partition_uuid "
+                "or partition_label for bare kernel-name targets"
+            )
+        return self
 
 
 DEFAULT_BANNER = (
@@ -366,23 +434,104 @@ class Crypto(StrictModel):
     policy: CryptoPolicy = CryptoPolicy.MODERN
 
 
+class ContainerVolume(StrictModel):
+    size: str = Field(default="20G", pattern=r"^\d+(M|G|T)$")
+    fsoptions: str = "nodev,nosuid"
+
+    @field_validator("fsoptions")
+    @classmethod
+    def _reject_noexec(cls, v: str) -> str:
+        tokens = [t for t in re.split(r"[,\s]+", v) if t]
+        if "noexec" in tokens:
+            raise ValueError(
+                "containers.volume.fsoptions: noexec is incompatible with "
+                "container image execution; remove it"
+            )
+        return v
+
+    @property
+    def size_mib(self) -> int:
+        unit = self.size[-1]
+        n = int(self.size[:-1])
+        if unit == "M":
+            return n
+        if unit == "G":
+            return n * 1024
+        # unit == "T" — pattern guarantees one of M|G|T
+        return n * 1024 * 1024
+
+
+class ContainerUser(StrictModel):
+    name: str = Field(..., pattern=r"^[a-z_][a-z0-9_-]{0,31}$")
+    gecos: str = ""
+    authorized_keys: list[str] = Field(..., min_length=1)
+
+    @field_validator("name")
+    @classmethod
+    def _not_root(cls, v: str) -> str:
+        if v == "root":
+            raise ValueError("containers.users[].name cannot be 'root'")
+        return v
+
+
+class Containers(StrictModel):
+    enabled: bool = False
+    users: list[ContainerUser] = Field(default_factory=list)
+    volume: ContainerVolume = Field(default_factory=ContainerVolume)
+
+    @model_validator(mode="after")
+    def _validate_users_distinct(self) -> Containers:
+        if not self.enabled:
+            return self
+        names = [u.name for u in self.users]
+        if len(names) != len(set(names)):
+            seen: set[str] = set()
+            for n in names:
+                if n in seen:
+                    raise ValueError(f"containers.users duplicate name: {n}")
+                seen.add(n)
+        return self
+
+
+class PackagesPreset(StrEnum):
+    STANDARD = "standard"
+    LEAN = "lean"
+
+
+LEAN_EXTRA_PACKAGES: tuple[str, ...] = (
+    "logrotate",
+    "postfix",
+    "cronie",
+    "crontabs",
+    "parted",
+)
+
+# Module-level defaults for Packages so the lean-normalization
+# `model_validator(mode="before")` can reference them when the input dict
+# omits the field. Pydantic doesn't apply Field default_factory at
+# mode="before" time — the validator sees the raw input dict only. The
+# field default_factory below reuses these constants so the source of
+# truth stays single.
+_PACKAGES_DEFAULT_BASE_GROUPS: list[str] = ["@^minimal-environment", "@standard"]
+_PACKAGES_DEFAULT_REQUIRED: list[str] = [
+    "scap-security-guide",
+    "openscap-scanner",
+    "aide",
+    "audit",
+    "rsyslog",
+    "chrony",
+    "firewalld",
+    "sudo",
+    "policycoreutils-python-utils",
+    "dnf-automatic",
+    "dnf-utils",
+]
+
+
 class Packages(StrictModel):
-    base_groups: list[str] = Field(default_factory=lambda: ["@^minimal-environment", "@standard"])
-    required: list[str] = Field(
-        default_factory=lambda: [
-            "scap-security-guide",
-            "openscap-scanner",
-            "aide",
-            "audit",
-            "rsyslog",
-            "chrony",
-            "firewalld",
-            "sudo",
-            "policycoreutils-python-utils",
-            "dnf-automatic",
-            "dnf-utils",
-        ]
-    )
+    preset: PackagesPreset = PackagesPreset.STANDARD
+    base_groups: list[str] = Field(default_factory=lambda: list(_PACKAGES_DEFAULT_BASE_GROUPS))
+    required: list[str] = Field(default_factory=lambda: list(_PACKAGES_DEFAULT_REQUIRED))
     extra: list[str] = Field(default_factory=list)
     excluded: list[str] = Field(
         default_factory=lambda: [
@@ -393,6 +542,58 @@ class Packages(StrictModel):
             "ypserv",
         ]
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_lean_preset(cls, data: Any) -> Any:
+        """When preset is LEAN, normalize base_groups + required into the
+        stored fields so model_dump() (used by writer.py to produce
+        host.yaml) reflects what's actually installed. Without this,
+        host.yaml continues to show the raw defaults (`@standard` in
+        base_groups, no LEAN_EXTRA_PACKAGES in required) while the
+        kickstart's `%packages` block uses the corrected effective set
+        — host.yaml ends up lying about what's on the box. Fixes #134.
+
+        Runs in mode="before" because StrictModel is frozen — Pydantic v2
+        forbids `mode="after"` validators from returning a different
+        instance on a frozen model. Mutating the input dict before
+        construction is the supported path.
+
+        Idempotent: re-validating an already-normalized cfg is a no-op.
+        The `effective_*` properties below keep their old contract for
+        backward compat — after normalization they just echo the fields.
+        """
+        if not isinstance(data, dict):
+            return data
+        preset = data.get("preset", PackagesPreset.STANDARD)
+        # Normalize StrEnum-or-str so the comparison is robust either way.
+        preset_value = preset.value if isinstance(preset, PackagesPreset) else preset
+        if preset_value != PackagesPreset.LEAN.value:
+            return data
+        base_groups = data.get("base_groups", list(_PACKAGES_DEFAULT_BASE_GROUPS))
+        data = {**data, "base_groups": [g for g in base_groups if g != "@standard"]}
+        required = data.get("required", list(_PACKAGES_DEFAULT_REQUIRED))
+        existing = set(required)
+        data["required"] = list(required) + [p for p in LEAN_EXTRA_PACKAGES if p not in existing]
+        return data
+
+    @property
+    def effective_base_groups(self) -> list[str]:
+        # Post-#134 normalization makes this equivalent to base_groups on
+        # a lean cfg; preserved as a property so existing call sites
+        # (writer.py, rules/) keep working with no behavior change.
+        if self.preset == PackagesPreset.LEAN:
+            return [g for g in self.base_groups if g != "@standard"]
+        return list(self.base_groups)
+
+    @property
+    def effective_required(self) -> list[str]:
+        # Post-#134 normalization makes this equivalent to required on a
+        # lean cfg; preserved as a property for backward compat.
+        if self.preset != PackagesPreset.LEAN:
+            return list(self.required)
+        existing = set(self.required)
+        return list(self.required) + [p for p in LEAN_EXTRA_PACKAGES if p not in existing]
 
 
 class FaillockCfg(StrictModel):
@@ -425,6 +626,7 @@ class AuditdActionsCfg(StrictModel):
 class SshKeepOpenCfg(StrictModel):
     ensure_firewalld_port: bool = True
     ensure_selinux_port: bool = True
+    ensure_ufw_port: bool = True
 
 
 class UsbguardCfg(StrictModel):
@@ -511,7 +713,15 @@ class ExceptionDecl(StrictModel):
     stig_rules_disabled: list[str] = Field(..., min_length=1)
 
 
+_DEFAULT_SCAP_CONTENT_BY_DISTRO: dict[str, str] = {
+    "alma9": "ssg-almalinux9-ds.xml",
+    "alma8": "ssg-almalinux8-ds.xml",
+    "ubuntu2404": "ssg-ubuntu2404-ds.xml",
+}
+
+
 class HostConfig(StrictModel):
+    distro: Literal["alma9", "alma8", "ubuntu2404"] = "alma9"
     meta: Meta = Field(default_factory=Meta)
     system: System
     network: Network = Field(default_factory=Network)
@@ -525,6 +735,7 @@ class HostConfig(StrictModel):
     overrides: Overrides = Field(default_factory=Overrides)
     custom_post: list[str] = Field(default_factory=list)
     exceptions: list[ExceptionDecl] = Field(default_factory=list)
+    containers: Containers = Field(default_factory=Containers)
 
     @model_validator(mode="after")
     def _crypto_fips_mutex(self) -> HostConfig:
@@ -548,6 +759,45 @@ class HostConfig(StrictModel):
             )
         return self
 
+    @model_validator(mode="before")
+    @classmethod
+    def _scap_content_matches_distro_before(cls, data: dict[str, Any]) -> dict[str, Any]:
+        """Check and adjust scap_content before model construction."""
+        distro = data.get("distro", "alma9")
+        meta_was_explicit = "meta" in data
+
+        # Only process if distro is a valid value; let Literal validation catch invalid ones
+        if distro not in _DEFAULT_SCAP_CONTENT_BY_DISTRO:
+            return data
+
+        expected = _DEFAULT_SCAP_CONTENT_BY_DISTRO[distro]
+        alma_default = _DEFAULT_SCAP_CONTENT_BY_DISTRO["alma9"]
+
+        # If meta was not explicitly provided and distro is not alma9, we'll auto-update it later
+        # If meta was explicitly provided, validate it matches the distro
+        if meta_was_explicit:
+            meta_data = data.get("meta", {})
+            if isinstance(meta_data, dict):
+                scap_content = meta_data.get("scap_content", alma_default)
+            else:
+                scap_content = getattr(meta_data, "scap_content", alma_default)
+
+            # If explicitly set meta and it mismatches, raise error
+            if scap_content != expected:
+                raise ValueError(
+                    f"meta.scap_content={scap_content!r} does not match distro={distro!r}; "
+                    f"expected {expected!r}"
+                )
+        else:
+            # If meta not provided and distro is not alma9, inject the correct scap_content
+            if distro != "alma9":
+                if "meta" not in data:
+                    data["meta"] = {}
+                if isinstance(data["meta"], dict):
+                    data["meta"]["scap_content"] = expected
+
+        return data
+
     @model_validator(mode="after")
     def _minimal_preset_rejects_luks(self) -> HostConfig:
         if self.disk.preset == DiskPreset.MINIMAL and self.disk.luks.preset != LuksPreset.NONE:
@@ -555,4 +805,91 @@ class HostConfig(StrictModel):
                 "disk.preset='minimal' has no LVM PV; disk.luks "
                 "requires disk.preset='stig_server' or disk.layout"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _minimal_preset_rejects_containers(self) -> HostConfig:
+        if self.disk.preset == DiskPreset.MINIMAL and self.containers.enabled:
+            raise ValueError(
+                "disk.preset='minimal' has no LVM VG; containers.enabled "
+                "auto-injects an LV at /srv/containers which requires "
+                "disk.preset='stig_server' or disk.layout"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_data_disks_require_target(self) -> HostConfig:
+        if self.disk.data_disks and self.disk.target is None:
+            raise ValueError(
+                "disk.data_disks is non-empty but disk.target is unset; "
+                "without a system target, anaconda's clearpart --all would "
+                "clobber the data disks"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_data_disks_targets_distinct(self) -> HostConfig:
+        seen: set[str] = {self.disk.target} if self.disk.target else set()
+        for i, d in enumerate(self.disk.data_disks):
+            if d.target in seen:
+                raise ValueError(
+                    f"disk.data_disks[{i}].target {d.target!r} collides "
+                    f"with disk.target or another data disk"
+                )
+            seen.add(d.target)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_data_disks_mounts_distinct(self) -> HostConfig:
+        reserved: set[str] = {"/", "/boot", "/boot/efi"}
+        if self.disk.layout is not None:
+            reserved.update(lv.mount for lv in self.disk.layout.lvs if lv.mount is not None)
+        elif self.disk.preset == DiskPreset.STIG_SERVER:
+            reserved.update(_STIG_REQUIRED_LV_MOUNTPOINTS)
+        # No branch for MINIMAL: _minimal_preset_rejects_data_disks (below)
+        # raises before any minimal+data_disks combination can matter, and
+        # minimal's sole `/` mount is already in `reserved`. CUSTOM never
+        # reaches here — _custom_not_yet_implemented rejects at field load.
+        if self.containers.enabled:
+            reserved.add("/srv/containers")
+        seen: set[str] = set()
+        for i, d in enumerate(self.disk.data_disks):
+            if d.mount in reserved or d.mount in seen:
+                raise ValueError(
+                    f"disk.data_disks[{i}].mount {d.mount!r} collides with "
+                    f"a reserved or already-assigned mount point"
+                )
+            seen.add(d.mount)
+        return self
+
+    @model_validator(mode="after")
+    def _minimal_preset_rejects_data_disks(self) -> HostConfig:
+        if self.disk.preset == DiskPreset.MINIMAL and self.disk.data_disks:
+            raise ValueError(
+                "disk.preset='minimal' is incompatible with disk.data_disks; "
+                "use disk.preset='stig_server' or disk.layout"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_containers_integration(self) -> HostConfig:
+        if not self.containers.enabled:
+            return self
+
+        admin_name = self.user.admin.name
+        for u in self.containers.users:
+            if u.name == admin_name:
+                raise ValueError(
+                    f"containers.users[].name {u.name!r} collides with "
+                    f"user.admin.name; admin user and container users must be distinct"
+                )
+
+        if self.disk.layout is not None:
+            for lv in self.disk.layout.lvs:
+                if lv.mount == "/srv/containers":
+                    raise ValueError(
+                        "containers.enabled=True conflicts with disk.layout LV mounted at "
+                        "/srv/containers; the container-host preset auto-injects this LV"
+                    )
+
         return self

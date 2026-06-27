@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ks-gen"
-version = "0.11.0"
+version = "0.29.2"
 requires-python = ">=3.11"
 description = "Remote-safe DISA STIG kickstart generator for AlmaLinux 9."
 authors = [{ name = "Patrick Connallon" }]
@@ -63,6 +63,9 @@ ks-gen = "ks_gen.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ks_gen"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/ks_gen/assets/create-rootless-user.sh" = "ks_gen/assets/create-rootless-user.sh"
 
 [tool.ruff]
 line-length = 100

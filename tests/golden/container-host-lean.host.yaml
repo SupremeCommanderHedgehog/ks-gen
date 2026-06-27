@@ -1,0 +1,17 @@
+system:
+  hostname: web01.example.com
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYcontainerhostlean test@laptop"
+    sudo: nopasswd_yes
+packages:
+  preset: lean
+containers:
+  enabled: true
+  users:
+    - name: webapp
+      gecos: "Web app workloads"
+      authorized_keys:
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYwebapplean webapp@bastion"

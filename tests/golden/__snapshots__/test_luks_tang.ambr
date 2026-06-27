@@ -13,6 +13,7 @@
   network --device=link --bootproto=dhcp --hostname=luks03.example.com --onboot=yes
   
   rootpw --lock
+  user --name=opsadmin --lock --groups=wheel --gecos="" --shell=/bin/bash
   bootloader --location=mbr --append="audit=1 audit_backlog_limit=8192"
   
   zerombr

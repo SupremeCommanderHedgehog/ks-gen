@@ -1,0 +1,28 @@
+#cloud-config
+autoinstall:
+  version: 1
+  identity:
+    hostname: {{ cfg.system.hostname | tojson }}
+    realname: {{ cfg.user.admin.name | tojson }}
+    username: {{ cfg.user.admin.name | tojson }}
+    password: "*"
+  user-data:
+    users:
+      - name: {{ cfg.user.admin.name | tojson }}
+        sudo: {{ ("ALL=(ALL) NOPASSWD:ALL" if cfg.user.admin.sudo == "nopasswd_yes" else "ALL=(ALL) ALL") | tojson }}
+        shell: /bin/bash
+        ssh_authorized_keys:{% if not cfg.user.admin.authorized_keys %} []{% endif %}
+
+{% for key in cfg.user.admin.authorized_keys %}
+          - {{ key | tojson }}
+{% endfor %}
+{% if cfg.user.admin.password %}
+        passwd: {{ cfg.user.admin.password | tojson }}
+{% endif %}
+{% if rule_packages %}
+  packages:
+{% for pkg in rule_packages %}
+    - {{ pkg | tojson }}
+{% endfor %}
+{% endif %}
+  late-commands:{{ late_commands_block }}
