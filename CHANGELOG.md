@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.29.4](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.29.3...v0.29.4) (2026-06-27)
+
+
+### Bug Fixes
+
+* **container-host:** write appdata fcontext against equivalency target ([#144](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/144)) ([599186c](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/599186cdc179314dc87a80fdc54a0d179c3683ae))
+
 ## [0.29.3](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.29.2...v0.29.3) (2026-06-27)
 
 
