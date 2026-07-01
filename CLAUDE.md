@@ -20,6 +20,22 @@ bounced a PR before (2026-06-02, PR #2).
 If `ruff format --check` fails, fix with `ruff format src tests`, verify
 with `--check` again, then commit as `style:`.
 
+## Code review — run /code-review before shipping
+
+Run `/code-review` on the working diff before shipping ANY code change —
+before `git push`, opening a PR, or merging. "Shipping" means the change
+leaves your local working tree for others: a push, a PR, or a merge.
+
+This is in addition to (not a replacement for) the CI parity check above:
+CI catches lint/type/test regressions; `/code-review` catches correctness
+bugs and reuse/simplification issues the automated gates don't. Address or
+consciously dismiss each finding before shipping.
+
+This applies to fixes made live during an install/debug session too — the
+2026-06-30 cougar work shipped two `%post`/tailoring bugs
+(chpasswd `$6` abort, inert `cfg.exceptions`) that a diff review would
+have flagged before they reached a real install.
+
 ## Snapshot tests
 
 Golden snapshots use syrupy and live at `tests/golden/__snapshots__/`.
