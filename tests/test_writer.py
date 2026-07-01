@@ -40,6 +40,34 @@ def test_write_bundle_creates_files(tmp_path):
         assert (out / name).is_file()
 
 
+def test_declared_exceptions_disable_rules_in_tailoring(tmp_path):
+    # Operator-declared exceptions (cfg.exceptions) must actually deselect the
+    # named STIG rules in tailoring.xml, not merely document them in
+    # exceptions.md. Regression for the cougar GUI removal: the STIG
+    # xwindows_* rules stripped the desktop because the declared exception
+    # never reached the oscap tailoring.
+    rid1 = "xccdf_org.ssgproject.content_rule_xwindows_remove_packages"
+    rid2 = "xccdf_org.ssgproject.content_rule_xwindows_runlevel_target"
+    yaml_text = YAML + textwrap.dedent(
+        f"""\
+        exceptions:
+          - id: gui-workstation-keep-x
+            reason: "Approved dev workstation; GUI required."
+            stig_rules_disabled:
+              - {rid1}
+              - {rid2}
+        """
+    )
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(yaml_text, encoding="utf-8")
+    cfg = load_host_config(cfg_path, sets=[])
+    bundle = build_bundle(cfg)
+    assert f'<xccdf:select idref="{rid1}" selected="false"/>' in bundle.tailoring_xml
+    assert f'<xccdf:select idref="{rid2}" selected="false"/>' in bundle.tailoring_xml
+    # existing behavior preserved: still documented in exceptions.md
+    assert rid1 in bundle.exceptions_md
+
+
 def test_admin_user_block_precedes_sshd_in_post(tmp_path):
     cfg_path = tmp_path / "host.yaml"
     cfg_path.write_text(YAML, encoding="utf-8")

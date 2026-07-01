@@ -9,9 +9,29 @@ import yaml
 from ks_gen.config import HostConfig
 from ks_gen.exceptions_report import render_exceptions_md
 from ks_gen.registry import load_rules
+from ks_gen.rules._types import TailoringOp
 from ks_gen.skeleton import PostBlock, render_meta_data, render_skeleton, render_user_data
 from ks_gen.tailoring import build_tailoring_xml
 from ks_gen.topo import topo_sort
+
+
+def _exception_tailoring_ops(cfg: HostConfig) -> list[TailoringOp]:
+    """Deselect every STIG rule named in an operator-declared exception.
+
+    ``cfg.exceptions`` used to feed only exceptions.md (documentation) and the
+    verify expected-failure set; the rules were never actually deselected in
+    tailoring.xml, so the oscap remediation still enforced them. These ops are
+    appended AFTER each rule's own emit_tailoring, so an explicit exception
+    wins when a rule would otherwise select the same id.
+    """
+    ops: list[TailoringOp] = []
+    seen: set[str] = set()
+    for ex in cfg.exceptions:
+        for rid in ex.stig_rules_disabled:
+            if rid not in seen:
+                seen.add(rid)
+                ops.append(TailoringOp(rule_id=rid, action="disable"))
+    return ops
 
 
 @dataclass(frozen=True)
@@ -61,6 +81,7 @@ def render_tailoring(cfg: HostConfig) -> str:
     tailoring_ops = []
     for r in applicable:
         tailoring_ops.extend(r.emit_tailoring(cfg))
+    tailoring_ops.extend(_exception_tailoring_ops(cfg))
     profile_id = f"xccdf_org.ssgproject.content_profile_{cfg.meta.profile}"
     return build_tailoring_xml(
         tailoring_ops, profile_id=profile_id, scap_content=cfg.meta.scap_content
@@ -93,6 +114,7 @@ def _build_rhel_family_bundle(cfg: HostConfig) -> Bundle:
                 rule_packages.append(pkg)
                 already.add(pkg)
 
+    tailoring_ops.extend(_exception_tailoring_ops(cfg))
     profile_id = f"xccdf_org.ssgproject.content_profile_{cfg.meta.profile}"
     tailoring_xml = build_tailoring_xml(
         tailoring_ops, profile_id=profile_id, scap_content=cfg.meta.scap_content
@@ -129,6 +151,7 @@ def _build_ubuntu2404_bundle(cfg: HostConfig) -> Bundle:
                 rule_packages.append(pkg)
                 seen.add(pkg)
 
+    tailoring_ops.extend(_exception_tailoring_ops(cfg))
     profile_id = f"xccdf_org.ssgproject.content_profile_{cfg.meta.profile}"
     tailoring_xml = build_tailoring_xml(
         tailoring_ops, profile_id=profile_id, scap_content=cfg.meta.scap_content
