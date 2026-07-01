@@ -17,7 +17,11 @@ def _emit(cfg: HostConfig) -> str:
     home = f"/home/{name}"
     keys = "\n".join(admin.authorized_keys)
     pw_block = (
-        f'echo "{name}:{admin.password}" | chpasswd -e\n'
+        # Single-quote the credential: a SHA-512 crypt hash contains `$6$...`
+        # segments, and %post runs under `set -u`, so a double-quoted string
+        # would expand `$6` to an unbound positional parameter and abort the
+        # install. Hashes and usernames never contain a single quote.
+        f"echo '{name}:{admin.password}' | chpasswd -e\n"
         if admin.password
         else f"passwd -l {name}\n"
     )
