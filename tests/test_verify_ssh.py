@@ -6,8 +6,9 @@ from unittest.mock import patch
 
 import pytest
 
+from ks_gen.verify.auth import SudoAuth
 from ks_gen.verify.errors import SshConnectError, ToolMissingError
-from ks_gen.verify.ssh import SshResult, check_tools, scp_pull, ssh_exec
+from ks_gen.verify.ssh import SshResult, check_tools, scp_pull, ssh_exec, sudo_pull
 
 
 def _completed(
@@ -120,3 +121,40 @@ def test_ssh_exec_stdin_input_defaults_to_none() -> None:
     with patch("ks_gen.verify.ssh.subprocess.run", return_value=_completed(0)) as run:
         ssh_exec("host", "user", "ls /")
     assert run.call_args.kwargs["input"] is None
+
+
+def test_sudo_pull_passwordless_writes_stdout(tmp_path: Path) -> None:
+    local = tmp_path / "out.xml"
+    with patch(
+        "ks_gen.verify.ssh.subprocess.run",
+        return_value=_completed(0, "<TestResult/>"),
+    ) as run:
+        sudo_pull("host", "user", "/root/f.xml", local, auth=SudoAuth(), extra_opts=["-q"])
+    assert local.read_text(encoding="utf-8") == "<TestResult/>"
+    cmd = run.call_args.args[0]
+    assert cmd[-1] == "sudo -n cat /root/f.xml"
+    assert run.call_args.kwargs["input"] is None
+    assert "-q" in cmd
+
+
+def test_sudo_pull_password_sends_stdin_and_uses_dash_s(tmp_path: Path) -> None:
+    local = tmp_path / "out.xml"
+    with patch(
+        "ks_gen.verify.ssh.subprocess.run",
+        return_value=_completed(0, "<x/>"),
+    ) as run:
+        sudo_pull("host", "user", "/root/f.xml", local, auth=SudoAuth(password="pw"))
+    cmd = run.call_args.args[0]
+    assert cmd[-1] == "sudo -S -p '' cat /root/f.xml"
+    assert run.call_args.kwargs["input"] == "pw\n"
+
+
+def test_sudo_pull_nonzero_exit_raises(tmp_path: Path) -> None:
+    with (
+        patch(
+            "ks_gen.verify.ssh.subprocess.run",
+            return_value=_completed(1, "", "cat: /root/f.xml: No such file"),
+        ),
+        pytest.raises(SshConnectError, match="sudo cat"),
+    ):
+        sudo_pull("host", "user", "/root/f.xml", tmp_path / "x", auth=SudoAuth())

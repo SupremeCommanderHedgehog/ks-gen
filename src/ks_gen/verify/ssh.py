@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from ks_gen.verify.auth import SudoAuth, sudo_prefix
 from ks_gen.verify.errors import SshConnectError, ToolMissingError
 
 
@@ -87,3 +89,35 @@ def scp_pull(
 
     if proc.returncode != 0:
         raise SshConnectError(f"scp exit {proc.returncode}: {_first_stderr_line(proc.stderr)}")
+
+
+def sudo_pull(
+    host: str,
+    user: str,
+    remote_path: str,
+    local_path: Path,
+    *,
+    auth: SudoAuth,
+    extra_opts: list[str] | None = None,
+    timeout: float | None = None,
+) -> None:
+    """Retrieve a root-owned remote file via `sudo cat` over the ssh channel.
+
+    Replaces scp: works when the login user cannot traverse /root and when
+    STIG root umask 077 makes even /tmp artifacts non-world-readable. Writes
+    the file's text to `local_path`.
+    """
+    stdin_input = f"{auth.password}\n" if auth.is_password else None
+    result = ssh_exec(
+        host,
+        user,
+        f"{sudo_prefix(auth)} cat {shlex.quote(remote_path)}",
+        extra_opts=extra_opts,
+        timeout=timeout,
+        stdin_input=stdin_input,
+    )
+    if result.exit_code != 0:
+        raise SshConnectError(
+            f"sudo cat {remote_path} exit {result.exit_code}: {_first_stderr_line(result.stderr)}"
+        )
+    local_path.write_text(result.stdout, encoding="utf-8")
