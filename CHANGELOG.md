@@ -3,6 +3,24 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.30.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.29.4...v0.30.0) (2026-07-02)
+
+
+### Features
+
+* **verify:** password-sudo support via --ask-sudo-pass ([#16](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/16)) ([#151](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/151)) ([dddefd8](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/dddefd87b3be34f47aff9a21067d64aa5cccc39d))
+
+
+### Bug Fixes
+
+* **admin-user:** single-quote crypt hash in chpasswd to survive set -u ([#147](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/147)) ([91cb1b8](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/91cb1b8307ffdca053b997ac36c1429abeb446c3))
+* **writer:** apply declared exceptions to the oscap tailoring ([#148](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/148)) ([5c9391c](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/5c9391c277c8b2cccaf03fa691217164784c625c))
+
+
+### Documentation
+
+* **claude:** require /code-review before shipping code ([#149](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/149)) ([5820d07](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/5820d077b7f26011032db12b87f74eb247fac9d7))
+
 ## [0.29.4](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.29.3...v0.29.4) (2026-06-27)
 
 
