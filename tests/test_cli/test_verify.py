@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from ks_gen.cli import app
 from ks_gen.loader import ExitCode
+from ks_gen.verify.auth import SudoAuth
 from ks_gen.verify.errors import (
     OscapInvocationError,
     SshConnectError,
@@ -523,3 +524,46 @@ def test_verify_baseline_missing_file_exit_usage(tmp_path: Path) -> None:
             ["verify", "--host", "h1", "--config", str(cfg), "--baseline", str(missing)],
         )
     assert result.exit_code == 1, result.output  # USAGE
+
+
+def test_verify_ask_sudo_pass_threads_password_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _write_cfg(tmp_path)
+    monkeypatch.setenv("KSGEN_SUDO_PASSWORD", "secret")
+    captured: dict[str, object] = {}
+
+    def fake_run_verify(**kw: object) -> VerifyReport:
+        captured["sudo_auth"] = kw["sudo_auth"]
+        return _clean_report()
+
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.run_verify", side_effect=fake_run_verify),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(
+            app, ["verify", "--host", "h1", "--config", str(cfg), "--ask-sudo-pass"]
+        )
+    assert result.exit_code == 0, result.output
+    assert isinstance(captured["sudo_auth"], SudoAuth)
+    assert captured["sudo_auth"].is_password is True
+
+
+def test_verify_default_is_passwordless(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = _write_cfg(tmp_path)
+    monkeypatch.delenv("KSGEN_SUDO_PASSWORD", raising=False)
+    captured: dict[str, object] = {}
+
+    def fake_run_verify(**kw: object) -> VerifyReport:
+        captured["sudo_auth"] = kw["sudo_auth"]
+        return _clean_report()
+
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.run_verify", side_effect=fake_run_verify),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(app, ["verify", "--host", "h1", "--config", str(cfg)])
+    assert result.exit_code == 0, result.output
+    assert captured["sudo_auth"].is_password is False
