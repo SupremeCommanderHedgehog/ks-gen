@@ -4,16 +4,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ks_gen.config import HostConfig
+from ks_gen.verify.auth import SudoAuth, sudo_prefix
 from ks_gen.verify.errors import (
     ArfMissingError,
     OscapInvocationError,
     SudoPromptError,
 )
-from ks_gen.verify.ssh import scp_pull, ssh_exec
+from ks_gen.verify.ssh import SshResult, ssh_exec, sudo_pull
 
 REMOTE_CURRENT_ARF = "/tmp/ksgen-verify-current.arf.xml"
 REMOTE_INSTALL_ARF = "/root/oscap-remediation-results.xml"
 REMOTE_TAILORING = "/root/tailoring.xml"
+
+_PASSWORDLESS_AUTH: SudoAuth = SudoAuth()
 
 
 @dataclass(frozen=True)
@@ -22,13 +25,35 @@ class CollectedArfs:
     install_text: str | None
 
 
-def probe_sudo(host: str, user: str, *, ssh_extra_opts: list[str]) -> None:
-    result = ssh_exec(host, user, "sudo -n true", extra_opts=ssh_extra_opts)
+def _sudo_ssh(
+    host: str,
+    user: str,
+    cmd: str,
+    *,
+    auth: SudoAuth,
+    ssh_extra_opts: list[str],
+    timeout: float | None = None,
+) -> SshResult:
+    """Run `cmd` under sudo, feeding the password on stdin in password mode."""
+    stdin_input = f"{auth.password}\n" if auth.is_password else None
+    return ssh_exec(
+        host,
+        user,
+        f"{sudo_prefix(auth)} {cmd}",
+        extra_opts=ssh_extra_opts,
+        stdin_input=stdin_input,
+        timeout=timeout,
+    )
+
+
+def probe_sudo(host: str, user: str, *, sudo_auth: SudoAuth, ssh_extra_opts: list[str]) -> None:
+    result = _sudo_ssh(host, user, "true", auth=sudo_auth, ssh_extra_opts=ssh_extra_opts)
     if result.exit_code != 0:
-        # exit_code != 0 from `sudo -n true` can mean: (a) sudo wants a password,
-        # (b) user is not in sudoers, or (c) sudo binary missing. We can't reliably
-        # distinguish without parsing stderr, so the message names the dominant
-        # cause and leaves the exit code for the operator to consult.
+        if sudo_auth.is_password:
+            raise SudoPromptError(
+                f"sudo failed (exit {result.exit_code}) on {host} as {user}: "
+                f"wrong password or user not in sudoers"
+            )
         raise SudoPromptError(
             f"sudo -n true failed (exit {result.exit_code}) on {host} as {user}: "
             f"passwordless sudo is required"
@@ -37,7 +62,7 @@ def probe_sudo(host: str, user: str, *, ssh_extra_opts: list[str]) -> None:
 
 def _oscap_command(cfg: HostConfig) -> str:
     return (
-        "sudo -n oscap xccdf eval "
+        "oscap xccdf eval "
         f"--tailoring-file {REMOTE_TAILORING} "
         f"--profile xccdf_org.ssgproject.content_profile_{cfg.meta.profile} "
         "--fetch-remote-resources "
@@ -55,11 +80,12 @@ def collect_arfs(
     no_drift: bool,
     ssh_extra_opts: list[str],
     timeout: int,
+    sudo_auth: SudoAuth = _PASSWORDLESS_AUTH,
 ) -> CollectedArfs:
-    probe_sudo(host, user, ssh_extra_opts=ssh_extra_opts)
+    probe_sudo(host, user, sudo_auth=sudo_auth, ssh_extra_opts=ssh_extra_opts)
 
-    tailoring_check = ssh_exec(
-        host, user, f"sudo -n test -r {REMOTE_TAILORING}", extra_opts=ssh_extra_opts
+    tailoring_check = _sudo_ssh(
+        host, user, f"test -r {REMOTE_TAILORING}", auth=sudo_auth, ssh_extra_opts=ssh_extra_opts
     )
     if tailoring_check.exit_code != 0:
         raise OscapInvocationError(
@@ -68,11 +94,12 @@ def collect_arfs(
         )
 
     try:
-        oscap_result = ssh_exec(
+        oscap_result = _sudo_ssh(
             host,
             user,
             _oscap_command(cfg),
-            extra_opts=ssh_extra_opts,
+            auth=sudo_auth,
+            ssh_extra_opts=ssh_extra_opts,
             timeout=timeout,
         )
         if oscap_result.exit_code not in (0, 2):
@@ -80,12 +107,8 @@ def collect_arfs(
             raise OscapInvocationError(f"oscap exit {oscap_result.exit_code}: {stderr_first}")
 
         local_current = workdir / "current.arf.xml"
-        scp_pull(
-            host,
-            user,
-            REMOTE_CURRENT_ARF,
-            local_current,
-            extra_opts=ssh_extra_opts,
+        sudo_pull(
+            host, user, REMOTE_CURRENT_ARF, local_current, auth=sudo_auth, extra_opts=ssh_extra_opts
         )
         if not local_current.exists() or local_current.stat().st_size == 0:
             raise ArfMissingError(f"pulled current ARF is empty or missing: {local_current}")
@@ -93,19 +116,21 @@ def collect_arfs(
 
         install_text: str | None = None
         if not no_drift:
-            check = ssh_exec(
+            check = _sudo_ssh(
                 host,
                 user,
-                f"sudo -n test -r {REMOTE_INSTALL_ARF}",
-                extra_opts=ssh_extra_opts,
+                f"test -r {REMOTE_INSTALL_ARF}",
+                auth=sudo_auth,
+                ssh_extra_opts=ssh_extra_opts,
             )
             if check.exit_code == 0:
                 local_install = workdir / "install.arf.xml"
-                scp_pull(
+                sudo_pull(
                     host,
                     user,
                     REMOTE_INSTALL_ARF,
                     local_install,
+                    auth=sudo_auth,
                     extra_opts=ssh_extra_opts,
                 )
                 if local_install.exists() and local_install.stat().st_size > 0:
@@ -114,11 +139,12 @@ def collect_arfs(
         return CollectedArfs(current_text=current_text, install_text=install_text)
     finally:
         try:
-            ssh_exec(
+            _sudo_ssh(
                 host,
                 user,
-                f"sudo -n rm -f {REMOTE_CURRENT_ARF}",
-                extra_opts=ssh_extra_opts,
+                f"rm -f {REMOTE_CURRENT_ARF}",
+                auth=sudo_auth,
+                ssh_extra_opts=ssh_extra_opts,
             )
         except Exception:
             # Best-effort cleanup; never mask the primary error.
@@ -131,8 +157,9 @@ def collect_deployed_tailoring(
     user: str,
     workdir: Path,
     ssh_extra_opts: list[str],
+    sudo_auth: SudoAuth = _PASSWORDLESS_AUTH,
 ) -> str:
-    """scp-pull `/root/tailoring.xml` for drift comparison.
+    """Pull `/root/tailoring.xml` via sudo cat for drift comparison.
 
     Sibling to `collect_arfs`. Does not share state with the ARF pull —
     `--check-tailoring` and `--no-drift` are independent axes.
@@ -140,15 +167,17 @@ def collect_deployed_tailoring(
     Returns the file's text contents.
 
     Raises:
-        SudoPromptError: passwordless sudo unavailable.
+        SudoPromptError: sudo unavailable (passwordless) or wrong password.
         OscapInvocationError: `/root/tailoring.xml` not readable on host.
-        ArfMissingError: scp succeeded but the pulled file is 0 bytes.
-        SshConnectError: ssh/scp transport failure.
-        ToolMissingError: ssh/scp not on PATH.
+        ArfMissingError: pull succeeded but the pulled file is 0 bytes.
+        SshConnectError: ssh transport failure.
+        ToolMissingError: ssh not on PATH.
     """
-    probe_sudo(host, user, ssh_extra_opts=ssh_extra_opts)
+    probe_sudo(host, user, sudo_auth=sudo_auth, ssh_extra_opts=ssh_extra_opts)
 
-    check = ssh_exec(host, user, f"sudo -n test -r {REMOTE_TAILORING}", extra_opts=ssh_extra_opts)
+    check = _sudo_ssh(
+        host, user, f"test -r {REMOTE_TAILORING}", auth=sudo_auth, ssh_extra_opts=ssh_extra_opts
+    )
     if check.exit_code != 0:
         raise OscapInvocationError(
             f"install-time tailoring not present at {REMOTE_TAILORING} "
@@ -156,7 +185,7 @@ def collect_deployed_tailoring(
         )
 
     local = workdir / "deployed-tailoring.xml"
-    scp_pull(host, user, REMOTE_TAILORING, local, extra_opts=ssh_extra_opts)
+    sudo_pull(host, user, REMOTE_TAILORING, local, auth=sudo_auth, extra_opts=ssh_extra_opts)
     if not local.exists() or local.stat().st_size == 0:
         raise ArfMissingError(f"pulled tailoring is empty or missing: {local}")
     return local.read_text(encoding="utf-8")
