@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from ks_gen.verify.auth import SudoAuth, sudo_prefix
+import pytest
+
+from ks_gen.loader import ConfigError, ExitCode
+from ks_gen.verify.auth import SudoAuth, resolve_sudo_auth, sudo_prefix
 
 
 def test_sudo_auth_passwordless_by_default() -> None:
@@ -24,3 +27,29 @@ def test_sudo_prefix_passwordless() -> None:
 
 def test_sudo_prefix_password() -> None:
     assert sudo_prefix(SudoAuth(password="x")) == "sudo -S -p ''"
+
+
+def test_resolve_not_ask_returns_passwordless(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KSGEN_SUDO_PASSWORD", "ignored")
+    auth = resolve_sudo_auth(False, user="u", host="h")
+    assert auth.password is None
+
+
+def test_resolve_ask_reads_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KSGEN_SUDO_PASSWORD", "fromenv")
+    auth = resolve_sudo_auth(True, user="u", host="h")
+    assert auth.password == "fromenv"
+
+
+def test_resolve_ask_prompts_when_env_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("KSGEN_SUDO_PASSWORD", raising=False)
+    monkeypatch.setattr("ks_gen.verify.auth.getpass.getpass", lambda prompt: "typed")
+    auth = resolve_sudo_auth(True, user="u", host="h")
+    assert auth.password == "typed"
+
+
+def test_resolve_ask_empty_password_raises_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KSGEN_SUDO_PASSWORD", "")
+    with pytest.raises(ConfigError) as ei:
+        resolve_sudo_auth(True, user="u", host="h")
+    assert ei.value.exit_code == ExitCode.USAGE
