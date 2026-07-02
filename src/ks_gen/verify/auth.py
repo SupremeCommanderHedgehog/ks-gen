@@ -28,6 +28,11 @@ def sudo_prefix(auth: SudoAuth) -> str:
     return "sudo -S -p ''" if auth.is_password else "sudo -n"
 
 
+def sudo_stdin(auth: SudoAuth) -> str | None:
+    """Return the stdin payload for a `sudo -S` invocation, or None for -n mode."""
+    return f"{auth.password}\n" if auth.is_password else None
+
+
 _ENV_VAR = "KSGEN_SUDO_PASSWORD"
 
 

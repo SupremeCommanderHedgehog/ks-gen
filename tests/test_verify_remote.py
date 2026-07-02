@@ -77,7 +77,7 @@ def test_collect_arfs_runs_oscap_pulls_current_and_install(tmp_path: Path) -> No
             return SshResult("", "", 0)
         raise AssertionError(f"unexpected ssh cmd: {cmd}")
 
-    def fake_pull(host, user, remote, local, **kw):
+    def fake_pull(host: str, user: str, remote: str, local: Path, **kw: object) -> None:
         call_log.append(("scp", remote))
         local.write_text("<TestResult/>", encoding="utf-8")
 
@@ -119,7 +119,7 @@ def test_collect_arfs_skips_install_baseline_when_no_drift(tmp_path: Path) -> No
             raise AssertionError("install baseline should not be probed when no_drift=True")
         return SshResult("", "", 0)
 
-    def fake_pull(host, user, remote, local, **kw):
+    def fake_pull(host: str, user: str, remote: str, local: Path, **kw: object) -> None:
         if "oscap-remediation-results" in remote:
             raise AssertionError("install baseline should not be scp'd when no_drift=True")
         local.write_text("<TestResult/>", encoding="utf-8")
@@ -157,7 +157,7 @@ def test_collect_arfs_install_baseline_missing_is_soft_fail(tmp_path: Path) -> N
             return SshResult("", "", 0)
         return SshResult("", "", 0)
 
-    def fake_pull(host, user, remote, local, **kw):
+    def fake_pull(host: str, user: str, remote: str, local: Path, **kw: object) -> None:
         local.write_text("<TestResult/>", encoding="utf-8")
 
     with (
@@ -249,7 +249,7 @@ def test_collect_arfs_raises_when_current_arf_is_empty(tmp_path: Path) -> None:
             return SshResult("", "", 0)
         return SshResult("", "", 0)
 
-    def fake_pull(host, user, remote, local, **kw):
+    def fake_pull(host: str, user: str, remote: str, local: Path, **kw: object) -> None:
         local.write_text("", encoding="utf-8")  # empty
 
     with (
@@ -269,6 +269,41 @@ def test_collect_arfs_raises_when_current_arf_is_empty(tmp_path: Path) -> None:
         )
 
 
+def test_collect_arfs_password_mode_sends_password_to_every_call(tmp_path: Path) -> None:
+    cfg = _build_cfg()
+    ssh_stdins: list[object] = []
+    pull_auths: list[object] = []
+
+    def fake_ssh(host: str, user: str, cmd: str, **kw: object) -> SshResult:
+        ssh_stdins.append(kw.get("stdin_input"))
+        if "oscap xccdf eval" in cmd:
+            return SshResult("", "", 0)
+        return SshResult("", "", 0)  # true, test -r, rm all succeed
+
+    def fake_pull(host: str, user: str, remote: str, local: Path, **kw: object) -> None:
+        pull_auths.append(kw["auth"])
+        local.write_text("<TestResult/>", encoding="utf-8")
+
+    with (
+        patch("ks_gen.verify.remote.ssh_exec", side_effect=fake_ssh),
+        patch("ks_gen.verify.remote.sudo_pull", side_effect=fake_pull),
+    ):
+        collect_arfs(
+            cfg=cfg,
+            host="h",
+            user="u",
+            workdir=tmp_path,
+            no_drift=True,
+            ssh_extra_opts=[],
+            timeout=600,
+            sudo_auth=SudoAuth(password="pw"),
+        )
+
+    assert ssh_stdins  # sanity: calls happened
+    assert all(s == "pw\n" for s in ssh_stdins)
+    assert all(a.password == "pw" for a in pull_auths)
+
+
 # --- collect_deployed_tailoring ----------------------------------------------
 
 
@@ -282,7 +317,7 @@ def test_collect_deployed_tailoring_pulls_and_returns_text(tmp_path: Path) -> No
             return SshResult("", "", 0)
         raise AssertionError(f"unexpected ssh cmd: {cmd}")
 
-    def fake_pull(host, user, remote, local, **kw):
+    def fake_pull(host: str, user: str, remote: str, local: Path, **kw: object) -> None:
         pulled["remote"] = remote
         local.write_text("<xccdf:Tailoring/>", encoding="utf-8")
 
@@ -323,7 +358,7 @@ def test_collect_deployed_tailoring_raises_when_pulled_file_empty(tmp_path: Path
             return SshResult("", "", 0)
         raise AssertionError(f"unexpected ssh cmd: {cmd}")
 
-    def fake_pull(host, user, remote, local, **kw):
+    def fake_pull(host: str, user: str, remote: str, local: Path, **kw: object) -> None:
         local.write_text("", encoding="utf-8")
 
     with (

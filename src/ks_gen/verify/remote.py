@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ks_gen.config import HostConfig
-from ks_gen.verify.auth import SudoAuth, sudo_prefix
+from ks_gen.verify.auth import SudoAuth, sudo_prefix, sudo_stdin
 from ks_gen.verify.errors import (
     ArfMissingError,
     OscapInvocationError,
@@ -35,7 +35,7 @@ def _sudo_ssh(
     timeout: float | None = None,
 ) -> SshResult:
     """Run `cmd` under sudo, feeding the password on stdin in password mode."""
-    stdin_input = f"{auth.password}\n" if auth.is_password else None
+    stdin_input = sudo_stdin(auth)
     return ssh_exec(
         host,
         user,

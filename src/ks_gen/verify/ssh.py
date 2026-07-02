@@ -6,7 +6,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from ks_gen.verify.auth import SudoAuth, sudo_prefix
+from ks_gen.verify.auth import SudoAuth, sudo_prefix, sudo_stdin
 from ks_gen.verify.errors import SshConnectError, ToolMissingError
 
 
@@ -107,7 +107,7 @@ def sudo_pull(
     STIG root umask 077 makes even /tmp artifacts non-world-readable. Writes
     the file's text to `local_path`.
     """
-    stdin_input = f"{auth.password}\n" if auth.is_password else None
+    stdin_input = sudo_stdin(auth)
     result = ssh_exec(
         host,
         user,

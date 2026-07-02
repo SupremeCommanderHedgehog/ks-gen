@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from ks_gen.loader import ConfigError, ExitCode
-from ks_gen.verify.auth import SudoAuth, resolve_sudo_auth, sudo_prefix
+from ks_gen.verify.auth import SudoAuth, resolve_sudo_auth, sudo_prefix, sudo_stdin
 
 
 def test_sudo_auth_passwordless_by_default() -> None:
@@ -27,6 +27,14 @@ def test_sudo_prefix_passwordless() -> None:
 
 def test_sudo_prefix_password() -> None:
     assert sudo_prefix(SudoAuth(password="x")) == "sudo -S -p ''"
+
+
+def test_sudo_stdin_passwordless_is_none() -> None:
+    assert sudo_stdin(SudoAuth()) is None
+
+
+def test_sudo_stdin_password_has_trailing_newline() -> None:
+    assert sudo_stdin(SudoAuth(password="pw")) == "pw\n"
 
 
 def test_resolve_not_ask_returns_passwordless(monkeypatch: pytest.MonkeyPatch) -> None:
