@@ -6,6 +6,7 @@ from unittest.mock import patch
 from ks_gen.config import AdminUser, ExceptionDecl, HostConfig, System, User
 from ks_gen.rules._types import TailoringOp
 from ks_gen.verify import run_verify
+from ks_gen.verify.auth import SudoAuth
 from ks_gen.verify.remote import CollectedArfs
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -455,3 +456,27 @@ def test_run_verify_baseline_path_composes_with_check_tailoring(tmp_path: Path) 
     assert report.baseline.path == str(baseline_path)
     assert report.tailoring_drift is not None
     assert report.has_tailoring_drift is True
+
+
+def test_run_verify_threads_sudo_auth_to_collect_arfs(tmp_path: Path) -> None:
+    current = (FIXTURES / "arf-mixed.xml").read_text(encoding="utf-8")
+    auth = SudoAuth(password="pw")
+    seen: dict[str, object] = {}
+
+    def fake_collect(**kw: object) -> CollectedArfs:
+        seen["sudo_auth"] = kw["sudo_auth"]
+        return CollectedArfs(current_text=current, install_text=None)
+
+    with patch("ks_gen.verify.collect_arfs", side_effect=fake_collect):
+        run_verify(
+            cfg=_cfg(),
+            host="h",
+            user="ops",
+            workdir=tmp_path,
+            no_drift=True,
+            ssh_extra_opts=[],
+            timeout=600,
+            sudo_auth=auth,
+        )
+
+    assert seen["sudo_auth"] is auth
