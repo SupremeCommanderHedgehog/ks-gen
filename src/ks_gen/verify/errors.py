@@ -10,10 +10,10 @@ class VerifyError(Exception):
 
 
 class SshConnectError(VerifyError):
-    """ssh/scp transport failure.
+    """ssh transport failure.
 
-    Covers ssh exit 255 (host unreachable, key rejected, kex failure), scp
-    transfer errors (any nonzero scp exit), and transport-layer timeouts.
+    Covers ssh exit 255 (host unreachable, key rejected, kex failure), a
+    nonzero `sudo cat` file pull, and transport-layer timeouts.
     """
 
 
