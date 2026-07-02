@@ -108,3 +108,15 @@ def test_scp_pull_nonzero_exit_raises_ssh_connect_error(tmp_path: Path) -> None:
         pytest.raises(SshConnectError, match="scp"),
     ):
         scp_pull("host", "user", "/r", tmp_path / "x")
+
+
+def test_ssh_exec_forwards_stdin_input() -> None:
+    with patch("ks_gen.verify.ssh.subprocess.run", return_value=_completed(0)) as run:
+        ssh_exec("host", "user", "sudo -S -p '' true", stdin_input="pw\n")
+    assert run.call_args.kwargs["input"] == "pw\n"
+
+
+def test_ssh_exec_stdin_input_defaults_to_none() -> None:
+    with patch("ks_gen.verify.ssh.subprocess.run", return_value=_completed(0)) as run:
+        ssh_exec("host", "user", "ls /")
+    assert run.call_args.kwargs["input"] is None

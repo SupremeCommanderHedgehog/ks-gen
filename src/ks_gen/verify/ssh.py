@@ -35,6 +35,7 @@ def ssh_exec(
     *,
     extra_opts: list[str] | None = None,
     timeout: float | None = None,
+    stdin_input: str | None = None,
 ) -> SshResult:
     cmd: list[str] = ["ssh", "-o", "BatchMode=yes"]
     if extra_opts:
@@ -43,7 +44,14 @@ def ssh_exec(
     cmd.append(remote_cmd)
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+            input=stdin_input,
+        )
     except subprocess.TimeoutExpired as e:
         raise SshConnectError(f"ssh timed out after {timeout}s") from e
     except FileNotFoundError as e:
