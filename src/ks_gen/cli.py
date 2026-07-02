@@ -13,6 +13,7 @@ from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
 from ks_gen.registry import load_rules
 from ks_gen.verify import run_verify
+from ks_gen.verify.auth import resolve_sudo_auth
 from ks_gen.verify.errors import VerifyError
 from ks_gen.verify.report import render_json, render_table
 from ks_gen.verify.ssh import check_tools
@@ -194,7 +195,7 @@ def verify_cmd(
     ssh_opts: str = typer.Option(
         "",
         "--ssh-opts",
-        help="Extra args appended to every ssh/scp invocation (shell-quoted).",
+        help="Extra args appended to every ssh invocation (shell-quoted).",
     ),
     format_: str = typer.Option("table", "--format", help="Output format: table | json."),
     arf_out: Path | None = typer.Option(  # noqa: B008
@@ -260,6 +261,15 @@ def verify_cmd(
         ),
     ),
     timeout: int = typer.Option(600, "--timeout", help="oscap run timeout in seconds."),
+    ask_sudo_pass: bool = typer.Option(
+        False,
+        "--ask-sudo-pass",
+        help=(
+            "Use password-based sudo on the host: read the password from "
+            "KSGEN_SUDO_PASSWORD, or prompt if unset. Default is passwordless "
+            "(sudo -n). Never pass the password via --ssh-opts."
+        ),
+    ),
 ) -> None:
     if format_ not in ("table", "json"):
         typer.echo(f"--format must be 'table' or 'json', got: {format_!r}", err=True)
@@ -296,6 +306,12 @@ def verify_cmd(
     resolved_user = user or cfg.user.admin.name
     extra_opts = shlex.split(ssh_opts) if ssh_opts else []
 
+    try:
+        sudo_auth = resolve_sudo_auth(ask_sudo_pass, user=resolved_user, host=host)
+    except ConfigError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=int(e.exit_code)) from None
+
     def _do(workdir: Path) -> None:
         try:
             report = run_verify(
@@ -309,6 +325,7 @@ def verify_cmd(
                 capture_to=capture_baseline,
                 ssh_extra_opts=extra_opts,
                 timeout=timeout,
+                sudo_auth=sudo_auth,
             )
         except ConfigError as e:
             typer.echo(f"ks-gen verify: {e}", err=True)
