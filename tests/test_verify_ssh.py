@@ -8,7 +8,7 @@ import pytest
 
 from ks_gen.verify.auth import SudoAuth
 from ks_gen.verify.errors import SshConnectError, ToolMissingError
-from ks_gen.verify.ssh import SshResult, check_tools, scp_pull, ssh_exec, sudo_pull
+from ks_gen.verify.ssh import SshResult, check_tools, ssh_exec, sudo_pull
 
 
 def _completed(
@@ -17,7 +17,7 @@ def _completed(
     return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
 
 
-def test_check_tools_passes_when_ssh_and_scp_present() -> None:
+def test_check_tools_passes_when_ssh_present() -> None:
     with patch("ks_gen.verify.ssh.shutil.which", side_effect=lambda t: f"/usr/bin/{t}"):
         check_tools()
 
@@ -29,17 +29,6 @@ def test_check_tools_raises_when_ssh_missing() -> None:
     with (
         patch("ks_gen.verify.ssh.shutil.which", side_effect=which),
         pytest.raises(ToolMissingError, match="ssh"),
-    ):
-        check_tools()
-
-
-def test_check_tools_raises_when_scp_missing() -> None:
-    def which(tool: str) -> str | None:
-        return None if tool == "scp" else f"/usr/bin/{tool}"
-
-    with (
-        patch("ks_gen.verify.ssh.shutil.which", side_effect=which),
-        pytest.raises(ToolMissingError, match="scp"),
     ):
         check_tools()
 
@@ -89,26 +78,6 @@ def test_ssh_exec_returns_nonzero_exit_without_raising() -> None:
     with patch("ks_gen.verify.ssh.subprocess.run", return_value=_completed(2, "", "rules failed")):
         result = ssh_exec("host", "user", "oscap ...")
     assert result.exit_code == 2
-
-
-def test_scp_pull_invokes_scp_with_user_host_remote_target(tmp_path: Path) -> None:
-    local = tmp_path / "out.xml"
-    with patch("ks_gen.verify.ssh.subprocess.run", return_value=_completed(0)) as run:
-        scp_pull("host", "user", "/root/file.xml", local, extra_opts=["-q"])
-    args = run.call_args.args[0]
-    assert args[0] == "scp"
-    assert "-o" in args and "BatchMode=yes" in args
-    assert "-q" in args
-    assert "user@host:/root/file.xml" in args
-    assert str(local) in args
-
-
-def test_scp_pull_nonzero_exit_raises_ssh_connect_error(tmp_path: Path) -> None:
-    with (
-        patch("ks_gen.verify.ssh.subprocess.run", return_value=_completed(1, "", "scp: not found")),
-        pytest.raises(SshConnectError, match="scp"),
-    ):
-        scp_pull("host", "user", "/r", tmp_path / "x")
 
 
 def test_ssh_exec_forwards_stdin_input() -> None:

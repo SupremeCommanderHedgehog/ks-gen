@@ -34,7 +34,7 @@ class ArfParseError(VerifyError):
 
 
 class ToolMissingError(VerifyError):
-    """system ssh or scp not on PATH."""
+    """system ssh not on PATH."""
 
     exit_code: ExitCode = ExitCode.TOOL_MISSING
 
