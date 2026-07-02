@@ -17,6 +17,12 @@ def _completed(
     return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
 
 
+def _completed_bytes(
+    returncode: int, stdout: bytes = b"", stderr: bytes = b""
+) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
+
+
 def test_check_tools_passes_when_ssh_present() -> None:
     with patch("ks_gen.verify.ssh.shutil.which", side_effect=lambda t: f"/usr/bin/{t}"):
         check_tools()
@@ -96,10 +102,10 @@ def test_sudo_pull_passwordless_writes_stdout(tmp_path: Path) -> None:
     local = tmp_path / "out.xml"
     with patch(
         "ks_gen.verify.ssh.subprocess.run",
-        return_value=_completed(0, "<TestResult/>"),
+        return_value=_completed_bytes(0, b"<TestResult/>"),
     ) as run:
         sudo_pull("host", "user", "/root/f.xml", local, auth=SudoAuth(), extra_opts=["-q"])
-    assert local.read_text(encoding="utf-8") == "<TestResult/>"
+    assert local.read_bytes() == b"<TestResult/>"
     cmd = run.call_args.args[0]
     assert cmd[-1] == "sudo -n cat /root/f.xml"
     assert run.call_args.kwargs["input"] is None
@@ -110,20 +116,33 @@ def test_sudo_pull_password_sends_stdin_and_uses_dash_s(tmp_path: Path) -> None:
     local = tmp_path / "out.xml"
     with patch(
         "ks_gen.verify.ssh.subprocess.run",
-        return_value=_completed(0, "<x/>"),
+        return_value=_completed_bytes(0, b"<x/>"),
     ) as run:
         sudo_pull("host", "user", "/root/f.xml", local, auth=SudoAuth(password="pw"))
     cmd = run.call_args.args[0]
     assert cmd[-1] == "sudo -S -p '' cat /root/f.xml"
-    assert run.call_args.kwargs["input"] == "pw\n"
+    assert run.call_args.kwargs["input"] == b"pw\n"
 
 
 def test_sudo_pull_nonzero_exit_raises(tmp_path: Path) -> None:
     with (
         patch(
             "ks_gen.verify.ssh.subprocess.run",
-            return_value=_completed(1, "", "cat: /root/f.xml: No such file"),
+            return_value=_completed_bytes(1, b"", b"cat: /root/f.xml: No such file"),
         ),
         pytest.raises(SshConnectError, match="sudo cat"),
     ):
         sudo_pull("host", "user", "/root/f.xml", tmp_path / "x", auth=SudoAuth())
+
+
+def test_sudo_pull_preserves_raw_bytes_no_transcode(tmp_path: Path) -> None:
+    # A UTF-8 'é' (0xC3 0xA9) must land on disk as those exact bytes, not
+    # decoded via the local locale codec and re-encoded.
+    raw = b"<x>\xc3\xa9</x>\n"
+    local = tmp_path / "out.xml"
+    with patch(
+        "ks_gen.verify.ssh.subprocess.run",
+        return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=raw, stderr=b""),
+    ):
+        sudo_pull("host", "user", "/root/f.xml", local, auth=SudoAuth())
+    assert local.read_bytes() == raw

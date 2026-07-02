@@ -4,19 +4,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ks_gen.config import HostConfig
-from ks_gen.verify.auth import SudoAuth, sudo_prefix, sudo_stdin
+from ks_gen.verify.auth import PASSWORDLESS, SudoAuth, sudo_command
 from ks_gen.verify.errors import (
     ArfMissingError,
     OscapInvocationError,
     SudoPromptError,
 )
-from ks_gen.verify.ssh import SshResult, ssh_exec, sudo_pull
+from ks_gen.verify.ssh import SshResult, _first_stderr_line, ssh_exec, sudo_pull
 
 REMOTE_CURRENT_ARF = "/tmp/ksgen-verify-current.arf.xml"
 REMOTE_INSTALL_ARF = "/root/oscap-remediation-results.xml"
 REMOTE_TAILORING = "/root/tailoring.xml"
-
-_PASSWORDLESS_AUTH: SudoAuth = SudoAuth()
 
 
 @dataclass(frozen=True)
@@ -35,11 +33,11 @@ def _sudo_ssh(
     timeout: float | None = None,
 ) -> SshResult:
     """Run `cmd` under sudo, feeding the password on stdin in password mode."""
-    stdin_input = sudo_stdin(auth)
+    remote_cmd, stdin_input = sudo_command(auth, cmd)
     return ssh_exec(
         host,
         user,
-        f"{sudo_prefix(auth)} {cmd}",
+        remote_cmd,
         extra_opts=ssh_extra_opts,
         stdin_input=stdin_input,
         timeout=timeout,
@@ -80,7 +78,7 @@ def collect_arfs(
     no_drift: bool,
     ssh_extra_opts: list[str],
     timeout: int,
-    sudo_auth: SudoAuth = _PASSWORDLESS_AUTH,
+    sudo_auth: SudoAuth = PASSWORDLESS,
 ) -> CollectedArfs:
     probe_sudo(host, user, sudo_auth=sudo_auth, ssh_extra_opts=ssh_extra_opts)
 
@@ -103,7 +101,7 @@ def collect_arfs(
             timeout=timeout,
         )
         if oscap_result.exit_code not in (0, 2):
-            stderr_first = (oscap_result.stderr.splitlines() or [""])[0]
+            stderr_first = _first_stderr_line(oscap_result.stderr)
             raise OscapInvocationError(f"oscap exit {oscap_result.exit_code}: {stderr_first}")
 
         local_current = workdir / "current.arf.xml"
@@ -157,7 +155,7 @@ def collect_deployed_tailoring(
     user: str,
     workdir: Path,
     ssh_extra_opts: list[str],
-    sudo_auth: SudoAuth = _PASSWORDLESS_AUTH,
+    sudo_auth: SudoAuth = PASSWORDLESS,
 ) -> str:
     """Pull `/root/tailoring.xml` via sudo cat for drift comparison.
 

@@ -6,7 +6,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from ks_gen.verify.auth import SudoAuth, sudo_prefix, sudo_stdin
+from ks_gen.verify.auth import SudoAuth, sudo_command
 from ks_gen.verify.errors import SshConnectError, ToolMissingError
 
 
@@ -29,6 +29,16 @@ def _first_stderr_line(stderr: str) -> str:
     return ""
 
 
+def _ssh_argv(host: str, user: str, remote_cmd: str, extra_opts: list[str] | None) -> list[str]:
+    """Build the ssh argv list shared by ssh_exec and sudo_pull."""
+    argv: list[str] = ["ssh", "-o", "BatchMode=yes"]
+    if extra_opts:
+        argv.extend(extra_opts)
+    argv.append(f"{user}@{host}")
+    argv.append(remote_cmd)
+    return argv
+
+
 def ssh_exec(
     host: str,
     user: str,
@@ -38,11 +48,7 @@ def ssh_exec(
     timeout: float | None = None,
     stdin_input: str | None = None,
 ) -> SshResult:
-    cmd: list[str] = ["ssh", "-o", "BatchMode=yes"]
-    if extra_opts:
-        cmd.extend(extra_opts)
-    cmd.append(f"{user}@{host}")
-    cmd.append(remote_cmd)
+    cmd = _ssh_argv(host, user, remote_cmd, extra_opts)
 
     try:
         proc = subprocess.run(
@@ -74,23 +80,26 @@ def sudo_pull(
     extra_opts: list[str] | None = None,
     timeout: float | None = None,
 ) -> None:
-    """Retrieve a root-owned remote file via `sudo cat` over the ssh channel.
+    """Retrieve a root-owned remote file via `sudo cat`, byte-for-byte.
 
-    Replaces scp: works when the login user cannot traverse /root and when
-    STIG root umask 077 makes even /tmp artifacts non-world-readable. Writes
-    the file's text to `local_path`.
+    Runs the transfer in binary mode (no text decoding) so the local copy is
+    an exact byte image of the on-host file — ARFs/tailoring may contain
+    non-ASCII and must not be transcoded through the operator's locale codec.
     """
-    stdin_input = sudo_stdin(auth)
-    result = ssh_exec(
-        host,
-        user,
-        f"{sudo_prefix(auth)} cat {shlex.quote(remote_path)}",
-        extra_opts=extra_opts,
-        timeout=timeout,
-        stdin_input=stdin_input,
-    )
-    if result.exit_code != 0:
-        raise SshConnectError(
-            f"sudo cat {remote_path} exit {result.exit_code}: {_first_stderr_line(result.stderr)}"
+    remote_cmd, stdin_text = sudo_command(auth, f"cat {shlex.quote(remote_path)}")
+    argv = _ssh_argv(host, user, remote_cmd, extra_opts)
+    stdin_bytes = stdin_text.encode("utf-8") if stdin_text is not None else None
+    try:
+        proc = subprocess.run(
+            argv, capture_output=True, timeout=timeout, check=False, input=stdin_bytes
         )
-    local_path.write_text(result.stdout, encoding="utf-8")
+    except subprocess.TimeoutExpired as e:
+        raise SshConnectError(f"sudo cat {remote_path} timed out after {timeout}s") from e
+    except FileNotFoundError as e:
+        raise ToolMissingError("ssh not on PATH") from e
+    if proc.returncode != 0:
+        stderr_text = proc.stderr.decode("utf-8", "replace")
+        raise SshConnectError(
+            f"sudo cat {remote_path} exit {proc.returncode}: {_first_stderr_line(stderr_text)}"
+        )
+    local_path.write_bytes(proc.stdout)

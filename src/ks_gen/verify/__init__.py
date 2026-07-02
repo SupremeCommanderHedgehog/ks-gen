@@ -10,7 +10,7 @@ from ks_gen.config import HostConfig
 from ks_gen.exceptions_report import expected_failure_rule_ids
 from ks_gen.loader import ConfigError, ExitCode
 from ks_gen.verify.arf import RuleResult, parse_arf
-from ks_gen.verify.auth import SudoAuth
+from ks_gen.verify.auth import PASSWORDLESS, SudoAuth
 from ks_gen.verify.baseline import BaselineReport, orphan_rule_ids, read_baseline
 from ks_gen.verify.errors import TailoringParseError
 from ks_gen.verify.reconcile import VerifyReport, build_report
@@ -20,8 +20,6 @@ from ks_gen.verify.tailoring_drift import (
     parse_tailoring_xml,
 )
 from ks_gen.writer import render_tailoring
-
-_PASSWORDLESS_AUTH: SudoAuth = SudoAuth()
 
 
 def run_verify(
@@ -36,7 +34,7 @@ def run_verify(
     capture_to: Path | None = None,
     ssh_extra_opts: list[str] | None = None,
     timeout: int = 600,
-    sudo_auth: SudoAuth = _PASSWORDLESS_AUTH,
+    sudo_auth: SudoAuth = PASSWORDLESS,
 ) -> VerifyReport:
     """Re-run oscap on `host` and reconcile against `cfg`'s exception set.
 
