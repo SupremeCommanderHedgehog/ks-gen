@@ -1180,8 +1180,9 @@ All flags:
 |---|---|---|
 | `--host` | (none) | Target address or hostname (single-host mode; mutually exclusive with `--hosts`) |
 | `--hosts` | (none) | Fleet mode: path to a hosts file (`[user@]host  config.yaml` lines); mutually exclusive with `--host`/`--config` |
+| `--local` | false | Local mode: run the check on this host itself with no SSH; requires root (run under `sudo` or a root systemd timer); still needs `--config <host.yaml>`. Rejects `--host`/`--hosts`/`--user`/`--ssh-opts`/`--ask-sudo-pass`/`--apply`. Same exit codes as remote mode; not-root or missing `oscap` fail preflight (exit 1 / exit 5). |
 | `--jobs` | `5` | Max concurrent hosts in fleet mode |
-| `--config`/`-c` | (required) | Path to `host.yaml` (single-host mode only) |
+| `--config`/`-c` | (required) | Path to `host.yaml` (single-host and local modes) |
 | `--user` | `cfg.user.admin.name` | SSH login user |
 | `--ssh-opts` | `""` | Extra args appended to every `ssh`/`scp` call (shell-quoted) |
 | `--format` | `table` | Output format: `table` or `json` |
@@ -1265,8 +1266,12 @@ a remediation pass.
 Originally single-host, on-demand only. Captured-baseline mode (#11),
 tailoring drift detection (#12), exception auto-suggest (#14), password
 sudo (#16), and fleet / batch mode (#10) have all shipped in subsequent
-releases. Remaining open items: on-host self-check timers, history
-tracking, and HTML report generation.
+releases. The on-host self-check *primitive* now also exists — `--local`
+runs the check on the host with no workstation (see "Local mode" above).
+The remaining piece of the on-host story is out of scope for now: a
+shipped systemd timer unit and install-time `host.yaml` caching so the
+check runs unattended (tracked on #13). History tracking and HTML report
+generation are also still open.
 
 ---
 
@@ -1482,6 +1487,34 @@ them to a `--host` invocation instead.
 hosts file is parsed and every referenced config is validated. Any
 authoring error (malformed line, missing config, schema failure) aborts
 with a clear per-line error listing and exit code 1.
+
+#### Local mode
+
+Run the compliance check on the host itself — no workstation, no SSH —
+with `--local`. This is for on-host or continuous verification: a
+cron/systemd job on the deployed box that re-runs oscap against the
+`host.yaml` living on that same host, so you can watch for drift without
+reaching in from a workstation. It requires root, since oscap needs to
+read the live system state:
+
+```bash
+sudo ks-gen verify --local --config /path/to/host.yaml
+```
+
+Local mode reuses every read-only flag from single-host remote mode —
+`--no-drift`, `--check-tailoring`, `--baseline`, `--capture-baseline`,
+`--suggest-exceptions`, `--arf-out`/`--keep-arf`, `--format`, and
+`--timeout` all behave identically — and reports the same table/JSON
+output and the same exit codes (`0`/`5`/`6`/`7`/`8`). Because there is no
+SSH transport, the connection flags (`--host`, `--hosts`, `--user`,
+`--ssh-opts`, `--ask-sudo-pass`) are rejected, and a not-root invocation
+or a missing `oscap` fails at preflight (exit `1` / exit `5`).
+
+`--apply` is intentionally **not** available in local mode. Mutating
+`host.yaml` stays a workstation operation — the workstation remains the
+source of truth for the config, and the host's copy is a deployed
+artifact. Use `--suggest-exceptions` locally to print candidate entries,
+then apply them from the workstation with `ks-gen verify --host … --apply`.
 
 ### 8.6 Writing a ks-gen ISO to USB on Windows (Rufus)
 

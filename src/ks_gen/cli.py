@@ -24,6 +24,7 @@ from ks_gen.verify.report import (
 )
 from ks_gen.verify.ssh import check_tools
 from ks_gen.verify.suggest import AppendResult, apply_to_host_yaml, build_suggestions
+from ks_gen.verify.transport import LocalTransport
 from ks_gen.wizard import WizardError, run_wizard, write_initial
 from ks_gen.writer import build_bundle, write_bundle
 
@@ -241,6 +242,92 @@ def _run_fleet_cmd(
     raise typer.Exit(code=fleet.aggregate_exit_code)
 
 
+def _run_local_cmd(
+    *,
+    config: Path | None,
+    format_: str,
+    no_drift: bool,
+    check_tailoring: bool,
+    baseline: Path | None,
+    capture_baseline: Path | None,
+    suggest_exceptions: bool,
+    arf_out: Path | None,
+    keep_arf: bool,
+    timeout: int,
+    rejected: dict[str, bool],
+) -> None:
+    bad = [flag for flag, present in rejected.items() if present]
+    if bad:
+        typer.echo(f"ks-gen verify: {', '.join(sorted(bad))} is not valid with --local", err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE))
+    if config is None:
+        typer.echo("ks-gen verify: --config is required with --local", err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE))
+    if baseline is not None and capture_baseline is not None:
+        typer.echo(
+            "ks-gen verify: --baseline and --capture-baseline are mutually exclusive", err=True
+        )
+        raise typer.Exit(code=int(ExitCode.USAGE))
+
+    try:
+        cfg = load_host_config(config, sets=[])
+    except ConfigError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=int(e.exit_code)) from None
+
+    # Preflight (root + oscap) up front so tool/root errors get a clean,
+    # non-transport message + correct exit code (mirrors check_tools() in the
+    # remote path). collect_arfs calls preflight again — idempotent.
+    try:
+        LocalTransport().preflight()
+    except (ConfigError, VerifyError) as e:
+        typer.echo(f"ks-gen verify: {e}", err=True)
+        raise typer.Exit(code=int(e.exit_code)) from None
+
+    def _do(workdir: Path) -> None:
+        try:
+            report = run_verify(
+                cfg=cfg,
+                host="",
+                user="",
+                workdir=workdir,
+                local=True,
+                no_drift=no_drift,
+                check_tailoring=check_tailoring,
+                baseline_path=baseline,
+                capture_to=capture_baseline,
+                timeout=timeout,
+            )
+        except ConfigError as e:
+            typer.echo(f"ks-gen verify: {e}", err=True)
+            raise typer.Exit(code=int(e.exit_code)) from None
+        except VerifyError as e:
+            label = error_label(e)
+            typer.echo(f"ks-gen verify: transport failure: {label}: {e}", err=True)
+            raise typer.Exit(code=int(e.exit_code)) from None
+
+        suggestions = build_suggestions(report) if suggest_exceptions else None
+        if format_ == "json":
+            typer.echo(render_json(report, suggestions=suggestions))
+        else:
+            typer.echo(render_table(report, suggestions=suggestions))
+
+        if not report.is_clean:
+            raise typer.Exit(code=int(ExitCode.VERIFY_FAIL))
+        if report.has_tailoring_drift:
+            raise typer.Exit(code=int(ExitCode.TAILORING_DRIFT))
+
+    if arf_out is not None or keep_arf:
+        target = arf_out or Path(tempfile.mkdtemp(prefix="ksgen-verify-"))
+        target.mkdir(parents=True, exist_ok=True)
+        if arf_out is None:
+            typer.echo(f"ks-gen verify: ARFs persisted under {target}", err=True)
+        _do(target)
+    else:
+        with tempfile.TemporaryDirectory(prefix="ksgen-verify-") as tmpdir:
+            _do(Path(tmpdir))
+
+
 @app.command(
     name="verify",
     help="Re-run oscap on a deployed host and reconcile against host.yaml.",
@@ -260,6 +347,14 @@ def verify_cmd(
     ),
     jobs: int = typer.Option(
         5, "--jobs", min=1, help="Max concurrent hosts in fleet mode (default 5)."
+    ),
+    local: bool = typer.Option(
+        False,
+        "--local",
+        help=(
+            "Run the check on THIS host (no SSH). Requires root and --config. "
+            "Rejects --host/--hosts/--user/--ssh-opts/--ask-sudo-pass/--apply."
+        ),
     ),
     config: Path | None = typer.Option(  # noqa: B008
         None, "--config", "-c", exists=True, dir_okay=False, readable=True
@@ -350,8 +445,8 @@ def verify_cmd(
         typer.echo(f"--format must be 'table' or 'json', got: {format_!r}", err=True)
         raise typer.Exit(code=int(ExitCode.USAGE))
 
-    if (host is None) == (hosts is None):
-        typer.echo("ks-gen verify: exactly one of --host / --hosts is required", err=True)
+    if sum([host is not None, hosts is not None, local]) != 1:
+        typer.echo("ks-gen verify: exactly one of --host / --hosts / --local is required", err=True)
         raise typer.Exit(code=int(ExitCode.USAGE))
 
     if hosts is not None:
@@ -374,6 +469,28 @@ def verify_cmd(
                 "--capture-baseline": capture_baseline is not None,
                 "--arf-out": arf_out is not None,
                 "--keep-arf": keep_arf,
+            },
+        )
+        return
+
+    if local:
+        _run_local_cmd(
+            config=config,
+            format_=format_,
+            no_drift=no_drift,
+            check_tailoring=check_tailoring,
+            baseline=baseline,
+            capture_baseline=capture_baseline,
+            suggest_exceptions=suggest_exceptions,
+            arf_out=arf_out,
+            keep_arf=keep_arf,
+            timeout=timeout,
+            rejected={
+                "--user": user is not None,
+                "--ssh-opts": bool(ssh_opts),
+                "--ask-sudo-pass": ask_sudo_pass,
+                "--apply": apply,
+                "--allow-regression": allow_regression,
             },
         )
         return

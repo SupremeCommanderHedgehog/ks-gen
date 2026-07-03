@@ -4,10 +4,9 @@ import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
 
 from ks_gen.verify.auth import SudoAuth, sudo_command
-from ks_gen.verify.errors import SshConnectError, ToolMissingError
+from ks_gen.verify.errors import SshConnectError, SudoPromptError, ToolMissingError
 
 
 @dataclass(frozen=True)
@@ -30,7 +29,7 @@ def _first_stderr_line(stderr: str) -> str:
 
 
 def _ssh_argv(host: str, user: str, remote_cmd: str, extra_opts: list[str] | None) -> list[str]:
-    """Build the ssh argv list shared by ssh_exec and sudo_pull."""
+    """Build the ssh argv list shared by ssh_exec and sudo_read."""
     argv: list[str] = ["ssh", "-o", "BatchMode=yes"]
     if extra_opts:
         argv.extend(extra_opts)
@@ -70,21 +69,55 @@ def ssh_exec(
     return SshResult(stdout=proc.stdout, stderr=proc.stderr, exit_code=proc.returncode)
 
 
-def sudo_pull(
+def _sudo_ssh(
+    host: str,
+    user: str,
+    cmd: str,
+    *,
+    auth: SudoAuth,
+    ssh_extra_opts: list[str],
+    timeout: float | None = None,
+) -> SshResult:
+    """Run `cmd` under sudo, feeding the password on stdin in password mode."""
+    remote_cmd, stdin_input = sudo_command(auth, cmd)
+    return ssh_exec(
+        host,
+        user,
+        remote_cmd,
+        extra_opts=ssh_extra_opts,
+        stdin_input=stdin_input,
+        timeout=timeout,
+    )
+
+
+def probe_sudo(host: str, user: str, *, sudo_auth: SudoAuth, ssh_extra_opts: list[str]) -> None:
+    result = _sudo_ssh(host, user, "true", auth=sudo_auth, ssh_extra_opts=ssh_extra_opts)
+    if result.exit_code != 0:
+        if sudo_auth.is_password:
+            raise SudoPromptError(
+                f"sudo failed (exit {result.exit_code}) on {host} as {user}: "
+                f"wrong password or user not in sudoers"
+            )
+        raise SudoPromptError(
+            f"sudo -n true failed (exit {result.exit_code}) on {host} as {user}: "
+            f"passwordless sudo is required"
+        )
+
+
+def sudo_read(
     host: str,
     user: str,
     remote_path: str,
-    local_path: Path,
     *,
     auth: SudoAuth,
     extra_opts: list[str] | None = None,
     timeout: float | None = None,
-) -> None:
-    """Retrieve a root-owned remote file via `sudo cat`, byte-for-byte.
+) -> bytes:
+    """Return the raw bytes of a root-owned remote file via `sudo cat`.
 
-    Runs the transfer in binary mode (no text decoding) so the local copy is
-    an exact byte image of the on-host file — ARFs/tailoring may contain
-    non-ASCII and must not be transcoded through the operator's locale codec.
+    Operates in binary mode (no text decoding) so the result is an exact byte
+    image of the on-host file — ARFs/tailoring may contain non-ASCII and must
+    not be transcoded through the operator's locale codec.
     """
     remote_cmd, stdin_text = sudo_command(auth, f"cat {shlex.quote(remote_path)}")
     argv = _ssh_argv(host, user, remote_cmd, extra_opts)
@@ -102,4 +135,4 @@ def sudo_pull(
         raise SshConnectError(
             f"sudo cat {remote_path} exit {proc.returncode}: {_first_stderr_line(stderr_text)}"
         )
-    local_path.write_bytes(proc.stdout)
+    return proc.stdout

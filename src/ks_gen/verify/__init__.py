@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import getpass
+import socket
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,6 +21,7 @@ from ks_gen.verify.tailoring_drift import (
     compare_tailorings,
     parse_tailoring_xml,
 )
+from ks_gen.verify.transport import LocalTransport, SshTransport, Transport
 from ks_gen.writer import render_tailoring
 
 
@@ -35,6 +38,7 @@ def run_verify(
     ssh_extra_opts: list[str] | None = None,
     timeout: int = 600,
     sudo_auth: SudoAuth = PASSWORDLESS,
+    local: bool = False,
 ) -> VerifyReport:
     """Re-run oscap on `host` and reconcile against `cfg`'s exception set.
 
@@ -88,6 +92,9 @@ def run_verify(
         sudo_auth: credential controlling how remote commands elevate.
             Defaults to passwordless (`sudo -n`); a password-mode `SudoAuth`
             runs `sudo -S` and feeds the password over stdin.
+        local: run the check on THIS host via LocalTransport (requires root);
+            the passed host/user are ignored and re-derived from the local
+            machine (socket.gethostname()/getpass.getuser()).
         timeout: oscap-run timeout in seconds (default 600). The ssh
             transport calls themselves are uncapped.
 
@@ -123,7 +130,17 @@ def run_verify(
             ExitCode.USAGE,
         )
 
-    extra_opts = ssh_extra_opts or []
+    transport: Transport
+    if local:
+        transport = LocalTransport()
+        # NB: derived before preflight; on a root shell getpass.getuser() always resolves.
+        host = socket.gethostname()
+        user = getpass.getuser()
+    else:
+        extra_opts = ssh_extra_opts or []
+        transport = SshTransport(
+            host=host, user=user, ssh_extra_opts=extra_opts, sudo_auth=sudo_auth
+        )
 
     # Load baseline first (fail fast on missing/malformed before any SSH).
     baseline_loaded = read_baseline(baseline_path) if baseline_path is not None else None
@@ -131,13 +148,7 @@ def run_verify(
 
     tailoring_drift = None
     if check_tailoring:
-        deployed_xml = collect_deployed_tailoring(
-            host=host,
-            user=user,
-            workdir=workdir,
-            ssh_extra_opts=extra_opts,
-            sudo_auth=sudo_auth,
-        )
+        deployed_xml = collect_deployed_tailoring(transport=transport, workdir=workdir)
         expected_xml = render_tailoring(cfg)
         try:
             parsed_deployed = parse_tailoring_xml(deployed_xml)
@@ -156,13 +167,10 @@ def run_verify(
     expected = expected_failure_rule_ids(cfg)
     arfs = collect_arfs(
         cfg=cfg,
-        host=host,
-        user=user,
+        transport=transport,
         workdir=workdir,
         no_drift=effective_no_drift,
-        ssh_extra_opts=extra_opts,
         timeout=timeout,
-        sudo_auth=sudo_auth,
     )
     current = parse_arf(arfs.current_text)
 

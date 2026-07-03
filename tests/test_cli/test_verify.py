@@ -646,3 +646,79 @@ def test_verify_hosts_fails_exit_6(tmp_path: Path) -> None:
     ):
         result = runner.invoke(app, ["verify", "--hosts", str(hosts)])
     assert result.exit_code == int(ExitCode.VERIFY_FAIL)
+
+
+def test_verify_local_happy_path(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_verify(**kwargs: object) -> VerifyReport:
+        captured.update(kwargs)
+        return _clean_report()
+
+    with (
+        patch("ks_gen.cli.LocalTransport.preflight"),
+        patch("ks_gen.cli.run_verify", side_effect=fake_run_verify),
+    ):
+        result = runner.invoke(app, ["verify", "--local", "--config", str(cfg)])
+    assert result.exit_code == 0, result.output
+    assert captured["local"] is True
+
+
+def test_verify_local_requires_config() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["verify", "--local"])
+    assert result.exit_code == int(ExitCode.USAGE)
+    assert "--config is required with --local" in result.output
+
+
+def test_verify_local_rejects_ssh_flags(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(app, ["verify", "--local", "--config", str(cfg), "--user", "bob"])
+    assert result.exit_code == int(ExitCode.USAGE)
+    assert "--user" in result.output
+    assert "not valid with --local" in result.output
+
+
+def test_verify_local_rejects_apply(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(app, ["verify", "--local", "--config", str(cfg), "--apply"])
+    assert result.exit_code == int(ExitCode.USAGE)
+    assert "--apply" in result.output
+
+
+def test_verify_local_rejects_allow_regression(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(app, ["verify", "--local", "--config", str(cfg), "--allow-regression"])
+    assert result.exit_code == int(ExitCode.USAGE)
+    assert "--allow-regression" in result.output
+    assert "not valid with --local" in result.output
+
+
+def test_verify_rejects_local_with_host(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(app, ["verify", "--local", "--host", "1.2.3.4", "--config", str(cfg)])
+    assert result.exit_code == int(ExitCode.USAGE)
+    assert "exactly one of --host / --hosts / --local" in result.output
+
+
+def test_verify_local_non_root_preflight_errors(tmp_path: Path) -> None:
+    from ks_gen.loader import ConfigError
+
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    with patch(
+        "ks_gen.cli.LocalTransport.preflight",
+        side_effect=ConfigError(
+            "verify --local must run as root (EUID 0); re-run under sudo",
+            ExitCode.USAGE,
+        ),
+    ):
+        result = runner.invoke(app, ["verify", "--local", "--config", str(cfg)])
+    assert result.exit_code == int(ExitCode.USAGE)
+    assert "must run as root" in result.output

@@ -34,7 +34,8 @@ class ArfParseError(VerifyError):
 
 
 class ToolMissingError(VerifyError):
-    """system ssh not on PATH."""
+    """A required system tool is not on PATH (ssh in remote mode; oscap or the
+    invoked binary in local mode)."""
 
     exit_code: ExitCode = ExitCode.TOOL_MISSING
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import getpass
+import socket
 from pathlib import Path
 from unittest.mock import patch
 
@@ -8,6 +10,7 @@ from ks_gen.rules._types import TailoringOp
 from ks_gen.verify import run_verify
 from ks_gen.verify.auth import SudoAuth
 from ks_gen.verify.remote import CollectedArfs
+from ks_gen.verify.transport import LocalTransport
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -458,13 +461,42 @@ def test_run_verify_baseline_path_composes_with_check_tailoring(tmp_path: Path) 
     assert report.has_tailoring_drift is True
 
 
+def test_run_verify_local_uses_local_transport_and_local_identity(tmp_path: Path) -> None:
+    current = (FIXTURES / "arf-clean.xml").read_text(encoding="utf-8")
+    with patch(
+        "ks_gen.verify.collect_arfs",
+        return_value=CollectedArfs(current_text=current, install_text=None),
+    ):
+        report = run_verify(
+            cfg=_cfg(),
+            host="",
+            user="",
+            workdir=tmp_path,
+            no_drift=True,
+            local=True,
+        )
+    assert report.host == socket.gethostname()
+    assert report.user == getpass.getuser()
+    assert report.is_clean is True
+
+
+def test_run_verify_local_passes_local_transport_to_collect_arfs(tmp_path: Path) -> None:
+    current = (FIXTURES / "arf-clean.xml").read_text(encoding="utf-8")
+    with patch(
+        "ks_gen.verify.collect_arfs",
+        return_value=CollectedArfs(current_text=current, install_text=None),
+    ) as m:
+        run_verify(cfg=_cfg(), host="", user="", workdir=tmp_path, no_drift=True, local=True)
+    assert isinstance(m.call_args.kwargs["transport"], LocalTransport)
+
+
 def test_run_verify_threads_sudo_auth_to_collect_arfs(tmp_path: Path) -> None:
     current = (FIXTURES / "arf-mixed.xml").read_text(encoding="utf-8")
     auth = SudoAuth(password="pw")
     seen: dict[str, object] = {}
 
     def fake_collect(**kw: object) -> CollectedArfs:
-        seen["sudo_auth"] = kw["sudo_auth"]
+        seen["transport"] = kw["transport"]
         return CollectedArfs(current_text=current, install_text=None)
 
     with patch("ks_gen.verify.collect_arfs", side_effect=fake_collect):
@@ -479,4 +511,5 @@ def test_run_verify_threads_sudo_auth_to_collect_arfs(tmp_path: Path) -> None:
             sudo_auth=auth,
         )
 
-    assert seen["sudo_auth"] is auth
+    # sudo_auth now flows to the collection layer inside the SshTransport.
+    assert seen["transport"].sudo_auth is auth
