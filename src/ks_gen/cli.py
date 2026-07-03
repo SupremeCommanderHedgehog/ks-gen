@@ -16,6 +16,8 @@ from ks_gen.verify import run_verify
 from ks_gen.verify.auth import resolve_sudo_auth
 from ks_gen.verify.errors import VerifyError, error_label
 from ks_gen.verify.fleet import FleetOptions, make_verify_one, parse_hosts_file, run_fleet
+from ks_gen.verify.html import render_fleet_html, render_html
+from ks_gen.verify.reconcile import VerifyReport
 from ks_gen.verify.report import (
     render_fleet_json,
     render_fleet_table,
@@ -23,7 +25,7 @@ from ks_gen.verify.report import (
     render_table,
 )
 from ks_gen.verify.ssh import check_tools
-from ks_gen.verify.suggest import AppendResult, apply_to_host_yaml, build_suggestions
+from ks_gen.verify.suggest import AppendResult, Suggestion, apply_to_host_yaml, build_suggestions
 from ks_gen.verify.transport import LocalTransport
 from ks_gen.wizard import WizardError, run_wizard, write_initial
 from ks_gen.writer import build_bundle, write_bundle
@@ -187,6 +189,45 @@ def _echo_apply_summary(result: AppendResult) -> None:
         typer.echo("ks-gen verify: nothing to apply", err=True)
 
 
+def _write_html_report(html_out: Path, html_str: str) -> None:
+    """Write the HTML report file, converting any OS error into a clean
+    USAGE exit instead of a raw traceback. Callers invoke this before their
+    own exit-code raise so the artifact still lands on a failing run.
+    """
+    try:
+        html_out.write_text(html_str, encoding="utf-8")
+    except OSError as e:
+        typer.echo(f"ks-gen verify: cannot write --html-out {html_out}: {e}", err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE)) from e
+
+
+def _emit_single_host_report(
+    *,
+    report: VerifyReport,
+    suggestions: list[Suggestion] | None,
+    format_: str,
+    html_out: Path | None,
+) -> None:
+    """Render a single-host report to stdout per --format, and additionally
+    write the HTML file when --html-out is set. The file write happens here
+    (before the caller's exit-code raise) so the artifact lands on failing runs.
+    """
+    # Build the HTML once if either stdout OR the file needs it; this invariant
+    # guarantees html_str is non-None wherever it is consumed below.
+    html_str = None
+    if format_ == "html" or html_out is not None:
+        html_str = render_html(report, suggestions=suggestions)
+    if format_ == "html":
+        typer.echo(html_str)
+    elif format_ == "json":
+        typer.echo(render_json(report, suggestions=suggestions))
+    else:
+        typer.echo(render_table(report, suggestions=suggestions))
+    if html_out is not None:
+        assert html_str is not None
+        _write_html_report(html_out, html_str)
+
+
 def _run_fleet_cmd(
     *,
     hosts: Path,
@@ -194,6 +235,7 @@ def _run_fleet_cmd(
     user: str | None,
     ssh_opts: str,
     format_: str,
+    html_out: Path | None,
     no_drift: bool,
     check_tailoring: bool,
     timeout: int,
@@ -234,10 +276,18 @@ def _run_fleet_cmd(
     )
     fleet = run_fleet(specs, jobs=jobs, verify_one=make_verify_one(opts))
 
-    if format_ == "json":
+    html_str = None
+    if format_ == "html" or html_out is not None:
+        html_str = render_fleet_html(fleet, jobs=jobs)
+    if format_ == "html":
+        typer.echo(html_str)
+    elif format_ == "json":
         typer.echo(render_fleet_json(fleet))
     else:
         typer.echo(render_fleet_table(fleet, jobs=jobs))
+    if html_out is not None:
+        assert html_str is not None
+        _write_html_report(html_out, html_str)
 
     raise typer.Exit(code=fleet.aggregate_exit_code)
 
@@ -246,6 +296,7 @@ def _run_local_cmd(
     *,
     config: Path | None,
     format_: str,
+    html_out: Path | None,
     no_drift: bool,
     check_tailoring: bool,
     baseline: Path | None,
@@ -307,10 +358,12 @@ def _run_local_cmd(
             raise typer.Exit(code=int(e.exit_code)) from None
 
         suggestions = build_suggestions(report) if suggest_exceptions else None
-        if format_ == "json":
-            typer.echo(render_json(report, suggestions=suggestions))
-        else:
-            typer.echo(render_table(report, suggestions=suggestions))
+        _emit_single_host_report(
+            report=report,
+            suggestions=suggestions,
+            format_=format_,
+            html_out=html_out,
+        )
 
         if not report.is_clean:
             raise typer.Exit(code=int(ExitCode.VERIFY_FAIL))
@@ -367,12 +420,21 @@ def verify_cmd(
         "--ssh-opts",
         help="Extra args appended to every ssh invocation (shell-quoted).",
     ),
-    format_: str = typer.Option("table", "--format", help="Output format: table | json."),
+    format_: str = typer.Option("table", "--format", help="Output format: table | json | html."),
     arf_out: Path | None = typer.Option(  # noqa: B008
         None,
         "--arf-out",
         file_okay=False,
         help="Persist pulled ARFs in this directory.",
+    ),
+    html_out: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--html-out",
+        dir_okay=False,
+        help=(
+            "Also write a self-contained HTML report to this file "
+            "(parent directory must already exist)."
+        ),
     ),
     keep_arf: bool = typer.Option(
         False,
@@ -441,8 +503,15 @@ def verify_cmd(
         ),
     ),
 ) -> None:
-    if format_ not in ("table", "json"):
-        typer.echo(f"--format must be 'table' or 'json', got: {format_!r}", err=True)
+    if format_ not in ("table", "json", "html"):
+        typer.echo(f"--format must be 'table', 'json', or 'html', got: {format_!r}", err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE))
+
+    if html_out is not None and not html_out.parent.is_dir():
+        typer.echo(
+            f"ks-gen verify: --html-out parent is not an existing directory: {html_out.parent}",
+            err=True,
+        )
         raise typer.Exit(code=int(ExitCode.USAGE))
 
     if sum([host is not None, hosts is not None, local]) != 1:
@@ -456,6 +525,7 @@ def verify_cmd(
             user=user,
             ssh_opts=ssh_opts,
             format_=format_,
+            html_out=html_out,
             no_drift=no_drift,
             check_tailoring=check_tailoring,
             timeout=timeout,
@@ -477,6 +547,7 @@ def verify_cmd(
         _run_local_cmd(
             config=config,
             format_=format_,
+            html_out=html_out,
             no_drift=no_drift,
             check_tailoring=check_tailoring,
             baseline=baseline,
@@ -570,10 +641,12 @@ def verify_cmd(
 
         want_suggestions = suggest_exceptions or apply
         suggestions = build_suggestions(report) if want_suggestions else None
-        if format_ == "json":
-            typer.echo(render_json(report, suggestions=suggestions))
-        else:
-            typer.echo(render_table(report, suggestions=suggestions))
+        _emit_single_host_report(
+            report=report,
+            suggestions=suggestions,
+            format_=format_,
+            html_out=html_out,
+        )
 
         # Note: `suggestions` here is guaranteed non-None when `apply` is set
         # (we built it above via `want_suggestions`). Use `is not None` rather

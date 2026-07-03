@@ -648,6 +648,50 @@ def test_verify_hosts_fails_exit_6(tmp_path: Path) -> None:
     assert result.exit_code == int(ExitCode.VERIFY_FAIL)
 
 
+def test_verify_fleet_format_html_stdout(tmp_path: Path) -> None:
+    from ks_gen.verify.fleet import FleetReport, HostOutcome
+
+    cfg = _write_cfg(tmp_path)
+    hosts = _write_hosts(tmp_path, cfg)
+
+    def fake_fleet(specs, *, jobs, verify_one):
+        outcomes = tuple(HostOutcome(spec=s, report=_clean_report(), error=None) for s in specs)
+        return FleetReport(outcomes=outcomes)
+
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.run_fleet", side_effect=fake_fleet),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(app, ["verify", "--hosts", str(hosts), "--format", "html"])
+    assert result.exit_code == 0
+    assert "<!DOCTYPE html>" in result.output
+    assert "fleet —" in result.output
+
+
+def test_verify_fleet_html_out_writes_file_stdout_stays_table(tmp_path: Path) -> None:
+    from ks_gen.verify.fleet import FleetReport, HostOutcome
+
+    cfg = _write_cfg(tmp_path)
+    hosts = _write_hosts(tmp_path, cfg)
+    out = tmp_path / "fleet-report.html"
+
+    def fake_fleet(specs, *, jobs, verify_one):
+        outcomes = tuple(HostOutcome(spec=s, report=_clean_report(), error=None) for s in specs)
+        return FleetReport(outcomes=outcomes)
+
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.run_fleet", side_effect=fake_fleet),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(app, ["verify", "--hosts", str(hosts), "--html-out", str(out)])
+    assert result.exit_code == 0
+    assert out.exists()
+    assert out.read_text(encoding="utf-8").startswith("<!DOCTYPE html>")
+    assert "<!DOCTYPE html>" not in result.output
+
+
 def test_verify_local_happy_path(tmp_path: Path) -> None:
     cfg = _write_cfg(tmp_path)
     runner = CliRunner()
@@ -722,3 +766,89 @@ def test_verify_local_non_root_preflight_errors(tmp_path: Path) -> None:
         result = runner.invoke(app, ["verify", "--local", "--config", str(cfg)])
     assert result.exit_code == int(ExitCode.USAGE)
     assert "must run as root" in result.output
+
+
+def test_verify_format_html_to_stdout(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.run_verify", return_value=_clean_report()),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(
+            app, ["verify", "--host", "h1", "--config", str(cfg), "--format", "html"]
+        )
+    assert result.exit_code == 0
+    assert "<!DOCTYPE html>" in result.output
+    assert "CLEAN" in result.output
+
+
+def test_verify_html_out_writes_file_and_stdout_stays_table(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    out = tmp_path / "report.html"
+    with (
+        patch("ks_gen.cli.run_verify", return_value=_clean_report()),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(
+            app, ["verify", "--host", "h1", "--config", str(cfg), "--html-out", str(out)]
+        )
+    assert result.exit_code == 0
+    assert out.exists()
+    assert out.read_text(encoding="utf-8").startswith("<!DOCTYPE html>")
+    assert "<!DOCTYPE html>" not in result.output
+
+
+def test_verify_html_out_written_even_on_failing_run(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    out = tmp_path / "report.html"
+    with (
+        patch("ks_gen.cli.run_verify", return_value=_failing_report()),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(
+            app, ["verify", "--host", "h1", "--config", str(cfg), "--html-out", str(out)]
+        )
+    # non-clean report => exit 6, but the HTML artifact must still be written
+    assert result.exit_code == int(ExitCode.VERIFY_FAIL)
+    assert out.exists()
+    assert out.read_text(encoding="utf-8").startswith("<!DOCTYPE html>")
+
+
+def test_verify_html_out_bad_parent_dir_is_usage_error(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    out = tmp_path / "nope" / "report.html"
+    result = runner.invoke(
+        app, ["verify", "--host", "h1", "--config", str(cfg), "--html-out", str(out)]
+    )
+    assert result.exit_code == int(ExitCode.USAGE)
+    assert "html-out" in result.output
+
+
+def test_verify_html_out_parent_is_file_is_usage_error(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    parent = tmp_path / "afile"
+    parent.write_text("x", encoding="utf-8")
+    out = parent / "out.html"  # parent is a regular file, not a dir
+    runner = CliRunner()
+    result = runner.invoke(
+        app, ["verify", "--host", "h1", "--config", str(cfg), "--html-out", str(out)]
+    )
+    assert result.exit_code == int(ExitCode.USAGE)
+    assert "html-out" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_verify_local_allows_format_html(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.run_verify", return_value=_clean_report()),
+        patch("ks_gen.cli.LocalTransport.preflight"),
+    ):
+        result = runner.invoke(app, ["verify", "--local", "--config", str(cfg), "--format", "html"])
+    assert result.exit_code == 0
+    assert "<!DOCTYPE html>" in result.output

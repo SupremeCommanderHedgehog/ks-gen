@@ -1185,9 +1185,10 @@ All flags:
 | `--config`/`-c` | (required) | Path to `host.yaml` (single-host and local modes) |
 | `--user` | `cfg.user.admin.name` | SSH login user |
 | `--ssh-opts` | `""` | Extra args appended to every `ssh`/`scp` call (shell-quoted) |
-| `--format` | `table` | Output format: `table` or `json` |
+| `--format` | `table` | Output format: `table`, `json`, or `html` |
 | `--arf-out` | (none) | Persist pulled ARFs to this directory |
 | `--keep-arf` | false | Persist pulled ARFs to a new temp directory (path is echoed) |
+| `--html-out` | (none) | Also write a self-contained HTML report to this file (parent dir must exist) |
 | `--no-drift` | false | Skip the install-time ARF pull; compliance-only |
 | `--timeout` | 600 | oscap run timeout in seconds |
 
@@ -1225,6 +1226,15 @@ verify host=h1.example.com user=ops at=2026-06-07T12:00:00Z
 Column widths are dynamic. The `EXP` column is `yes` when the rule
 appears in the host's declared exceptions (so a failure is allowed),
 `no` otherwise. `--format json` emits the same data as a JSON document.
+
+**HTML output.** `verify --format html` writes a self-contained HTML
+report (inline styles, no external assets) to stdout — redirect it to a
+file (`> report.html`). `--html-out <file>` instead writes the HTML to a
+file while stdout keeps whatever `--format` selects, so you can see the
+table on the console and archive the HTML at once. Both work in single,
+`--local`, and `--hosts` (fleet) modes; in fleet mode the HTML is one page
+summarizing every host. The file is written even when the run exits
+non-zero (failures or drift), since it is a report artifact, not a gate.
 
 #### Drift comparison
 
