@@ -567,3 +567,82 @@ def test_verify_default_is_passwordless(tmp_path: Path, monkeypatch: pytest.Monk
         result = runner.invoke(app, ["verify", "--host", "h1", "--config", str(cfg)])
     assert result.exit_code == 0, result.output
     assert captured["sudo_auth"].is_password is False
+
+
+def _write_hosts(tmp_path: Path, cfg: Path) -> Path:
+    hosts = tmp_path / "hosts.txt"
+    hosts.write_text(f"h1 {cfg.name}\nh2 {cfg.name}\n", encoding="utf-8")
+    return hosts
+
+
+def test_verify_requires_host_or_hosts(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(app, ["verify", "--config", str(cfg)])
+    assert result.exit_code == int(ExitCode.USAGE)
+    assert "exactly one of --host / --hosts" in result.output
+
+
+def test_verify_rejects_both_host_and_hosts(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    hosts = _write_hosts(tmp_path, cfg)
+    runner = CliRunner()
+    result = runner.invoke(app, ["verify", "--host", "h1", "--hosts", str(hosts)])
+    assert result.exit_code == int(ExitCode.USAGE)
+
+
+def test_verify_rejects_config_with_hosts(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    hosts = _write_hosts(tmp_path, cfg)
+    runner = CliRunner()
+    result = runner.invoke(app, ["verify", "--hosts", str(hosts), "--config", str(cfg)])
+    assert result.exit_code == int(ExitCode.USAGE)
+    assert "--config is not valid with --hosts" in result.output
+
+
+def test_verify_rejects_apply_with_hosts(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    hosts = _write_hosts(tmp_path, cfg)
+    runner = CliRunner()
+    result = runner.invoke(app, ["verify", "--hosts", str(hosts), "--apply"])
+    assert result.exit_code == int(ExitCode.USAGE)
+    assert "not valid with --hosts" in result.output
+
+
+def test_verify_hosts_happy_path_exit_code(tmp_path: Path) -> None:
+    from ks_gen.verify.fleet import FleetReport, HostOutcome
+
+    cfg = _write_cfg(tmp_path)
+    hosts = _write_hosts(tmp_path, cfg)
+
+    def fake_fleet(specs, *, jobs, verify_one):
+        outcomes = tuple(HostOutcome(spec=s, report=_clean_report(), error=None) for s in specs)
+        return FleetReport(outcomes=outcomes)
+
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.run_fleet", side_effect=fake_fleet),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(app, ["verify", "--hosts", str(hosts)])
+    assert result.exit_code == 0, result.output
+    assert "fleet: 2 hosts" in result.output
+
+
+def test_verify_hosts_fails_exit_6(tmp_path: Path) -> None:
+    from ks_gen.verify.fleet import FleetReport, HostOutcome
+
+    cfg = _write_cfg(tmp_path)
+    hosts = _write_hosts(tmp_path, cfg)
+
+    def fake_fleet(specs, *, jobs, verify_one):
+        outcomes = tuple(HostOutcome(spec=s, report=_failing_report(), error=None) for s in specs)
+        return FleetReport(outcomes=outcomes)
+
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.run_fleet", side_effect=fake_fleet),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(app, ["verify", "--hosts", str(hosts)])
+    assert result.exit_code == int(ExitCode.VERIFY_FAIL)

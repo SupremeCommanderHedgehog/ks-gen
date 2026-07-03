@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 
+from ks_gen.verify.fleet import FleetReport, HostOutcome
 from ks_gen.verify.reconcile import VerifyReport
 from ks_gen.verify.suggest import Suggestion, render_yaml
 from ks_gen.verify.tailoring_drift import render_drift_section
@@ -92,7 +93,8 @@ def render_table(report: VerifyReport, *, suggestions: list[Suggestion] | None =
     return base + "\n" + suggestion_block
 
 
-def render_json(report: VerifyReport, *, suggestions: list[Suggestion] | None = None) -> str:
+def _report_payload(report: VerifyReport) -> dict[str, object]:
+    """The single-host JSON body, sans suggestions. Reused by fleet JSON."""
     payload: dict[str, object] = {
         "host": report.host,
         "user": report.user,
@@ -111,10 +113,6 @@ def render_json(report: VerifyReport, *, suggestions: list[Suggestion] | None = 
             for r in report.rows
         ],
     }
-    if suggestions is not None:
-        payload["suggested_exceptions"] = [
-            {"category": s.category, "decl": s.decl.model_dump()} for s in suggestions
-        ]
     drift = report.tailoring_drift
     if drift is not None:
         payload["tailoring_drift"] = {
@@ -145,4 +143,70 @@ def render_json(report: VerifyReport, *, suggestions: list[Suggestion] | None = 
             "captured_utc": baseline.captured_utc,
             "orphans": list(baseline.orphans),
         }
+    return payload
+
+
+def render_json(report: VerifyReport, *, suggestions: list[Suggestion] | None = None) -> str:
+    payload = _report_payload(report)
+    if suggestions is not None:
+        payload["suggested_exceptions"] = [
+            {"category": s.category, "decl": s.decl.model_dump()} for s in suggestions
+        ]
+    return json.dumps(payload, indent=2)
+
+
+def _outcome_summary(outcome: HostOutcome) -> str:
+    if outcome.error is not None:
+        first = outcome.error.message.splitlines()[0] if outcome.error.message else ""
+        return f"{outcome.error.label}: {first}"
+    assert outcome.report is not None
+    counts = _summary(outcome.report)
+    nonzero = " ".join(f"{k}={v}" for k, v in counts.items() if v)
+    if outcome.status == "drift":
+        nonzero = (nonzero + " (tailoring drift)").strip()
+    return nonzero or "(no rows)"
+
+
+def render_fleet_table(fleet: FleetReport, *, jobs: int) -> str:
+    n = len(fleet.outcomes)
+    lines: list[str] = [f"fleet: {n} host{'s' if n != 1 else ''}  jobs={jobs}"]
+    host_w = max((len(o.spec.host) for o in fleet.outcomes), default=len("HOST"))
+    host_w = max(host_w, len("HOST"))
+    status_w = max((len(o.status) for o in fleet.outcomes), default=len("STATUS"))
+    status_w = max(status_w, len("STATUS"))
+    lines.append(f"  {'HOST':<{host_w}}  {'STATUS':<{status_w}}  SUMMARY")
+    for o in fleet.outcomes:
+        lines.append(f"  {o.spec.host:<{host_w}}  {o.status:<{status_w}}  {_outcome_summary(o)}")
+    lines.append("  " + "-" * 6)
+    counts = fleet.status_counts()
+    code = fleet.aggregate_exit_code
+    verdict = "CLEAN" if code == 0 else "FAILURES"
+    summary = " ".join(f"{k}={v}" for k, v in counts.items() if v)
+    lines.append(f"  summary: {summary} -> {verdict} (exit {code})")
+    return "\n".join(lines) + "\n"
+
+
+def render_fleet_json(fleet: FleetReport) -> str:
+    hosts: list[dict[str, object]] = []
+    for o in fleet.outcomes:
+        entry: dict[str, object] = {
+            "host": o.spec.host,
+            "user": o.user or o.spec.user,
+            "status": o.status,
+        }
+        if o.error is not None:
+            entry["error"] = {
+                "label": o.error.label,
+                "message": o.error.message,
+                "exit_code": o.error.exit_code,
+            }
+        else:
+            assert o.report is not None
+            entry["report"] = _report_payload(o.report)
+        hosts.append(entry)
+    payload = {
+        "hosts": hosts,
+        "summary": fleet.status_counts(),
+        "aggregate_exit_code": fleet.aggregate_exit_code,
+    }
     return json.dumps(payload, indent=2)

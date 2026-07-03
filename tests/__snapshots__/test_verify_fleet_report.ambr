@@ -1,0 +1,137 @@
+# serializer version: 1
+# name: test_render_fleet_json_snapshot
+  '''
+  {
+    "hosts": [
+      {
+        "host": "web01",
+        "user": null,
+        "status": "clean",
+        "report": {
+          "host": "web01",
+          "user": "ops",
+          "timestamp_utc": "2026-07-02T00:00:00Z",
+          "install_baseline_available": true,
+          "is_clean": true,
+          "summary": {
+            "clean": 1,
+            "expected_fail": 0,
+            "new_fail": 0,
+            "regression": 0,
+            "incomplete": 0
+          },
+          "rows": [
+            {
+              "rule_id": "r",
+              "current": "pass",
+              "install": "pass",
+              "expected": false,
+              "category": "clean"
+            }
+          ]
+        }
+      },
+      {
+        "host": "web02",
+        "user": null,
+        "status": "verify_fail",
+        "report": {
+          "host": "web02",
+          "user": "ops",
+          "timestamp_utc": "2026-07-02T00:00:00Z",
+          "install_baseline_available": true,
+          "is_clean": false,
+          "summary": {
+            "clean": 0,
+            "expected_fail": 0,
+            "new_fail": 1,
+            "regression": 1,
+            "incomplete": 0
+          },
+          "rows": [
+            {
+              "rule_id": "r1",
+              "current": "fail",
+              "install": "pass",
+              "expected": false,
+              "category": "regression"
+            },
+            {
+              "rule_id": "r2",
+              "current": "fail",
+              "install": null,
+              "expected": false,
+              "category": "new_fail"
+            }
+          ]
+        }
+      },
+      {
+        "host": "db01",
+        "user": null,
+        "status": "drift",
+        "report": {
+          "host": "db01",
+          "user": "ops",
+          "timestamp_utc": "2026-07-02T00:00:00Z",
+          "install_baseline_available": true,
+          "is_clean": true,
+          "summary": {
+            "clean": 1,
+            "expected_fail": 0,
+            "new_fail": 0,
+            "regression": 0,
+            "incomplete": 0
+          },
+          "rows": [
+            {
+              "rule_id": "r",
+              "current": "pass",
+              "install": "pass",
+              "expected": false,
+              "category": "clean"
+            }
+          ],
+          "tailoring_drift": {
+            "profile_id_expected": "p",
+            "profile_id_deployed": "q",
+            "added": [],
+            "removed": [],
+            "changed": []
+          }
+        }
+      },
+      {
+        "host": "bastion01",
+        "user": "root",
+        "status": "transport",
+        "error": {
+          "label": "sshconnect",
+          "message": "connection refused",
+          "exit_code": 7
+        }
+      }
+    ],
+    "summary": {
+      "clean": 1,
+      "verify_fail": 1,
+      "drift": 1,
+      "transport": 1
+    },
+    "aggregate_exit_code": 6
+  }
+  '''
+# ---
+# name: test_render_fleet_table_snapshot
+  '''
+  fleet: 4 hosts  jobs=5
+    HOST       STATUS       SUMMARY
+    web01      clean        clean=1
+    web02      verify_fail  new_fail=1 regression=1
+    db01       drift        clean=1 (tailoring drift)
+    bastion01  transport    sshconnect: connection refused
+    ------
+    summary: clean=1 verify_fail=1 drift=1 transport=1 -> FAILURES (exit 6)
+  
+  '''
+# ---

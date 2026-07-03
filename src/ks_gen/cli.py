@@ -14,8 +14,14 @@ from ks_gen.loader import ConfigError, ExitCode, load_host_config
 from ks_gen.registry import load_rules
 from ks_gen.verify import run_verify
 from ks_gen.verify.auth import resolve_sudo_auth
-from ks_gen.verify.errors import VerifyError
-from ks_gen.verify.report import render_json, render_table
+from ks_gen.verify.errors import VerifyError, error_label
+from ks_gen.verify.fleet import FleetOptions, make_verify_one, parse_hosts_file, run_fleet
+from ks_gen.verify.report import (
+    render_fleet_json,
+    render_fleet_table,
+    render_json,
+    render_table,
+)
 from ks_gen.verify.ssh import check_tools
 from ks_gen.verify.suggest import AppendResult, apply_to_host_yaml, build_suggestions
 from ks_gen.wizard import WizardError, run_wizard, write_initial
@@ -180,14 +186,83 @@ def _echo_apply_summary(result: AppendResult) -> None:
         typer.echo("ks-gen verify: nothing to apply", err=True)
 
 
+def _run_fleet_cmd(
+    *,
+    hosts: Path,
+    jobs: int,
+    user: str | None,
+    ssh_opts: str,
+    format_: str,
+    no_drift: bool,
+    check_tailoring: bool,
+    timeout: int,
+    ask_sudo_pass: bool,
+    rejected: dict[str, bool],
+) -> None:
+    bad = [flag for flag, present in rejected.items() if present]
+    if bad:
+        typer.echo(f"ks-gen verify: {', '.join(sorted(bad))} is not valid with --hosts", err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE))
+
+    try:
+        specs = parse_hosts_file(hosts)
+    except ConfigError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=int(e.exit_code)) from None
+
+    try:
+        check_tools()
+    except VerifyError as e:
+        typer.echo(f"ks-gen verify: {e}", err=True)
+        raise typer.Exit(code=int(e.exit_code)) from None
+
+    try:
+        sudo_auth = resolve_sudo_auth(ask_sudo_pass, user="fleet", host="fleet")
+    except ConfigError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=int(e.exit_code)) from None
+
+    extra_opts = shlex.split(ssh_opts) if ssh_opts else []
+    opts = FleetOptions(
+        no_drift=no_drift,
+        check_tailoring=check_tailoring,
+        ssh_extra_opts=extra_opts,
+        timeout=timeout,
+        sudo_auth=sudo_auth,
+        fleet_user=user,
+    )
+    fleet = run_fleet(specs, jobs=jobs, verify_one=make_verify_one(opts))
+
+    if format_ == "json":
+        typer.echo(render_fleet_json(fleet))
+    else:
+        typer.echo(render_fleet_table(fleet, jobs=jobs))
+
+    raise typer.Exit(code=fleet.aggregate_exit_code)
+
+
 @app.command(
     name="verify",
     help="Re-run oscap on a deployed host and reconcile against host.yaml.",
 )
 def verify_cmd(
-    host: str = typer.Option(..., "--host"),
-    config: Path = typer.Option(  # noqa: B008
-        ..., "--config", "-c", exists=True, dir_okay=False, readable=True
+    host: str | None = typer.Option(None, "--host"),
+    hosts: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--hosts",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help=(
+            "Fleet mode: file of '[user@]host  path/to/host.yaml' lines. "
+            "Mutually exclusive with --host/--config."
+        ),
+    ),
+    jobs: int = typer.Option(
+        5, "--jobs", min=1, help="Max concurrent hosts in fleet mode (default 5)."
+    ),
+    config: Path | None = typer.Option(  # noqa: B008
+        None, "--config", "-c", exists=True, dir_okay=False, readable=True
     ),
     user: str | None = typer.Option(
         None, "--user", help="SSH login user; defaults to cfg.user.admin.name."
@@ -275,6 +350,44 @@ def verify_cmd(
         typer.echo(f"--format must be 'table' or 'json', got: {format_!r}", err=True)
         raise typer.Exit(code=int(ExitCode.USAGE))
 
+    if (host is None) == (hosts is None):
+        typer.echo("ks-gen verify: exactly one of --host / --hosts is required", err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE))
+
+    if hosts is not None:
+        _run_fleet_cmd(
+            hosts=hosts,
+            jobs=jobs,
+            user=user,
+            ssh_opts=ssh_opts,
+            format_=format_,
+            no_drift=no_drift,
+            check_tailoring=check_tailoring,
+            timeout=timeout,
+            ask_sudo_pass=ask_sudo_pass,
+            rejected={
+                "--config": config is not None,
+                "--suggest-exceptions": suggest_exceptions,
+                "--apply": apply,
+                "--allow-regression": allow_regression,
+                "--baseline": baseline is not None,
+                "--capture-baseline": capture_baseline is not None,
+                "--arf-out": arf_out is not None,
+                "--keep-arf": keep_arf,
+            },
+        )
+        return
+
+    # ---- single-host mode from here on ----
+    if config is None:
+        typer.echo("ks-gen verify: --config is required with --host", err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE))
+
+    # Mode-selection above guarantees exactly one of --host/--hosts; after
+    # the fleet branch returned, host is not None.  One assertion here lets
+    # mypy propagate the narrowing through the rest of single-host code.
+    assert host is not None
+
     if allow_regression and not apply:
         typer.echo(
             "ks-gen verify: --allow-regression has no effect without --apply",
@@ -334,7 +447,7 @@ def verify_cmd(
             # Only transport-class errors reach this handler (ToolMissingError
             # was caught earlier). Keep the "transport failure:" prefix
             # consistent so operator scripts can grep for it.
-            label = type(e).__name__.removesuffix("Error").lower()
+            label = error_label(e)
             typer.echo(f"ks-gen verify: transport failure: {label}: {e}", err=True)
             raise typer.Exit(code=int(e.exit_code)) from None
 

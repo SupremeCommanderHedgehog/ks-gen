@@ -57,3 +57,8 @@ class TailoringParseError(VerifyError):
     or a ks-gen renderer regression."""
 
     exit_code: ExitCode = ExitCode.VERIFY_FAIL
+
+
+def error_label(exc: BaseException) -> str:
+    """Short lowercase tag for an error class, e.g. SshConnectError -> 'sshconnect'."""
+    return type(exc).__name__.removesuffix("Error").lower() or "error"

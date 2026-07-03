@@ -1178,8 +1178,10 @@ All flags:
 
 | Flag | Default | Purpose |
 |---|---|---|
-| `--host` | (required) | Target address or hostname |
-| `--config`/`-c` | (required) | Path to `host.yaml` |
+| `--host` | (none) | Target address or hostname (single-host mode; mutually exclusive with `--hosts`) |
+| `--hosts` | (none) | Fleet mode: path to a hosts file (`[user@]host  config.yaml` lines); mutually exclusive with `--host`/`--config` |
+| `--jobs` | `5` | Max concurrent hosts in fleet mode |
+| `--config`/`-c` | (required) | Path to `host.yaml` (single-host mode only) |
 | `--user` | `cfg.user.admin.name` | SSH login user |
 | `--ssh-opts` | `""` | Extra args appended to every `ssh`/`scp` call (shell-quoted) |
 | `--format` | `table` | Output format: `table` or `json` |
@@ -1260,10 +1262,11 @@ a remediation pass.
 
 #### Out of scope (v0.3)
 
-Single-host, on-demand only. Batch sweeps, captured-baseline mode,
-tailoring drift detection, on-host self-check timers, history tracking,
-HTML report generation, and exception auto-suggest are tracked
-separately as GitHub issues #10–#17.
+Originally single-host, on-demand only. Captured-baseline mode (#11),
+tailoring drift detection (#12), exception auto-suggest (#14), password
+sudo (#16), and fleet / batch mode (#10) have all shipped in subsequent
+releases. Remaining open items: on-host self-check timers, history
+tracking, and HTML report generation.
 
 ---
 
@@ -1425,6 +1428,60 @@ Use both together when appropriate.
 **JSON output.** `verify --format json --baseline <path>` adds a
 top-level `baseline` key with `path`, `captured_utc`, and `orphans`.
 The key is omitted when `--baseline` isn't set.
+
+#### Fleet mode
+
+Verify many hosts in one run with `--hosts <file>`. Each non-blank,
+non-`#` line names a host and its config, whitespace-separated:
+
+```
+# hosts.txt
+web01.example.com    configs/web.yaml
+web02.example.com    configs/web.yaml
+db01.example.com     configs/db.yaml
+admin@bastion01      configs/bastion.yaml
+```
+
+```bash
+ks-gen verify --hosts hosts.txt --jobs 5
+```
+
+Config paths are resolved relative to the hosts file. The per-host SSH
+user is `user@` from the line, else `--user`, else the config's
+`user.admin.name`. `--ask-sudo-pass` prompts once and reuses the same
+password for the whole fleet.
+
+Hosts are verified in parallel (`--jobs`, default 5). A failed or
+unreachable host is reported and does not abort the run. The process
+exit code reflects the fleet aggregate:
+
+| Condition (first match wins) | Exit |
+|---|---|
+| any host has a compliance failure | 6 |
+| else any host was unreachable or errored | 7 |
+| else any host has tailoring drift | 8 |
+| else all clean | 0 |
+
+These are the same codes as single-host mode, making fleet runs
+composable in the same CI scripts.
+
+**Output.** The default `--format table` prints a summary header, one
+status line per host (host, status, and a per-host summary), and a
+fleet-total footer with the aggregate exit code. `--format json` emits
+an object with a `hosts` array (each entry carrying `host`, `user`,
+`status`, and either a `report` object — the single-host payload — or an
+`error` object with `label`/`message`/`exit_code`), plus top-level
+`summary` counts and `aggregate_exit_code`.
+
+**Fleet mode does not support** `--config`, `--suggest-exceptions`,
+`--apply`, `--allow-regression`, `--baseline`, `--capture-baseline`,
+`--arf-out`, or `--keep-arf` — those are single-host workflows. Pass
+them to a `--host` invocation instead.
+
+**Fail-fast validation.** Before any SSH connections open, the entire
+hosts file is parsed and every referenced config is validated. Any
+authoring error (malformed line, missing config, schema failure) aborts
+with a clear per-line error listing and exit code 1.
 
 ### 8.6 Writing a ks-gen ISO to USB on Windows (Rufus)
 
