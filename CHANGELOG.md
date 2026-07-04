@@ -3,6 +3,15 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.31.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.30.0...v0.31.0) (2026-07-03)
+
+
+### Features
+
+* **verify:** fleet / batch mode — --hosts parallel SSH fan-out ([#10](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/10)) ([#152](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/152)) ([d9d3724](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/d9d3724421b8b9f1d1297d9470e805ac1f0de381))
+* **verify:** HTML report — --format html / --html-out ([#15](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/15)) ([#155](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/155)) ([f176415](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/f1764154d6723af2bbeac13e71b99e0448ad0811))
+* **verify:** ks-gen verify --local — on-host self-check ([#13](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/13)) ([#154](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/154)) ([98dee41](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/98dee41ef9a87cdc6683c585711c41b4e4845c04))
+
 ## [0.30.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.29.4...v0.30.0) (2026-07-02)
 
 
