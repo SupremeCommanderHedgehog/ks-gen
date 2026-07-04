@@ -16,6 +16,14 @@ from ks_gen.verify import run_verify
 from ks_gen.verify.auth import resolve_sudo_auth
 from ks_gen.verify.errors import VerifyError, error_label
 from ks_gen.verify.fleet import FleetOptions, make_verify_one, parse_hosts_file, run_fleet
+from ks_gen.verify.history import (
+    read_history,
+    read_host_history,
+    record_from_report,
+    render_history_json,
+    render_history_table,
+    write_record,
+)
 from ks_gen.verify.html import render_fleet_html, render_html
 from ks_gen.verify.reconcile import VerifyReport
 from ks_gen.verify.report import (
@@ -166,6 +174,15 @@ def iso_cmd(
     typer.echo(f"Wrote {out}")
 
 
+def _record_run(record_dir: Path, report: VerifyReport) -> None:
+    """Persist one run to the history store. A write failure warns to stderr
+    but never aborts the verify (the run already completed and rendered)."""
+    try:
+        write_record(record_dir, record_from_report(report))
+    except ConfigError as e:
+        typer.echo(f"ks-gen verify: warning: could not record run: {e}", err=True)
+
+
 def _echo_apply_summary(result: AppendResult) -> None:
     if result.added:
         typer.echo(
@@ -240,6 +257,7 @@ def _run_fleet_cmd(
     check_tailoring: bool,
     timeout: int,
     ask_sudo_pass: bool,
+    record: Path | None,
     rejected: dict[str, bool],
 ) -> None:
     bad = [flag for flag, present in rejected.items() if present]
@@ -289,6 +307,11 @@ def _run_fleet_cmd(
         assert html_str is not None
         _write_html_report(html_out, html_str)
 
+    if record is not None:
+        for outcome in fleet.outcomes:
+            if outcome.report is not None:
+                _record_run(record, outcome.report)
+
     raise typer.Exit(code=fleet.aggregate_exit_code)
 
 
@@ -305,6 +328,7 @@ def _run_local_cmd(
     arf_out: Path | None,
     keep_arf: bool,
     timeout: int,
+    record: Path | None,
     rejected: dict[str, bool],
 ) -> None:
     bad = [flag for flag, present in rejected.items() if present]
@@ -364,6 +388,9 @@ def _run_local_cmd(
             format_=format_,
             html_out=html_out,
         )
+
+        if record is not None:
+            _record_run(record, report)
 
         if not report.is_clean:
             raise typer.Exit(code=int(ExitCode.VERIFY_FAIL))
@@ -492,6 +519,15 @@ def verify_cmd(
             "pull. Mutually exclusive with --capture-baseline."
         ),
     ),
+    record: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--record",
+        file_okay=False,
+        help=(
+            "Append a slim record of this run to <dir>/<host>.jsonl for trend "
+            "tracking. Works in all modes. Read it back with 'ks-gen verify-history'."
+        ),
+    ),
     timeout: int = typer.Option(600, "--timeout", help="oscap run timeout in seconds."),
     ask_sudo_pass: bool = typer.Option(
         False,
@@ -530,6 +566,7 @@ def verify_cmd(
             check_tailoring=check_tailoring,
             timeout=timeout,
             ask_sudo_pass=ask_sudo_pass,
+            record=record,
             rejected={
                 "--config": config is not None,
                 "--suggest-exceptions": suggest_exceptions,
@@ -556,6 +593,7 @@ def verify_cmd(
             arf_out=arf_out,
             keep_arf=keep_arf,
             timeout=timeout,
+            record=record,
             rejected={
                 "--user": user is not None,
                 "--ssh-opts": bool(ssh_opts),
@@ -664,6 +702,9 @@ def verify_cmd(
                 raise typer.Exit(code=int(e.exit_code)) from None
             _echo_apply_summary(apply_result)
 
+        if record is not None:
+            _record_run(record, report)
+
         if not report.is_clean:
             raise typer.Exit(code=int(ExitCode.VERIFY_FAIL))
         if report.has_tailoring_drift:
@@ -678,6 +719,48 @@ def verify_cmd(
     else:
         with tempfile.TemporaryDirectory(prefix="ksgen-verify-") as tmpdir:
             _do(Path(tmpdir))
+
+
+@app.command(
+    name="verify-history",
+    help="Show run-over-run trends from a --record history directory.",
+)
+def verify_history_cmd(
+    record_dir: Path = typer.Argument(  # noqa: B008
+        ..., help="Directory of <host>.jsonl records written by 'verify --record'."
+    ),
+    host: str | None = typer.Option(
+        None, "--host", help="Show only this host (default: every host in the dir)."
+    ),
+    format_: str = typer.Option("table", "--format", help="Output format: table | json."),
+) -> None:
+    if format_ not in ("table", "json"):
+        typer.echo(f"--format must be 'table' or 'json', got: {format_!r}", err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE))
+
+    if host is not None:
+        host_path = record_dir / f"{host}.jsonl"
+        if not host_path.is_file():
+            typer.echo(
+                f"ks-gen verify-history: no history for host {host!r} in {record_dir}",
+                err=True,
+            )
+            raise typer.Exit(code=int(ExitCode.USAGE))
+
+    try:
+        if host is not None:
+            history = {host: read_host_history(record_dir / f"{host}.jsonl")}
+        else:
+            history = read_history(record_dir)
+    except ConfigError as e:
+        typer.echo(f"ks-gen verify-history: {e}", err=True)
+        raise typer.Exit(code=int(e.exit_code)) from None
+
+    if format_ == "json":
+        typer.echo(render_history_json(history))
+    else:
+        blocks = [render_history_table(h, recs) for h, recs in sorted(history.items())]
+        typer.echo("\n".join(blocks))
 
 
 if __name__ == "__main__":

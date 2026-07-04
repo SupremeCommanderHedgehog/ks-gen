@@ -1190,6 +1190,7 @@ All flags:
 | `--keep-arf` | false | Persist pulled ARFs to a new temp directory (path is echoed) |
 | `--html-out` | (none) | Also write a self-contained HTML report to this file (parent dir must exist) |
 | `--no-drift` | false | Skip the install-time ARF pull; compliance-only |
+| `--record` | (none) | Append a slim run record to `<dir>/<host>.jsonl` for trend tracking; works in all modes; read back with `ks-gen verify-history` |
 | `--timeout` | 600 | oscap run timeout in seconds |
 
 #### Prerequisites
@@ -1280,8 +1281,9 @@ releases. The on-host self-check *primitive* now also exists — `--local`
 runs the check on the host with no workstation (see "Local mode" above).
 The remaining piece of the on-host story is out of scope for now: a
 shipped systemd timer unit and install-time `host.yaml` caching so the
-check runs unattended (tracked on #13). History tracking and HTML report
-generation are also still open.
+check runs unattended (tracked on #13). History tracking (`--record` /
+`verify-history`, #17) and HTML report generation (`--format html` /
+`--html-out`, #15) have since shipped.
 
 ---
 
@@ -1525,6 +1527,101 @@ or a missing `oscap` fails at preflight (exit `1` / exit `5`).
 source of truth for the config, and the host's copy is a deployed
 artifact. Use `--suggest-exceptions` locally to print candidate entries,
 then apply them from the workstation with `ks-gen verify --host … --apply`.
+
+#### Recording history for trend tracking (`--record`)
+
+`ks-gen verify --record <dir>` appends one slim JSON-line record to
+`<dir>/<host>.jsonl` at the end of every verify run. The flag works in
+all three modes — single-host (`--host`), fleet (`--hosts`), and local
+(`--local`) — and the write happens regardless of outcome: failing runs
+and drift runs are recorded so the history captures the full picture.
+
+````
+ks-gen verify --host web01.example.com --config build/web01/host.yaml \
+              --record /var/lib/ks-gen/history
+````
+
+In fleet mode each host gets its own file
+(`web01.example.com.jsonl`, `db01.example.com.jsonl`, etc.) inside the
+same directory.
+
+**What each record contains.** Host and user fields, a UTC timestamp,
+the five category summary counts (`clean`, `expected_fail`, `new_fail`,
+`regression`, `incomplete`), the `is_clean` flag, the tailoring-drift
+flag, and the non-clean rule rows (rule ID + category). Clean rows are
+omitted to keep records small; the summary counts make them recoverable.
+
+**No automatic pruning.** Records are appended unbounded. The store is a
+plain directory of JSONL files — rotate or archive old entries with
+standard file tools when the store grows large. Two concurrent verify
+runs against the SAME host are not write-safe; runs against different
+hosts are independent and safe.
+
+**Reading the history.** Use `ks-gen verify-history <dir>` — described
+in the next section.
+
+#### `verify-history` — run-over-run trends
+
+`ks-gen verify-history` is a read-only command: no SSH, no oscap, no
+`host.yaml`. It loads a `--record` store and prints three trend sections
+for each host in the directory.
+
+**Command shape.**
+
+````
+ks-gen verify-history <dir> [--host NAME] [--format table|json]
+````
+
+| Argument / Flag | Default | Purpose |
+|---|---|---|
+| `<dir>` | (required) | Directory of `<host>.jsonl` records written by `verify --record` |
+| `--host NAME` | (all hosts) | Limit output to one host; sorted by hostname when showing all |
+| `--format` | `table` | Output format: `table` or `json` |
+
+**Output sections (table mode).** For each host, `verify-history` prints:
+
+1. **TIMELINE** — one row per recorded run: UTC timestamp, the five
+   category counts (`CLEAN`, `EXP`, `NEW`, `REG`, `INC`), and a
+   `CLEAN` or `FAIL` verdict. Rows are oldest-first.
+
+2. **PERSISTENT FAILURES (streaks)** — for each rule currently failing,
+   how many consecutive most-recent runs it has been non-clean, sorted
+   longest streak first. Shows `none` when the latest run is fully
+   clean.
+
+3. **SINCE `<previous-run-timestamp>`** — a delta between the two most
+   recent runs: rules newly failing since the prior run, and rules that
+   recovered. Shows `n/a` when fewer than two runs exist.
+
+Example output (abbreviated):
+
+````
+history host=web01.example.com  (3 runs)
+
+  TIMELINE
+  TIMESTAMP              CLEAN    EXP    NEW    REG    INC  VERDICT
+  2026-06-01T10:00:00Z     410      3      2      0      0  FAIL
+  2026-06-08T10:00:00Z     411      3      1      0      0  FAIL
+  2026-06-15T10:00:00Z     413      3      0      0      0  CLEAN
+
+  PERSISTENT FAILURES (streaks): none
+
+  SINCE 2026-06-08T10:00:00Z
+  (no change)
+````
+
+**`--format json`** emits an object keyed by hostname. Each value
+carries a `runs` array (timestamp, user, summary counts, verdict, and
+the non-clean rule rows), a `streaks` array (rule_id, category, length),
+and a `delta` object (`since_utc`, `added`, `recovered`). Suitable for
+scripting or feeding a dashboard.
+
+**Exit codes.**
+
+| Code | Meaning |
+|---|---|
+| 0 | History loaded and printed successfully |
+| 1 | Usage error: missing or empty dir, unknown `--host`, malformed record, or bad `--format` |
 
 ### 8.6 Writing a ks-gen ISO to USB on Windows (Rufus)
 
