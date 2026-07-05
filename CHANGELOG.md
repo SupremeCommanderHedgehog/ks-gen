@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.32.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.31.0...v0.32.0) (2026-07-04)
+
+
+### Features
+
+* **verify:** trend/history tracking — --record + verify-history ([#17](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/17)) ([#156](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/156)) ([71341f9](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/71341f99bdd32849857fb41ff7bc044b37b961dc))
+
 ## [0.31.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.30.0...v0.31.0) (2026-07-03)
 
 
