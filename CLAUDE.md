@@ -31,8 +31,8 @@ CI catches lint/type/test regressions; `/code-review` catches correctness
 bugs and reuse/simplification issues the automated gates don't. Address or
 consciously dismiss each finding before shipping.
 
-This applies to fixes made live during an install/debug session too — the
-2026-06-30 cougar work shipped two `%post`/tailoring bugs
+This applies to fixes made live during an install/debug session too — a
+live install/debug session shipped two `%post`/tailoring bugs
 (chpasswd `$6` abort, inert `cfg.exceptions`) that a diff review would
 have flagged before they reached a real install.
 

@@ -9,7 +9,7 @@ def test_password_hash_not_exposed_to_shell_expansion(minimal_cfg):
     # A SHA-512 crypt hash contains `$6$...` segments. The %post block runs
     # under `set -euxo pipefail`, so any unescaped `$6` in a double-quoted
     # string is treated as positional parameter 6 -> "unbound variable" ->
-    # fatal install abort (observed live on the cougar build, 2026-06-30).
+    # fatal install abort (observed live on a real install).
     # The hash must be single-quoted so bash passes it through literally.
     pw = "$6$YJbKhp9Lbll716tN$nt1RtJC4hspS1m4Oc6htcTbfY5eWl"
     admin = minimal_cfg.user.admin.model_copy(update={"password": pw, "sudo": "nopasswd_no"})
