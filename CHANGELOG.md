@@ -3,6 +3,18 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.32.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.32.0...v0.32.1) (2026-07-13)
+
+
+### Bug Fixes
+
+* **security:** resolve CodeQL high-severity alerts ([#42](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/42)) ([97b0a19](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/97b0a193f83e09fa86502447e62185504721ee2a))
+
+
+### Documentation
+
+* drop references to removed internal design/plan docs ([7891e02](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/7891e0221e290e4d854256605b6b726dc3b4337f))
+
 ## [0.32.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.31.0...v0.32.0) (2026-07-04)
 
 
