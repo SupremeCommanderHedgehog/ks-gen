@@ -43,7 +43,7 @@ def test_write_bundle_creates_files(tmp_path):
 def test_declared_exceptions_disable_rules_in_tailoring(tmp_path):
     # Operator-declared exceptions (cfg.exceptions) must actually deselect the
     # named STIG rules in tailoring.xml, not merely document them in
-    # exceptions.md. Regression for the cougar GUI removal: the STIG
+    # exceptions.md. Regression for the GUI-removal case: the STIG
     # xwindows_* rules stripped the desktop because the declared exception
     # never reached the oscap tailoring.
     rid1 = "xccdf_org.ssgproject.content_rule_xwindows_remove_packages"
