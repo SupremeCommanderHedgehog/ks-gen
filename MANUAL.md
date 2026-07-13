@@ -2,8 +2,7 @@
 
 This document is the operator's reference for `ks-gen` v0.1. The
 [`README.md`](README.md) is a 30-second quickstart; this file is the
-500-foot walkthrough. The design rationale lives in the
-[design spec](docs/superpowers/specs/2026-06-01-alma-stig-kickstart-design.md).
+500-foot walkthrough.
 
 ## Contents
 
@@ -2067,8 +2066,3 @@ its prerequisite gates on FAT32 USB installs.
 - Anaconda kickstart syntax — https://pykickstart.readthedocs.io/
 - `oscap-anaconda-addon` — https://github.com/OpenSCAP/oscap-anaconda-addon
 - RHEL 9 crypto policies — https://access.redhat.com/articles/3642912
-
-For ks-gen's own design rationale, see
-[`docs/superpowers/specs/2026-06-01-alma-stig-kickstart-design.md`](docs/superpowers/specs/2026-06-01-alma-stig-kickstart-design.md).
-For the implementation plan, see
-[`docs/superpowers/plans/2026-06-01-ks-gen-implementation.md`](docs/superpowers/plans/2026-06-01-ks-gen-implementation.md).
