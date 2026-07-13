@@ -60,7 +60,7 @@ def test_build_suggestions_reason_carries_run_context():
     suggestion = build_suggestions(report)[0]
     reason = suggestion.decl.reason
     assert reason.startswith("TODO:")
-    assert "web01.example.com" in reason
+    assert "from web01.example.com" in reason
     assert "2026-06-09" in reason
     assert "current=fail" in reason
     assert "install=pass" in reason
@@ -115,7 +115,7 @@ def test_render_yaml_header_includes_run_context():
     suggestions = build_suggestions(report)
     out = render_yaml(suggestions, report)
     assert out.startswith("## Suggested exception entries")
-    assert "web01.example.com" in out
+    assert "host=web01.example.com" in out
     assert "2026-06-09T12:00:00Z" in out
     assert "1 suggestion" in out  # singular
 

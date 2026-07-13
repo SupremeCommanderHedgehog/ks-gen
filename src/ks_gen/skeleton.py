@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from importlib.resources import files
 from shlex import quote as _shlex_quote
 
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
 from ks_gen import __version__
 from ks_gen.config import HostConfig
@@ -22,6 +22,11 @@ def _env() -> Environment:
     env = Environment(
         loader=FileSystemLoader(str(templates_path)),
         undefined=StrictUndefined,
+        # Templates render kickstart/shell/cloud-init text, never HTML — so
+        # HTML autoescaping stays off for those. select_autoescape still
+        # engages for any future .html/.xml template rather than hardcoding
+        # autoescape=False (shell injection is handled by shlex quoting).
+        autoescape=select_autoescape(enabled_extensions=("html", "xml"), default=False),
         trim_blocks=True,
         lstrip_blocks=True,
         keep_trailing_newline=True,
