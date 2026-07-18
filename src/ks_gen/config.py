@@ -493,6 +493,28 @@ class Containers(StrictModel):
         return self
 
 
+class InstallSourceKind(StrEnum):
+    MEDIA = "media"
+    NETWORK = "network"
+
+
+class Install(StrictModel):
+    """Where Anaconda gets packages. `media` (default) uses the boot media's
+    own repo (a full DVD). `network` emits `url`/`repo` pointing at AlmaLinux
+    mirrors, so a repo-less `boot.iso` can be used — the iso builder then also
+    drops the hardcoded `inst.repo=hd:LABEL` boot-menu arg (see iso/_menu.py)."""
+
+    source: InstallSourceKind = InstallSourceKind.MEDIA
+    baseos_url: str = Field(
+        default="https://repo.almalinux.org/almalinux/9.8/BaseOS/x86_64/os/",
+        min_length=1,
+    )
+    appstream_url: str = Field(
+        default="https://repo.almalinux.org/almalinux/9.8/AppStream/x86_64/os/",
+        min_length=1,
+    )
+
+
 class PackagesPreset(StrEnum):
     STANDARD = "standard"
     LEAN = "lean"
@@ -736,6 +758,7 @@ class HostConfig(StrictModel):
     custom_post: list[str] = Field(default_factory=list)
     exceptions: list[ExceptionDecl] = Field(default_factory=list)
     containers: Containers = Field(default_factory=Containers)
+    install: Install = Field(default_factory=Install)
 
     @model_validator(mode="after")
     def _crypto_fips_mutex(self) -> HostConfig:
