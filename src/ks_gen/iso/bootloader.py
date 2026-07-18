@@ -13,7 +13,9 @@ class BootloaderRewriteError(ValueError):
     pass
 
 
-def rewrite_isolinux(text: str, *, volid: str, timeout: int = 5) -> str:
+def rewrite_isolinux(
+    text: str, *, volid: str, timeout: int = 5, network_install: bool = False
+) -> str:
     if IDEMPOTENCY_MARKER in text:
         return text
 
@@ -35,11 +37,12 @@ def rewrite_isolinux(text: str, *, volid: str, timeout: int = 5) -> str:
 
     match = re.search(r"^label\s+\S+", text, flags=re.MULTILINE)
     assert match is not None  # verified above; edits only delete `menu default`
-    entry = ISOLINUX_UNATTENDED_ENTRY.format(marker=IDEMPOTENCY_MARKER, volid=volid)
+    repo = "" if network_install else f" inst.repo=hd:LABEL={volid}"
+    entry = ISOLINUX_UNATTENDED_ENTRY.format(marker=IDEMPOTENCY_MARKER, volid=volid, repo=repo)
     return text[: match.start()] + entry + "\n" + text[match.start() :]
 
 
-def rewrite_grub(text: str, *, volid: str, timeout: int = 5) -> str:
+def rewrite_grub(text: str, *, volid: str, timeout: int = 5, network_install: bool = False) -> str:
     if IDEMPOTENCY_MARKER in text:
         return text
 
@@ -68,5 +71,6 @@ def rewrite_grub(text: str, *, volid: str, timeout: int = 5) -> str:
 
     match = re.search(r"^menuentry\s+", text, flags=re.MULTILINE)
     assert match is not None  # verified above
-    entry = GRUB_UNATTENDED_ENTRY.format(marker=IDEMPOTENCY_MARKER, volid=volid)
+    repo = "" if network_install else f" inst.repo=hd:LABEL={volid}"
+    entry = GRUB_UNATTENDED_ENTRY.format(marker=IDEMPOTENCY_MARKER, volid=volid, repo=repo)
     return text[: match.start()] + entry + "\n" + text[match.start() :]

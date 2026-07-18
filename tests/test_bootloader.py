@@ -97,3 +97,22 @@ def test_rewrite_grub_al8_idempotent():
     once = rewrite_grub(original, volid="ALMA8")
     twice = rewrite_grub(once, volid="ALMA8")
     assert once == twice
+
+
+def test_rewrite_isolinux_network_install_omits_repo():
+    result = rewrite_isolinux(_read_fixture("isolinux.cfg"), volid="DEV0", network_install=True)
+    assert "inst.stage2=hd:LABEL=DEV0" in result
+    assert "inst.ks=hd:LABEL=DEV0:/ks.cfg" in result
+    assert "inst.repo=" not in result
+
+
+def test_rewrite_grub_network_install_omits_repo():
+    result = rewrite_grub(_read_fixture("grub.cfg"), volid="DEV0", network_install=True)
+    assert "inst.stage2=hd:LABEL=DEV0" in result
+    assert "inst.ks=hd:LABEL=DEV0:/ks.cfg" in result
+    assert "inst.repo=" not in result
+
+
+def test_rewrite_grub_media_keeps_repo():
+    result = rewrite_grub(_read_fixture("grub.cfg"), volid="DEV0")
+    assert "inst.repo=hd:LABEL=DEV0" in result
