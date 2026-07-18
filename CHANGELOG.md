@@ -3,6 +3,18 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.33.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.32.1...v0.33.0) (2026-07-18)
+
+
+### Features
+
+* network install source (boot.iso support) ([#46](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/46)) ([58bec5f](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/58bec5fb537b7f93f8876616a006b73b0a6701ad))
+
+
+### Bug Fixes
+
+* **containers:** make linger chroot-safe so container installs complete ([#48](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/48)) ([c00f3f8](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/c00f3f8ac6965f85574274fc7ae1e2d4b81e5e1d))
+
 ## [0.32.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.32.0...v0.32.1) (2026-07-13)
 
 
