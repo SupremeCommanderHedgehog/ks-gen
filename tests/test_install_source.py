@@ -12,9 +12,28 @@ _GOLDEN8 = Path(__file__).parent / "golden" / "alma8-minimal.host.yaml"
 _GOLDEN9 = Path(__file__).parent / "golden" / "minimal-dhcp.host.yaml"
 
 
+_GOLDEN_UBUNTU = Path(__file__).parent / "golden" / "ubuntu-minimal.host.yaml"
+
+
 def test_network_default_urls_rejected_on_alma8():
     with pytest.raises(ConfigError, match="do not match distro"):
         load_host_config(_GOLDEN8, sets=["install.source=network"])
+
+
+def test_network_partial_url_override_rejected_on_alma8():
+    with pytest.raises(ConfigError, match="do not match distro"):
+        load_host_config(
+            _GOLDEN8,
+            sets=[
+                "install.source=network",
+                "install.baseos_url=https://repo.almalinux.org/almalinux/8/BaseOS/x86_64/os/",
+            ],
+        )
+
+
+def test_network_source_rejected_on_ubuntu2404():
+    with pytest.raises(ConfigError, match="ubuntu2404"):
+        load_host_config(_GOLDEN_UBUNTU, sets=["install.source=network"])
 
 
 def test_network_custom_urls_accepted_on_alma8():

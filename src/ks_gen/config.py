@@ -769,16 +769,22 @@ class HostConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def _network_install_defaults_match_distro(self) -> HostConfig:
-        if (
-            self.install.source == InstallSourceKind.NETWORK
-            and self.distro != "alma9"
-            and self.install.baseos_url == _INSTALL_DEFAULT_BASEOS_URL
-            and self.install.appstream_url == _INSTALL_DEFAULT_APPSTREAM_URL
+    def _network_install_source_is_supported(self) -> HostConfig:
+        if self.install.source != InstallSourceKind.NETWORK:
+            return self
+        if self.distro == "ubuntu2404":
+            raise ValueError(
+                "install.source=network is not supported for distro=ubuntu2404: "
+                "the Ubuntu autoinstall path does not consume install.* (the "
+                "setting would be silently ignored)."
+            )
+        if self.distro != "alma9" and (
+            self.install.baseos_url == _INSTALL_DEFAULT_BASEOS_URL
+            or self.install.appstream_url == _INSTALL_DEFAULT_APPSTREAM_URL
         ):
             raise ValueError(
-                "install.source=network uses the AlmaLinux 9.8 default mirror "
-                f"URLs, which do not match distro={self.distro}. Set "
+                "install.source=network still uses AlmaLinux 9.8 default mirror "
+                f"URL(s) that do not match distro={self.distro}. Set BOTH "
                 "install.baseos_url and install.appstream_url to your distro/"
                 "release's BaseOS and AppStream repos."
             )
