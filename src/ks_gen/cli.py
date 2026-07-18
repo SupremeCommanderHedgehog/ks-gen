@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json as _json
+import re
 import shlex
 import tempfile
 from pathlib import Path
@@ -165,14 +166,27 @@ def iso_cmd(
     tailoring: Path = typer.Option(..., "--tailoring", exists=True, dir_okay=False),  # noqa: B008
     out: Path = typer.Option(..., "--out", dir_okay=False),  # noqa: B008
     volid: str = typer.Option("ALMA9", "--volid"),
-    network_install: bool = typer.Option(
-        False,
+    network_install: bool | None = typer.Option(
+        None,
         "--network-install/--no-network-install",
         help="Drop inst.repo=hd:LABEL from the boot menu so Anaconda uses the "
-        "kickstart's url/repo (install.source=network) instead of the ISO's "
-        "own repo. Use with a boot.iso built from a network-source bundle.",
+        "kickstart's url/repo instead of the ISO's own repo. Default: auto-"
+        "detected from whether the kickstart has a `url` install source.",
     ),
 ) -> None:
+    ks_text = ks.read_text(encoding="utf-8")
+    ks_is_network = re.search(r"(?m)^url\s+--url=", ks_text) is not None
+    if network_install is None:
+        network_install = ks_is_network
+    elif network_install != ks_is_network:
+        typer.echo(
+            "--network-install / --no-network-install contradicts the kickstart: "
+            f"it {'has' if ks_is_network else 'has no'} a `url` install source. "
+            "Regenerate the bundle (install.source) or drop the flag.",
+            err=True,
+        )
+        raise typer.Exit(code=int(ExitCode.USAGE))
+
     try:
         build_iso(src, ks, tailoring, out, volid=volid, network_install=network_install)
     except IsoBuildError as e:

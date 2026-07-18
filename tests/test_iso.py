@@ -2,8 +2,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from typer.testing import CliRunner
 
+from ks_gen.cli import app
 from ks_gen.iso import IsoBuildError, build_iso
+
+runner = CliRunner()
 
 
 def test_build_iso_calls_xorriso(tmp_path):
@@ -197,3 +201,105 @@ def test_build_iso_forwards_network_install(tmp_path):
 
     assert ri.call_args.kwargs["network_install"] is True
     assert rg.call_args.kwargs["network_install"] is True
+
+
+def _make_iso_cli_files(tmp_path, *, ks_has_url: bool):
+    src = tmp_path / "src.iso"
+    src.write_bytes(b"\0" * 1024)
+    ks = tmp_path / "ks.cfg"
+    if ks_has_url:
+        ks.write_text('url --url="https://x/BaseOS/"\n', encoding="utf-8")
+    else:
+        ks.write_text("cmdline\n", encoding="utf-8")
+    tail = tmp_path / "tailoring.xml"
+    tail.write_text("<x/>", encoding="utf-8")
+    out = tmp_path / "out.iso"
+    return src, ks, tail, out
+
+
+def test_iso_cmd_autodetects_network_install_from_url_line(tmp_path):
+    src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=True)
+    with patch("ks_gen.cli.build_iso") as mock_build:
+        result = runner.invoke(
+            app,
+            [
+                "iso",
+                "--src",
+                str(src),
+                "--ks",
+                str(ks),
+                "--tailoring",
+                str(tail),
+                "--out",
+                str(out),
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    mock_build.assert_called_once()
+    assert mock_build.call_args.kwargs["network_install"] is True
+
+
+def test_iso_cmd_autodetects_media_install_when_no_url_line(tmp_path):
+    src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=False)
+    with patch("ks_gen.cli.build_iso") as mock_build:
+        result = runner.invoke(
+            app,
+            [
+                "iso",
+                "--src",
+                str(src),
+                "--ks",
+                str(ks),
+                "--tailoring",
+                str(tail),
+                "--out",
+                str(out),
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    mock_build.assert_called_once()
+    assert mock_build.call_args.kwargs["network_install"] is False
+
+
+def test_iso_cmd_rejects_no_network_install_flag_when_ks_has_url(tmp_path):
+    src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=True)
+    with patch("ks_gen.cli.build_iso") as mock_build:
+        result = runner.invoke(
+            app,
+            [
+                "iso",
+                "--src",
+                str(src),
+                "--ks",
+                str(ks),
+                "--tailoring",
+                str(tail),
+                "--out",
+                str(out),
+                "--no-network-install",
+            ],
+        )
+    assert result.exit_code != 0
+    mock_build.assert_not_called()
+
+
+def test_iso_cmd_rejects_network_install_flag_when_ks_has_no_url(tmp_path):
+    src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=False)
+    with patch("ks_gen.cli.build_iso") as mock_build:
+        result = runner.invoke(
+            app,
+            [
+                "iso",
+                "--src",
+                str(src),
+                "--ks",
+                str(ks),
+                "--tailoring",
+                str(tail),
+                "--out",
+                str(out),
+                "--network-install",
+            ],
+        )
+    assert result.exit_code != 0
+    mock_build.assert_not_called()
