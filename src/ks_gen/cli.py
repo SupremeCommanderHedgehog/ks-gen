@@ -165,9 +165,16 @@ def iso_cmd(
     tailoring: Path = typer.Option(..., "--tailoring", exists=True, dir_okay=False),  # noqa: B008
     out: Path = typer.Option(..., "--out", dir_okay=False),  # noqa: B008
     volid: str = typer.Option("ALMA9", "--volid"),
+    network_install: bool = typer.Option(
+        False,
+        "--network-install/--no-network-install",
+        help="Drop inst.repo=hd:LABEL from the boot menu so Anaconda uses the "
+        "kickstart's url/repo (install.source=network) instead of the ISO's "
+        "own repo. Use with a boot.iso built from a network-source bundle.",
+    ),
 ) -> None:
     try:
-        build_iso(src, ks, tailoring, out, volid=volid)
+        build_iso(src, ks, tailoring, out, volid=volid, network_install=network_install)
     except IsoBuildError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(code=int(ExitCode.TOOL_MISSING)) from None

@@ -160,3 +160,40 @@ def test_build_iso_rewrite_error_raises(tmp_path):
         pytest.raises(IsoBuildError, match="bootloader rewrite aborted"),
     ):
         build_iso(src, ks, tail, out, volid="ALMA9")
+
+
+def test_build_iso_forwards_network_install(tmp_path):
+    src = tmp_path / "src.iso"
+    src.write_bytes(b"\0" * 1024)
+    ks = tmp_path / "ks.cfg"
+    ks.write_text("text\n", encoding="utf-8")
+    tail = tmp_path / "tailoring.xml"
+    tail.write_text("<x/>", encoding="utf-8")
+    out = tmp_path / "out.iso"
+
+    def fake_run(args, **kwargs):
+        if "-extract" in args:
+            idx = args.index("-extract")
+            dest = Path(args[idx + 2])
+            if "isolinux.cfg" in args[idx + 1]:
+                dest.write_text("timeout 600\nlabel linux\n  kernel vmlinuz\n", encoding="utf-8")
+            else:
+                dest.write_text(
+                    "set timeout=60\nmenuentry 'foo' { linuxefi vmlinuz\ninitrdefi initrd.img\n}\n",
+                    encoding="utf-8",
+                )
+        result = MagicMock()
+        result.returncode = 0
+        result.stderr = ""
+        return result
+
+    with (
+        patch("ks_gen.iso.builder.shutil.which", return_value="/usr/bin/xorriso"),
+        patch("ks_gen.iso.builder.subprocess.run", side_effect=fake_run),
+        patch("ks_gen.iso.builder.rewrite_isolinux", return_value="x") as ri,
+        patch("ks_gen.iso.builder.rewrite_grub", return_value="x") as rg,
+    ):
+        build_iso(src, ks, tail, out, volid="DEV0", network_install=True)
+
+    assert ri.call_args.kwargs["network_install"] is True
+    assert rg.call_args.kwargs["network_install"] is True
