@@ -6,6 +6,7 @@ import pytest
 
 from ks_gen.config import Install, InstallSourceKind
 from ks_gen.loader import ConfigError, load_host_config
+from ks_gen.writer import build_bundle
 
 _GOLDEN8 = Path(__file__).parent / "golden" / "alma8-minimal.host.yaml"
 _GOLDEN9 = Path(__file__).parent / "golden" / "minimal-dhcp.host.yaml"
@@ -58,3 +59,19 @@ def test_install_default_urls_pin_9_8():
 def test_install_urls_overridable():
     ins = Install(source="network", baseos_url="https://mirror.example/BaseOS/")
     assert ins.baseos_url == "https://mirror.example/BaseOS/"
+
+
+def test_network_source_emits_url_and_repo():
+    cfg = load_host_config(_GOLDEN9, sets=["install.source=network"])
+    ks = build_bundle(cfg).ks_cfg
+    assert 'url --url="https://repo.almalinux.org/almalinux/9.8/BaseOS/x86_64/os/"' in ks
+    assert (
+        "repo --name=AppStream "
+        '--baseurl="https://repo.almalinux.org/almalinux/9.8/AppStream/x86_64/os/"'
+    ) in ks
+
+
+def test_media_source_omits_url():
+    cfg = load_host_config(_GOLDEN9, sets=[])
+    ks = build_bundle(cfg).ks_cfg
+    assert "url --url=" not in ks
