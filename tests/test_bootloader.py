@@ -4,7 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from ks_gen.iso.bootloader import BootloaderRewriteError, rewrite_grub, rewrite_isolinux
+from ks_gen.iso.bootloader import (
+    BootloaderRewriteError,
+    _inst_repo_arg,
+    rewrite_grub,
+    rewrite_isolinux,
+)
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "alma9-bootloader"
 FIXTURE_DIR_AL8 = Path(__file__).parent / "fixtures" / "alma8-bootloader"
@@ -50,6 +55,14 @@ def test_rewrite_isolinux_no_label_raises():
 def test_rewrite_grub_no_menuentry_raises():
     with pytest.raises(BootloaderRewriteError, match="menuentry"):
         rewrite_grub("set timeout=60\n", volid="ALMA9")
+
+
+def test_inst_repo_arg_media():
+    assert _inst_repo_arg("ALMA9", False) == " inst.repo=hd:LABEL=ALMA9"
+
+
+def test_inst_repo_arg_network():
+    assert _inst_repo_arg("ALMA9", True) == ""
 
 
 def test_rewrite_isolinux_custom_volid():

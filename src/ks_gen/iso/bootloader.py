@@ -13,6 +13,12 @@ class BootloaderRewriteError(ValueError):
     pass
 
 
+def _inst_repo_arg(volid: str, network_install: bool) -> str:
+    """The `inst.repo=hd:LABEL=<volid>` boot arg, or "" for a network install
+    (which sources packages from the kickstart's url/repo, not the ISO)."""
+    return "" if network_install else f" inst.repo=hd:LABEL={volid}"
+
+
 def rewrite_isolinux(
     text: str, *, volid: str, timeout: int = 5, network_install: bool = False
 ) -> str:
@@ -37,7 +43,7 @@ def rewrite_isolinux(
 
     match = re.search(r"^label\s+\S+", text, flags=re.MULTILINE)
     assert match is not None  # verified above; edits only delete `menu default`
-    repo = "" if network_install else f" inst.repo=hd:LABEL={volid}"
+    repo = _inst_repo_arg(volid, network_install)
     entry = ISOLINUX_UNATTENDED_ENTRY.format(marker=IDEMPOTENCY_MARKER, volid=volid, repo=repo)
     return text[: match.start()] + entry + "\n" + text[match.start() :]
 
@@ -71,6 +77,6 @@ def rewrite_grub(text: str, *, volid: str, timeout: int = 5, network_install: bo
 
     match = re.search(r"^menuentry\s+", text, flags=re.MULTILINE)
     assert match is not None  # verified above
-    repo = "" if network_install else f" inst.repo=hd:LABEL={volid}"
+    repo = _inst_repo_arg(volid, network_install)
     entry = GRUB_UNATTENDED_ENTRY.format(marker=IDEMPOTENCY_MARKER, volid=volid, repo=repo)
     return text[: match.start()] + entry + "\n" + text[match.start() :]
