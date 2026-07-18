@@ -498,6 +498,10 @@ class InstallSourceKind(StrEnum):
     NETWORK = "network"
 
 
+_INSTALL_DEFAULT_BASEOS_URL = "https://repo.almalinux.org/almalinux/9.8/BaseOS/x86_64/os/"
+_INSTALL_DEFAULT_APPSTREAM_URL = "https://repo.almalinux.org/almalinux/9.8/AppStream/x86_64/os/"
+
+
 class Install(StrictModel):
     """Where Anaconda gets packages. `media` (default) uses the boot media's
     own repo (a full DVD). `network` emits `url`/`repo` pointing at AlmaLinux
@@ -505,14 +509,8 @@ class Install(StrictModel):
     drops the hardcoded `inst.repo=hd:LABEL` boot-menu arg (see iso/_menu.py)."""
 
     source: InstallSourceKind = InstallSourceKind.MEDIA
-    baseos_url: str = Field(
-        default="https://repo.almalinux.org/almalinux/9.8/BaseOS/x86_64/os/",
-        min_length=1,
-    )
-    appstream_url: str = Field(
-        default="https://repo.almalinux.org/almalinux/9.8/AppStream/x86_64/os/",
-        min_length=1,
-    )
+    baseos_url: str = Field(default=_INSTALL_DEFAULT_BASEOS_URL, min_length=1)
+    appstream_url: str = Field(default=_INSTALL_DEFAULT_APPSTREAM_URL, min_length=1)
 
 
 class PackagesPreset(StrEnum):
@@ -768,6 +766,22 @@ class HostConfig(StrictModel):
                     "crypto.policy=MODERN/FUTURE conflicts with overrides.fips_mode=true: "
                     "FIPS kernel mode blocks Curve25519/Ed25519 at the kernel layer."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _network_install_defaults_match_distro(self) -> HostConfig:
+        if (
+            self.install.source == InstallSourceKind.NETWORK
+            and self.distro != "alma9"
+            and self.install.baseos_url == _INSTALL_DEFAULT_BASEOS_URL
+            and self.install.appstream_url == _INSTALL_DEFAULT_APPSTREAM_URL
+        ):
+            raise ValueError(
+                "install.source=network uses the AlmaLinux 9.8 default mirror "
+                f"URLs, which do not match distro={self.distro}. Set "
+                "install.baseos_url and install.appstream_url to your distro/"
+                "release's BaseOS and AppStream repos."
+            )
         return self
 
     @model_validator(mode="after")
