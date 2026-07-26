@@ -10,7 +10,7 @@ ISOLINUX_UNATTENDED_ENTRY = (
     "  kernel vmlinuz\n"
     "  append initrd=initrd.img"
     " inst.stage2=hd:LABEL={volid}"
-    " inst.repo=hd:LABEL={volid}"
+    "{repo}"
     " inst.ks=hd:LABEL={volid}:/ks.cfg"
     " quiet\n"
 )
@@ -21,7 +21,7 @@ GRUB_UNATTENDED_ENTRY = (
     "--class fedora --class gnu-linux --class gnu --class os {{\n"
     "  linuxefi /images/pxeboot/vmlinuz"
     " inst.stage2=hd:LABEL={volid}"
-    " inst.repo=hd:LABEL={volid}"
+    "{repo}"
     " inst.ks=hd:LABEL={volid}:/ks.cfg"
     " quiet\n"
     "  initrdefi /images/pxeboot/initrd.img\n"

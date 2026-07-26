@@ -238,6 +238,10 @@
     volume:
       size: 20G
       fsoptions: nodev,nosuid
+  install:
+    source: media
+    baseos_url: https://repo.almalinux.org/almalinux/9.8/BaseOS/x86_64/os/
+    appstream_url: https://repo.almalinux.org/almalinux/9.8/AppStream/x86_64/os/
   
   '''
 # ---

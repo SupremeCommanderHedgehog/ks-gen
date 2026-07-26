@@ -141,7 +141,17 @@ install -d -m 0700 -o "$user" -g "$user" "$store"
 # --- optional: linger ------------------------------------------------------
 if [ "$enable_linger" -eq 1 ]; then
     info "enabling linger for '$user'"
-    loginctl enable-linger "$user"
+    # `loginctl enable-linger` just creates a marker file under
+    # /var/lib/systemd/linger, but it talks to logind over D-Bus, which is
+    # absent inside the autoinstall/curtin install chroot — there it fails
+    # with "Could not enable linger: No such file or directory". Under this
+    # script's `set -e`, that non-zero exit aborts provisioning, so fall back
+    # to writing the marker directly. logind honours it on first boot either way.
+    if ! loginctl enable-linger "$user" 2>/dev/null; then
+        warn "logind unavailable (install chroot?); writing linger marker directly"
+        install -d -m 0755 /var/lib/systemd/linger
+        : > "/var/lib/systemd/linger/$user"
+    fi
 fi
 
 # --- optional: ssh key -----------------------------------------------------

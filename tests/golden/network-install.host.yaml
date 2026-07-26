@@ -1,0 +1,16 @@
+# Golden: a network-install-source host (boot.iso + AlmaLinux mirrors).
+system:
+  hostname: netinstall01.example.com
+network:
+  interfaces:
+    - device: link
+      bootproto: dhcp
+      onboot: true
+install:
+  source: network
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYnetinstall test@laptop"
+    sudo: nopasswd_yes

@@ -10,6 +10,10 @@ timezone {{ cfg.system.timezone }} --utc
 {% for iface in cfg.network.interfaces -%}
 network --device={{ iface.device }} --bootproto={{ iface.bootproto }}{% if iface.bootproto == 'static' %} --ip={{ iface.ip }} --netmask={{ iface.netmask }} --gateway={{ iface.gateway }}{% if iface.nameservers %} --nameserver={{ iface.nameservers | join(',') }}{% endif %}{% endif %} --hostname={{ cfg.system.hostname }} --onboot={{ 'yes' if iface.onboot else 'no' }}
 {% endfor %}
+{% if cfg.install.source.value == 'network' -%}
+url --url="{{ cfg.install.baseos_url }}"
+repo --name=AppStream --baseurl="{{ cfg.install.appstream_url }}"
+{% endif %}
 
 rootpw --lock
 {% set _admin = cfg.user.admin -%}

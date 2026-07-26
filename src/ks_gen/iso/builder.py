@@ -23,6 +23,7 @@ def build_iso(
     out_iso: Path,
     *,
     volid: str,
+    network_install: bool = False,
 ) -> None:
     if shutil.which("xorriso") is None:
         raise IsoBuildError(
@@ -41,11 +42,19 @@ def build_iso(
 
         try:
             iso_isolinux.write_text(
-                rewrite_isolinux(iso_isolinux.read_text(encoding="utf-8"), volid=volid),
+                rewrite_isolinux(
+                    iso_isolinux.read_text(encoding="utf-8"),
+                    volid=volid,
+                    network_install=network_install,
+                ),
                 encoding="utf-8",
             )
             iso_grub.write_text(
-                rewrite_grub(iso_grub.read_text(encoding="utf-8"), volid=volid),
+                rewrite_grub(
+                    iso_grub.read_text(encoding="utf-8"),
+                    volid=volid,
+                    network_install=network_install,
+                ),
                 encoding="utf-8",
             )
         except BootloaderRewriteError as e:
