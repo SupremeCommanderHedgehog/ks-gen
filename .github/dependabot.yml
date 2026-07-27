@@ -50,3 +50,14 @@ updates:
       - "area:ci"
     commit-message:
       prefix: "chore(actions)"
+    # One PR for all action bumps. Two reasons, both of which have bitten:
+    #   - github/codeql-action/init and .../analyze must run the same version
+    #     ("Loaded a configuration file for version X, but running version Y"),
+    #     and ungrouped dependabot opens one PR per sub-action, so each PR
+    #     fails on its own (PRs #51/#53).
+    #   - checkout/setup-python pins sit on adjacent lines, so merging one
+    #     bump leaves the next in conflict (PR #54).
+    groups:
+      github-actions:
+        patterns:
+          - "*"
