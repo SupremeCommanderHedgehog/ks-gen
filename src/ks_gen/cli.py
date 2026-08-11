@@ -9,7 +9,7 @@ from pathlib import Path
 import typer
 
 from ks_gen.config import HostConfig
-from ks_gen.iso import IsoBuildError, build_iso
+from ks_gen.iso import GRUB_BIOS_CFG, ISOLINUX_CFG, IsoBuildError, build_iso
 from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
 from ks_gen.registry import load_rules
@@ -188,11 +188,17 @@ def iso_cmd(
         raise typer.Exit(code=int(ExitCode.USAGE))
 
     try:
-        build_iso(src, ks, tailoring, out, volid=volid, network_install=network_install)
+        patched = build_iso(src, ks, tailoring, out, volid=volid, network_install=network_install)
     except IsoBuildError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(code=int(ExitCode.TOOL_MISSING)) from None
-    typer.echo(f"Wrote {out}")
+    typer.echo(f"Wrote {out} (unattended entry added to {', '.join(patched)})")
+    if not any(p in (ISOLINUX_CFG, GRUB_BIOS_CFG) for p in patched):
+        typer.echo(
+            "warning: source ISO has no BIOS bootloader config — the unattended "
+            "entry only applies when booting under UEFI.",
+            err=True,
+        )
 
 
 def _record_run(record_dir: Path, report: VerifyReport) -> None:

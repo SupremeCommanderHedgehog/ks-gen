@@ -16,6 +16,12 @@ class IsoBuildError(Exception):
     pass
 
 
+ISOLINUX_CFG = "/isolinux/isolinux.cfg"
+# EL10 dropped /isolinux — BIOS boot is grub2 there.
+GRUB_BIOS_CFG = "/boot/grub2/grub.cfg"
+GRUB_EFI_CFG = "/EFI/BOOT/grub.cfg"
+
+
 def build_iso(
     src_iso: Path,
     ks_cfg: Path,
@@ -24,7 +30,10 @@ def build_iso(
     *,
     volid: str,
     network_install: bool = False,
-) -> None:
+) -> list[str]:
+    """Repack `src_iso` with ks.cfg + tailoring.xml and an unattended boot
+    entry. Returns the ISO paths of the bootloader configs that were patched.
+    """
     if shutil.which("xorriso") is None:
         raise IsoBuildError(
             "xorriso not on PATH (install: dnf install xorriso / brew install xorriso)"
@@ -32,38 +41,46 @@ def build_iso(
 
     with tempfile.TemporaryDirectory(prefix="ks-gen-iso-") as tmp:
         tmp_path = Path(tmp)
-        iso_isolinux = tmp_path / "isolinux.cfg"
-        iso_grub = tmp_path / "grub.cfg"
+        staged: list[tuple[Path, str]] = []
 
-        _extract(src_iso, "/isolinux/isolinux.cfg", iso_isolinux)
-        iso_isolinux.chmod(0o644)
-        _extract(src_iso, "/EFI/BOOT/grub.cfg", iso_grub)
-        iso_grub.chmod(0o644)
+        # BIOS: isolinux on EL8/EL9, grub2 on EL10. Neither is fatal on its
+        # own — media may legitimately be EFI-only.
+        bios_isolinux = tmp_path / "isolinux.cfg"
+        bios_grub = tmp_path / "bios-grub.cfg"
+        if _try_extract(src_iso, ISOLINUX_CFG, bios_isolinux):
+            staged.append((bios_isolinux, ISOLINUX_CFG))
+        elif _try_extract(src_iso, GRUB_BIOS_CFG, bios_grub):
+            staged.append((bios_grub, GRUB_BIOS_CFG))
+
+        efi_grub = tmp_path / "grub.cfg"
+        _extract(src_iso, GRUB_EFI_CFG, efi_grub)
+        staged.append((efi_grub, GRUB_EFI_CFG))
 
         try:
-            iso_isolinux.write_text(
-                rewrite_isolinux(
-                    iso_isolinux.read_text(encoding="utf-8"),
-                    volid=volid,
-                    network_install=network_install,
-                ),
-                encoding="utf-8",
-            )
-            iso_grub.write_text(
-                rewrite_grub(
-                    iso_grub.read_text(encoding="utf-8"),
-                    volid=volid,
-                    network_install=network_install,
-                ),
-                encoding="utf-8",
-            )
+            for local, iso_path in staged:
+                local.chmod(0o644)
+                text = local.read_text(encoding="utf-8")
+                if iso_path == ISOLINUX_CFG:
+                    patched = rewrite_isolinux(text, volid=volid, network_install=network_install)
+                else:
+                    patched = rewrite_grub(
+                        text,
+                        volid=volid,
+                        network_install=network_install,
+                        bios=iso_path == GRUB_BIOS_CFG,
+                    )
+                local.write_text(patched, encoding="utf-8")
         except BootloaderRewriteError as e:
             raise IsoBuildError(f"bootloader rewrite aborted: {e}") from e
 
-        _author(src_iso, out_iso, volid, ks_cfg, tailoring_xml, iso_isolinux, iso_grub)
+        _author(src_iso, out_iso, volid, ks_cfg, tailoring_xml, staged)
+
+    return [iso_path for _, iso_path in staged]
 
 
-def _extract(src_iso: Path, iso_path: str, dest: Path) -> None:
+def _run_extract(src_iso: Path, iso_path: str, dest: Path) -> str | None:
+    """Extract one file from the ISO. Returns None on success, else xorriso's
+    stderr."""
     args = [
         "xorriso",
         "-indev",
@@ -76,9 +93,21 @@ def _extract(src_iso: Path, iso_path: str, dest: Path) -> None:
     ]
     result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode != 0 or not dest.exists():
+        detail = result.stderr.strip() or "no output produced"
+        return f"exit {result.returncode}: {detail}"
+    return None
+
+
+def _try_extract(src_iso: Path, iso_path: str, dest: Path) -> bool:
+    return _run_extract(src_iso, iso_path, dest) is None
+
+
+def _extract(src_iso: Path, iso_path: str, dest: Path) -> None:
+    stderr = _run_extract(src_iso, iso_path, dest)
+    if stderr is not None:
         raise IsoBuildError(
-            f"source ISO missing {iso_path} — not an AlmaLinux 9 DVD? "
-            f"(xorriso: {result.stderr.strip()})"
+            f"source ISO missing {iso_path} — not an AlmaLinux install ISO? "
+            f"(xorriso: {stderr.strip()})"
         )
 
 
@@ -88,13 +117,13 @@ def _author(
     volid: str,
     ks_cfg: Path,
     tailoring_xml: Path,
-    isolinux_cfg: Path,
-    grub_cfg: Path,
+    bootloader_cfgs: list[tuple[Path, str]],
 ) -> None:
     # xorriso refuses `-outdev` against a non-empty file when it differs from
     # `-indev`. We treat `--out` as a writable target, so unlink any prior ISO
     # before authoring.
     out_iso.unlink(missing_ok=True)
+    mapped = [*bootloader_cfgs, (ks_cfg, "/ks.cfg"), (tailoring_xml, "/tailoring.xml")]
     args = [
         "xorriso",
         "-indev",
@@ -106,26 +135,10 @@ def _author(
         "replay",
         "-volid",
         volid,
-        "-map",
-        str(isolinux_cfg),
-        "/isolinux/isolinux.cfg",
-        "-map",
-        str(grub_cfg),
-        "/EFI/BOOT/grub.cfg",
-        "-map",
-        str(ks_cfg),
-        "/ks.cfg",
-        "-map",
-        str(tailoring_xml),
-        "/tailoring.xml",
-        "-chmod",
-        "0444",
-        "/ks.cfg",
-        "/tailoring.xml",
-        "/isolinux/isolinux.cfg",
-        "/EFI/BOOT/grub.cfg",
-        "--",
     ]
+    for local, iso_path in mapped:
+        args += ["-map", str(local), iso_path]
+    args += ["-chmod", "0444", *[iso_path for _, iso_path in mapped], "--"]
     result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode != 0:
         raise IsoBuildError(f"xorriso failed: {result.stderr}")

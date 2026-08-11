@@ -19,11 +19,18 @@ GRUB_UNATTENDED_ENTRY = (
     "{marker}\n"
     "menuentry 'Unattended STIG install (ks-gen)' "
     "--class fedora --class gnu-linux --class gnu --class os {{\n"
-    "  linuxefi /images/pxeboot/vmlinuz"
+    # Don't inherit whatever $root the stock file-scope `search` left behind:
+    # its label is the pre-relabel one and may match nothing, or something else.
+    "  search --no-floppy --set=root -l '{volid}'\n"
+    "  {linux} /images/pxeboot/vmlinuz"
     " inst.stage2=hd:LABEL={volid}"
     "{repo}"
     " inst.ks=hd:LABEL={volid}:/ks.cfg"
     " quiet\n"
-    "  initrdefi /images/pxeboot/initrd.img\n"
+    "  {initrd} /images/pxeboot/initrd.img\n"
     "}}\n"
 )
+
+# The i386-pc grub build used for BIOS boot has no linuxefi/initrdefi.
+GRUB_EFI_LOADER = {"linux": "linuxefi", "initrd": "initrdefi"}
+GRUB_BIOS_LOADER = {"linux": "linux", "initrd": "initrd"}
