@@ -19,6 +19,9 @@ GRUB_UNATTENDED_ENTRY = (
     "{marker}\n"
     "menuentry 'Unattended STIG install (ks-gen)' "
     "--class fedora --class gnu-linux --class gnu --class os {{\n"
+    # Don't inherit whatever $root the stock file-scope `search` left behind:
+    # its label is the pre-relabel one and may match nothing, or something else.
+    "  search --no-floppy --set=root -l '{volid}'\n"
     "  {linux} /images/pxeboot/vmlinuz"
     " inst.stage2=hd:LABEL={volid}"
     "{repo}"

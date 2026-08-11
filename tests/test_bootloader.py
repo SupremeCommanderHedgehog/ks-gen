@@ -184,6 +184,21 @@ def test_rewrite_grub_al10_defaults_to_ks_gen_entry():
     )
 
 
+def test_rewrite_grub_entry_pins_root_to_new_volid():
+    # EL10 grub.cfg carries a file-scope `search --set=root -l '<stock label>'`
+    # that no longer matches once we relabel the ISO. Keep our entry
+    # self-contained rather than depending on whatever $root is left over.
+    result = rewrite_grub(_read_fixture_al10("grub.cfg"), volid="ALMA10")
+    entry = result.split("menuentry 'Install AlmaLinux 10.2'")[0]
+    assert "search --no-floppy --set=root -l 'ALMA10'" in entry
+
+
+def test_rewrite_grub_bios_entry_pins_root_to_new_volid():
+    result = rewrite_grub(_read_fixture_al10("bios-grub.cfg"), volid="ALMA10", bios=True)
+    entry = result.split("menuentry 'Install AlmaLinux 10.2'")[0]
+    assert "search --no-floppy --set=root -l 'ALMA10'" in entry
+
+
 def test_rewrite_grub_bios_network_install_omits_repo():
     result = rewrite_grub(
         _read_fixture_al10("bios-grub.cfg"), volid="DEV0", bios=True, network_install=True

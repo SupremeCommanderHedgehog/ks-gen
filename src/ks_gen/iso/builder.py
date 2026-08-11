@@ -3,8 +3,6 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
-from collections.abc import Callable
-from functools import partial
 from pathlib import Path
 
 from ks_gen.iso.bootloader import (
@@ -61,26 +59,23 @@ def build_iso(
         try:
             for local, iso_path in staged:
                 local.chmod(0o644)
-                local.write_text(
-                    _rewrite_for(iso_path)(
-                        local.read_text(encoding="utf-8"),
+                text = local.read_text(encoding="utf-8")
+                if iso_path == ISOLINUX_CFG:
+                    patched = rewrite_isolinux(text, volid=volid, network_install=network_install)
+                else:
+                    patched = rewrite_grub(
+                        text,
                         volid=volid,
                         network_install=network_install,
-                    ),
-                    encoding="utf-8",
-                )
+                        bios=iso_path == GRUB_BIOS_CFG,
+                    )
+                local.write_text(patched, encoding="utf-8")
         except BootloaderRewriteError as e:
             raise IsoBuildError(f"bootloader rewrite aborted: {e}") from e
 
         _author(src_iso, out_iso, volid, ks_cfg, tailoring_xml, staged)
 
     return [iso_path for _, iso_path in staged]
-
-
-def _rewrite_for(iso_path: str) -> Callable[..., str]:
-    if iso_path == ISOLINUX_CFG:
-        return rewrite_isolinux
-    return partial(rewrite_grub, bios=iso_path == GRUB_BIOS_CFG)
 
 
 def _run_extract(src_iso: Path, iso_path: str, dest: Path) -> str | None:
@@ -98,7 +93,8 @@ def _run_extract(src_iso: Path, iso_path: str, dest: Path) -> str | None:
     ]
     result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode != 0 or not dest.exists():
-        return result.stderr or ""
+        detail = result.stderr.strip() or "no output produced"
+        return f"exit {result.returncode}: {detail}"
     return None
 
 
