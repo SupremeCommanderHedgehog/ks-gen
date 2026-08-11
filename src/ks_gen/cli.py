@@ -188,11 +188,17 @@ def iso_cmd(
         raise typer.Exit(code=int(ExitCode.USAGE))
 
     try:
-        build_iso(src, ks, tailoring, out, volid=volid, network_install=network_install)
+        patched = build_iso(src, ks, tailoring, out, volid=volid, network_install=network_install)
     except IsoBuildError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(code=int(ExitCode.TOOL_MISSING)) from None
-    typer.echo(f"Wrote {out}")
+    typer.echo(f"Wrote {out} (unattended entry added to {', '.join(patched)})")
+    if patched == ["/EFI/BOOT/grub.cfg"]:
+        typer.echo(
+            "warning: source ISO has no BIOS bootloader config — the unattended "
+            "entry only applies when booting under UEFI.",
+            err=True,
+        )
 
 
 def _record_run(record_dir: Path, report: VerifyReport) -> None:

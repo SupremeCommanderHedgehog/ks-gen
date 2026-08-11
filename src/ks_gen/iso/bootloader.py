@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 
 from ks_gen.iso._menu import (
+    GRUB_BIOS_LOADER,
+    GRUB_EFI_LOADER,
     GRUB_UNATTENDED_ENTRY,
     IDEMPOTENCY_MARKER,
     ISOLINUX_UNATTENDED_ENTRY,
@@ -48,7 +50,19 @@ def rewrite_isolinux(
     return text[: match.start()] + entry + "\n" + text[match.start() :]
 
 
-def rewrite_grub(text: str, *, volid: str, timeout: int = 5, network_install: bool = False) -> str:
+def rewrite_grub(
+    text: str,
+    *,
+    volid: str,
+    timeout: int = 5,
+    network_install: bool = False,
+    bios: bool = False,
+) -> str:
+    """Insert the unattended entry into a grub.cfg.
+
+    `bios=True` targets EL10's /boot/grub2/grub.cfg, whose i386-pc grub
+    needs plain linux/initrd rather than the EFI linuxefi/initrdefi.
+    """
     if IDEMPOTENCY_MARKER in text:
         return text
 
@@ -78,5 +92,10 @@ def rewrite_grub(text: str, *, volid: str, timeout: int = 5, network_install: bo
     match = re.search(r"^menuentry\s+", text, flags=re.MULTILINE)
     assert match is not None  # verified above
     repo = _inst_repo_arg(volid, network_install)
-    entry = GRUB_UNATTENDED_ENTRY.format(marker=IDEMPOTENCY_MARKER, volid=volid, repo=repo)
+    entry = GRUB_UNATTENDED_ENTRY.format(
+        marker=IDEMPOTENCY_MARKER,
+        volid=volid,
+        repo=repo,
+        **(GRUB_BIOS_LOADER if bios else GRUB_EFI_LOADER),
+    )
     return text[: match.start()] + entry + "\n" + text[match.start() :]
