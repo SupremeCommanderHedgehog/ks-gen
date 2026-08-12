@@ -42,7 +42,7 @@ from ks_gen.writer import build_bundle, write_bundle
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="ks-gen — DISA STIG kickstart/autoinstall generator (AlmaLinux 9, Ubuntu 24.04)",
+    help="ks-gen — DISA STIG kickstart/autoinstall generator (AlmaLinux 8/9/10, Ubuntu 24.04)",
 )
 
 
