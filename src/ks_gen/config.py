@@ -789,13 +789,18 @@ class HostConfig(StrictModel):
                 "the Ubuntu autoinstall path does not consume install.* (the "
                 "setting would be silently ignored)."
             )
-        if self.distro not in _INSTALL_DEFAULT_URLS_BY_DISTRO and (
-            self.install.baseos_url == _INSTALL_DEFAULT_BASEOS_URL
-            or self.install.appstream_url == _INSTALL_DEFAULT_APPSTREAM_URL
-        ):
+        # Reject another distro's mirrors — including this distro's own
+        # stale defaults after a `gen` round-trip made them explicit.
+        foreign = {
+            url
+            for distro, pair in _INSTALL_DEFAULT_URLS_BY_DISTRO.items()
+            if distro != self.distro
+            for url in pair
+        }
+        if self.install.baseos_url in foreign or self.install.appstream_url in foreign:
             raise ValueError(
-                "install.source=network still uses AlmaLinux 9.8 default mirror "
-                f"URL(s) that do not match distro={self.distro}. Set BOTH "
+                "install.source=network uses default mirror URL(s) belonging to "
+                f"another distro; they do not match distro={self.distro}. Set BOTH "
                 "install.baseos_url and install.appstream_url to your distro/"
                 "release's BaseOS and AppStream repos."
             )
@@ -858,19 +863,25 @@ class HostConfig(StrictModel):
         """Fill in the distro's mirror URLs when the operator didn't name them.
 
         Runs before construction so "was it explicitly set?" is still
-        answerable — after defaults are applied it no longer is.
+        answerable — after defaults are applied it no longer is. Applies even
+        when there's no `install:` block at all: `gen` writes the expanded
+        config back out, so a wrong URL here becomes an explicit one there.
+
+        Copies rather than mutating: callers (verify/suggest) dump the same
+        dict back over the operator's file.
         """
         distro = data.get("distro", "alma9")
         urls = _INSTALL_DEFAULT_URLS_BY_DISTRO.get(distro)
         if urls is None:
             return data
         install = data.get("install")
-        if not isinstance(install, dict):
+        if install is not None and not isinstance(install, dict):
             return data
         baseos, appstream = urls
+        install = {**(install or {})}
         install.setdefault("baseos_url", baseos)
         install.setdefault("appstream_url", appstream)
-        return data
+        return {**data, "install": install}
 
     @model_validator(mode="after")
     def _minimal_preset_rejects_luks(self) -> HostConfig:

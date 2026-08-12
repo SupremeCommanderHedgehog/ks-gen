@@ -51,19 +51,26 @@ in-place — `git diff` shows what SSG changed.
 
 - AlmaLinux 8: **1630** rules
 - AlmaLinux 9: **1530** rules
-- AlmaLinux 10: **1061** rules (measured 2026-08-11 for #58; the EL10 content
-  is younger than EL9's, and its `stig` profile selects **508** of them)
+- AlmaLinux 10: **1061** rules (added 2026-08-11 for #58; the EL10 content is
+  younger than EL9's, and its `stig` profile selects **508** of them)
 - Ubuntu 24.04: **639** rules
-- Shared across all 3: **452** rules (universal STIG floor)
+- Shared across all 4: **409** rules (universal STIG floor)
+- AL9 ∩ AL10: **991** rules (65% of AL10) — the alma10 re-export gambit holds
+  for 12 of 15 rules; the 3 that diverge are documented in their rule modules
 - AL8 ∩ AL9: **1435** rules (88% of AL8, 94% of AL9) — confirms the alma8
   re-export gambit from #121 phase 2: the alma9 `emit_tailoring` output
   is mostly directly valid on alma8
 
 Full distro-only sets and pairwise breakdowns: `cross-distro-rule-id-diff.md`.
-That file still covers alma8/alma9/ubuntu2404 only — the extractor rewrites it
-from whatever `--datastream` set it is given, so folding alma10 in means
-re-running the recipe above with all four datastreams at once, not a partial
-re-run.
+
+The extractor rewrites that file from whatever `--datastream` set it is given,
+so always re-run it with **all four** at once — a partial run silently drops
+the distros you left out.
+
+`tests/test_rule_ids_exist_in_datastream.py` asserts that every SSG rule ID
+referenced by a rule exists in its distro's list here, so a stale pin or an
+upstream rename fails the suite instead of turning into a silent no-op on a
+live host.
 
 ## Why pin downstream versions, not upstream
 

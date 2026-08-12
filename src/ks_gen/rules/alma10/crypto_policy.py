@@ -6,8 +6,9 @@ splits the same check into two stig-selected rules:
   - harden_sshd_ciphers_openssh_conf_crypto_policy
   - harden_sshd_ciphers_opensshserver_conf_crypto_policy
 
-(alma8 already carries these two names for the same reason — AL8 SSG had
-them before AL9 dropped the pair.) `enable_fips_mode` is unchanged.
+`enable_fips_mode` is unchanged. (alma8 diverges from alma9 here too, but
+over a different pair — sshd_use_approved_kex_ordered_stig and
+sshd_use_approved_macs — and it still carries sshd_use_approved_ciphers.)
 
 emit_post is reused from alma9: `update-crypto-policies` behaves the same
 on AL10.

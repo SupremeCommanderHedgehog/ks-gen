@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from ks_gen.config import HostConfig, Install, InstallSourceKind
 from ks_gen.loader import ConfigError, load_host_config
@@ -116,9 +117,49 @@ def test_alma10_explicit_urls_win_over_defaults():
     assert "/10/" in cfg.install.appstream_url
 
 
-def test_alma10_media_source_leaves_urls_alone():
+def test_alma10_without_install_block_still_gets_al10_urls():
+    # `ks-gen gen` writes the fully-expanded config back out, so whatever
+    # lands here becomes explicit in the operator's host.yaml. AL9 URLs
+    # under distro=alma10 would then survive a later flip to network.
     cfg = HostConfig(distro="alma10", **_minimal_kwargs())
     assert cfg.install.source == InstallSourceKind.MEDIA
+    assert "/almalinux/10/" in cfg.install.baseos_url
+    assert "/almalinux/10/" in cfg.install.appstream_url
+
+
+def test_alma10_rejects_explicit_al9_urls():
+    with pytest.raises(ValidationError, match="do not match distro"):
+        HostConfig(
+            distro="alma10",
+            install={
+                "source": "network",
+                "baseos_url": "https://repo.almalinux.org/almalinux/9.8/BaseOS/x86_64/os/",
+                "appstream_url": "https://repo.almalinux.org/almalinux/9.8/AppStream/x86_64/os/",
+            },
+            **_minimal_kwargs(),
+        )
+
+
+def test_alma9_rejects_explicit_al10_urls():
+    with pytest.raises(ValidationError, match="do not match distro"):
+        HostConfig(
+            distro="alma9",
+            install={
+                "source": "network",
+                "baseos_url": "https://repo.almalinux.org/almalinux/10/BaseOS/x86_64/os/",
+                "appstream_url": "https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/",
+            },
+            **_minimal_kwargs(),
+        )
+
+
+def test_validator_does_not_mutate_the_callers_install_dict():
+    # verify/suggest.py shallow-copies the loaded config and dumps it back
+    # over the operator's host.yaml — mutating the nested dict would write
+    # keys they never authored.
+    install = {"source": "network"}
+    HostConfig(distro="alma10", install=install, **_minimal_kwargs())
+    assert install == {"source": "network"}
 
 
 def test_alma10_network_emits_url_and_repo():
