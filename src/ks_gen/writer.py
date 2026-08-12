@@ -43,7 +43,7 @@ class Bundle:
     the invariant so callers downstream of construction can rely on it.
     """
 
-    distro: Literal["alma9", "alma8", "ubuntu2404"]
+    distro: Literal["alma9", "alma8", "alma10", "ubuntu2404"]
     tailoring_xml: str
     host_yaml: str
     exceptions_md: str
@@ -52,7 +52,7 @@ class Bundle:
     meta_data: str | None = None
 
     def __post_init__(self) -> None:
-        if self.distro in ("alma9", "alma8"):
+        if self.distro in ("alma9", "alma8", "alma10"):
             if self.ks_cfg is None:
                 raise ValueError(f"{self.distro} bundle requires ks_cfg")
             if self.user_data is not None:
@@ -89,7 +89,7 @@ def render_tailoring(cfg: HostConfig) -> str:
 
 
 def build_bundle(cfg: HostConfig) -> Bundle:
-    if cfg.distro == "alma9" or cfg.distro == "alma8":
+    if cfg.distro == "alma9" or cfg.distro == "alma8" or cfg.distro == "alma10":
         return _build_rhel_family_bundle(cfg)
     if cfg.distro == "ubuntu2404":
         return _build_ubuntu2404_bundle(cfg)
@@ -177,7 +177,7 @@ def write_bundle(bundle: Bundle, out_dir: Path) -> None:
     (out_dir / "tailoring.xml").write_text(bundle.tailoring_xml, encoding="utf-8", newline="\n")
     (out_dir / "host.yaml").write_text(bundle.host_yaml, encoding="utf-8", newline="\n")
     (out_dir / "exceptions.md").write_text(bundle.exceptions_md, encoding="utf-8", newline="\n")
-    if bundle.distro == "alma9" or bundle.distro == "alma8":
+    if bundle.distro == "alma9" or bundle.distro == "alma8" or bundle.distro == "alma10":
         assert bundle.ks_cfg is not None  # Bundle.__post_init__ guarantees this
         (out_dir / "ks.cfg").write_text(bundle.ks_cfg, encoding="utf-8", newline="\n")
     elif bundle.distro == "ubuntu2404":

@@ -1,0 +1,9 @@
+distro: alma10
+system:
+  hostname: a10-min
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-ed25519 AAAA a@b"
+    sudo: nopasswd_yes

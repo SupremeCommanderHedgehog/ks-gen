@@ -11,6 +11,7 @@ time. Upstream SSG (`ComplianceAsCode/content`) was on `v0.1.81` on
 |---|---|---|---|
 | AlmaLinux 8.10 | `scap-security-guide` | `0.1.74-3.el8_10.alma.1` | https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.74-3.el8_10.alma.1.noarch.rpm |
 | AlmaLinux 9 (latest) | `scap-security-guide` | `0.1.80-1.el9_7.alma.2` | https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.80-1.el9_7.alma.2.noarch.rpm |
+| AlmaLinux 10 (latest) | `scap-security-guide` | `0.1.81-1.el10_2.alma.1` | https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el10_2.alma.1.noarch.rpm |
 | Ubuntu 24.04 (noble) | `ssg-debderived` | `0.1.79-1` | http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.79-1_all.deb |
 
 ## Re-extraction recipe (reproducibility for SSG version bumps)
@@ -50,13 +51,26 @@ in-place — `git diff` shows what SSG changed.
 
 - AlmaLinux 8: **1630** rules
 - AlmaLinux 9: **1530** rules
+- AlmaLinux 10: **1061** rules (added 2026-08-11 for #58; the EL10 content is
+  younger than EL9's, and its `stig` profile selects **508** of them)
 - Ubuntu 24.04: **639** rules
-- Shared across all 3: **452** rules (universal STIG floor)
+- Shared across all 4: **409** rules (universal STIG floor)
+- AL9 ∩ AL10: **991** rules (65% of AL10) — the alma10 re-export gambit holds
+  for 12 of 15 rules; the 3 that diverge are documented in their rule modules
 - AL8 ∩ AL9: **1435** rules (88% of AL8, 94% of AL9) — confirms the alma8
   re-export gambit from #121 phase 2: the alma9 `emit_tailoring` output
   is mostly directly valid on alma8
 
 Full distro-only sets and pairwise breakdowns: `cross-distro-rule-id-diff.md`.
+
+The extractor rewrites that file from whatever `--datastream` set it is given,
+so always re-run it with **all four** at once — a partial run silently drops
+the distros you left out.
+
+`tests/test_rule_ids_exist_in_datastream.py` asserts that every SSG rule ID
+referenced by a rule exists in its distro's list here, so a stale pin or an
+upstream rename fails the suite instead of turning into a silent no-op on a
+live host.
 
 ## Why pin downstream versions, not upstream
 
