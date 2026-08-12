@@ -27,6 +27,8 @@ curl -sLo al8.rpm \
   https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.74-3.el8_10.alma.1.noarch.rpm
 curl -sLo al9.rpm \
   https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.80-1.el9_7.alma.2.noarch.rpm
+curl -sLo al10.rpm \
+  https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el10_2.alma.1.noarch.rpm
 curl -sLo ssg.deb \
   http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.79-1_all.deb
 
@@ -34,6 +36,8 @@ curl -sLo ssg.deb \
 rpm2cpio al8.rpm | cpio -id --quiet './usr/share/xml/scap/ssg/content/ssg-almalinux8-ds.xml'
 mkdir al9-ex && (cd al9-ex && rpm2cpio ../al9.rpm | cpio -id --quiet \
   './usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml')
+mkdir al10-ex && (cd al10-ex && rpm2cpio ../al10.rpm | cpio -id --quiet \
+  './usr/share/xml/scap/ssg/content/ssg-almalinux10-ds.xml')
 mkdir ubuntu-ex && dpkg-deb -x ssg.deb ubuntu-ex/
 
 # Run the extractor (from the ks-gen repo root)

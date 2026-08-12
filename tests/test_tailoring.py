@@ -1,5 +1,6 @@
 from ks_gen.rules._types import TailoringOp
-from ks_gen.tailoring import build_tailoring_xml
+from ks_gen.skeleton import render_skeleton
+from ks_gen.tailoring import TAILORED_PROFILE_ID, build_tailoring_xml
 
 
 def test_empty_ops_produces_skeleton():
@@ -68,3 +69,33 @@ def test_benchmark_href_uses_scap_content_ubuntu():
     )
     assert '<xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml"/>' in xml
     assert "ssg-almalinux9-ds.xml" not in xml
+
+
+def test_generated_profile_id_matches_the_exported_constant():
+    """#65: the id emitted here is the id every oscap --profile must name."""
+    xml = build_tailoring_xml(
+        [],
+        profile_id="xccdf_org.ssgproject.content_profile_stig",
+        scap_content="ssg-almalinux9-ds.xml",
+    )
+    assert f'<xccdf:Profile id="{TAILORED_PROFILE_ID}"' in xml
+
+
+def test_kickstart_oscap_evaluates_the_tailored_profile(minimal_cfg):
+    """Naming the base profile loads the tailoring and silently ignores it.
+
+    Confirmed on real AL10 hardware: the ARF reported
+    testresult_...content_profile_stig and every disabled rule was still
+    scanned. This is the regression pin for that.
+    """
+    ks = render_skeleton(minimal_cfg, post_blocks=[])
+    assert f"--profile {TAILORED_PROFILE_ID}" in ks
+    assert "--profile xccdf_org.ssgproject.content_profile_stig" not in ks
+
+
+def test_verify_oscap_command_evaluates_the_tailored_profile(minimal_cfg):
+    from ks_gen.verify.remote import _oscap_command
+
+    cmd = _oscap_command(minimal_cfg)
+    assert f"--profile {TAILORED_PROFILE_ID}" in cmd
+    assert "--profile xccdf_org.ssgproject.content_profile_stig" not in cmd

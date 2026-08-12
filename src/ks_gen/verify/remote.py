@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ks_gen.config import HostConfig
+from ks_gen.tailoring import TAILORED_PROFILE_ID
 from ks_gen.verify.errors import ArfMissingError, OscapInvocationError
 from ks_gen.verify.ssh import _first_stderr_line
 
@@ -26,7 +27,9 @@ def _oscap_command(cfg: HostConfig) -> str:
     return (
         "oscap xccdf eval "
         f"--tailoring-file {REMOTE_TAILORING} "
-        f"--profile xccdf_org.ssgproject.content_profile_{cfg.meta.profile} "
+        # Must name the tailoring's own profile; the base id evaluates
+        # untailored and silently ignores every exception (#65).
+        f"--profile {TAILORED_PROFILE_ID} "
         "--fetch-remote-resources "
         f"--results-arf {REMOTE_CURRENT_ARF} "
         f"/usr/share/xml/scap/ssg/content/{cfg.meta.scap_content}"

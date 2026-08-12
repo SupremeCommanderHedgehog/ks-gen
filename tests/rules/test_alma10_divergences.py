@@ -29,11 +29,14 @@ def _al10(cfg, **update):
 # ---------------- banner_text (shared with alma9 since #61) ----------------
 
 
-def test_banner_tailoring_is_the_two_al10_rules(minimal_cfg):
+def test_banner_tailoring_is_the_stig_selected_al10_rules(minimal_cfg):
     ops = BANNER.emit_tailoring(_al10(minimal_cfg))
     assert {o.rule_id for o in ops} == {
         f"{_PREFIX}banner_etc_issue",
         f"{_PREFIX}dconf_gnome_banner_enabled",
+        # added via #61 — remediation would write DoD text to the GDM login
+        # screen on a GUI host otherwise
+        f"{_PREFIX}dconf_gnome_login_banner_text",
     }
 
 

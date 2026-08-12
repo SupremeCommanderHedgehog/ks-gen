@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ks_gen.tailoring import TAILORED_PROFILE_ID
+
 
 @dataclass
 class LintReport:
@@ -49,6 +51,14 @@ def _internal_checks(text: str) -> list[str]:
             failures.append("missing: oscap remediation invocation in %post oscap block")
         if "--tailoring-file /root/tailoring.xml" not in text[oscap_idx:]:
             failures.append("missing: --tailoring-file reference in %post oscap block")
+        # #65: oscap evaluates whatever --profile names. Naming the base
+        # profile loads the tailoring and ignores it, silently — every
+        # exception becomes decorative with no error anywhere.
+        if f"--profile {TAILORED_PROFILE_ID}" not in text[oscap_idx:]:
+            failures.append(
+                f"missing: --profile {TAILORED_PROFILE_ID} in %post oscap block "
+                "(naming the base profile silently ignores the tailoring)"
+            )
         if "--fetch-remote-resources" not in text[oscap_idx:]:
             failures.append("missing: --fetch-remote-resources flag in %post oscap block")
     # If both blocks are present, check ordering and fetch-region content.

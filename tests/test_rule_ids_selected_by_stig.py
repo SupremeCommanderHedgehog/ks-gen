@@ -31,9 +31,17 @@ _RULE_PREFIX = "xccdf_org.ssgproject.content_rule_"
 
 def _stig_selected(distro: str) -> set[str]:
     path = _DOCS / f"{distro}-stig-selected.txt"
-    if not path.is_file():
-        pytest.skip(f"no extracted stig-selected list for {distro}")
-    return set(path.read_text(encoding="utf-8").split())
+    # Deliberately NOT pytest.skip: a missing list is the failure mode this
+    # guard exists to catch. A new distro whose lists were never extracted
+    # would otherwise ship inert tailoring with CI green.
+    assert path.is_file(), (
+        f"missing {path.name} — re-run scripts/audit_story/extract_ssg_rule_ids.py "
+        f"with all four datastreams (see docs/audit-story/SSG-VERSIONS.md). "
+        f"Every distro in _DISTROS must have an extracted stig-selected list."
+    )
+    ids = set(path.read_text(encoding="utf-8").split())
+    assert ids, f"{path.name} is empty"
+    return ids
 
 
 @pytest.mark.parametrize("distro", _DISTROS)
@@ -51,6 +59,31 @@ def test_declared_stig_rules_affected_are_stig_selected(distro):
     )
 
 
+@pytest.mark.parametrize("distro", _DISTROS)
+def test_every_emitted_disable_is_declared_and_stig_selected(distro, minimal_cfg):
+    """Covers rules that disable an ID via emit_tailoring without declaring it.
+
+    The declared-list test above only sees `stig_rules_affected`; this walks
+    what the rules actually emit, which is what lands in tailoring.xml.
+    """
+    selected = _stig_selected(distro)
+    cfg = minimal_cfg.model_copy(update={"distro": distro})
+    for rule in load_rules(distro):
+        if not rule.applies(cfg):
+            continue
+        declared = set(getattr(rule, "stig_rules_affected", []) or [])
+        emitted = {op.rule_id for op in rule.emit_tailoring(cfg) if op.action == "disable"}
+        assert emitted <= declared, (
+            f"{distro}/{rule.id} disables IDs it never declares in "
+            f"stig_rules_affected: {sorted(emitted - declared)} — the declared "
+            f"list is what exceptions.md and the other guard read."
+        )
+        assert emitted <= selected, (
+            f"{distro}/{rule.id} disables rules the stig profile never "
+            f"selects: {sorted(emitted - selected)}"
+        )
+
+
 @pytest.mark.parametrize("distro", _RHEL_FAMILY)
 @pytest.mark.parametrize("policy", [CryptoPolicy.MODERN, CryptoPolicy.FUTURE])
 def test_crypto_policy_only_disables_stig_selected_rules(distro, policy, minimal_cfg):
@@ -65,6 +98,28 @@ def test_crypto_policy_only_disables_stig_selected_rules(distro, policy, minimal
         f"{distro}/{policy.value} disables rules the stig profile never selects: "
         f"{sorted(disabled - selected)}"
     )
+
+
+@pytest.mark.parametrize("distro", _RHEL_FAMILY)
+@pytest.mark.parametrize(
+    ("policy", "expected"),
+    [(CryptoPolicy.MODERN, "DEFAULT"), (CryptoPolicy.FUTURE, "FUTURE")],
+)
+def test_crypto_policy_set_value_matches_the_policy_post_applies(
+    distro, policy, expected, minimal_cfg
+):
+    """The tailored value must equal what %post's update-crypto-policies sets.
+
+    Both come from _POLICY_NAME; if they ever diverge, configure_crypto_policy
+    asserts a value the host never has. FUTURE was previously unpinned.
+    """
+    cfg = minimal_cfg.model_copy(update={"distro": distro, "crypto": Crypto(policy=policy)})
+    crypto = next(r for r in load_rules(distro) if r.id == "crypto_policy")
+
+    set_values = [op for op in crypto.emit_tailoring(cfg) if op.action == "set_value"]
+    assert len(set_values) == 1
+    assert set_values[0].value == expected
+    assert f"update-crypto-policies --set {expected}" in crypto.emit_post(cfg)
 
 
 @pytest.mark.parametrize("distro", _RHEL_FAMILY)
