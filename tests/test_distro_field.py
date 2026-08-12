@@ -86,6 +86,26 @@ def test_scap_content_explicit_override_must_match_distro_alma8():
     assert "scap_content" in str(ei.value)
 
 
+def test_distro_accepts_alma10():
+    cfg = HostConfig(distro="alma10", **_minimal_kwargs())
+    assert cfg.distro == "alma10"
+
+
+def test_scap_content_default_matches_alma10():
+    cfg = HostConfig(distro="alma10", **_minimal_kwargs())
+    assert cfg.meta.scap_content == "ssg-almalinux10-ds.xml"
+
+
+def test_scap_content_explicit_override_must_match_distro_alma10():
+    with pytest.raises(ValidationError) as ei:
+        HostConfig(
+            distro="alma10",
+            meta={"scap_content": "ssg-almalinux9-ds.xml"},
+            **_minimal_kwargs(),
+        )
+    assert "scap_content" in str(ei.value)
+
+
 def test_scap_content_explicit_override_alma8_matches_distro_accepted():
     # Explicit alma8 scap_content matching distro: alma8 works.
     cfg = HostConfig(

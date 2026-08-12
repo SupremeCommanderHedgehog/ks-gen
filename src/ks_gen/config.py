@@ -501,6 +501,16 @@ class InstallSourceKind(StrEnum):
 _INSTALL_DEFAULT_BASEOS_URL = "https://repo.almalinux.org/almalinux/9.8/BaseOS/x86_64/os/"
 _INSTALL_DEFAULT_APPSTREAM_URL = "https://repo.almalinux.org/almalinux/9.8/AppStream/x86_64/os/"
 
+# Per-distro network-install mirrors. AL10 uses the unpinned `10` stream so the
+# URL survives point releases; AL9 keeps its historical 9.8 pin.
+_INSTALL_DEFAULT_URLS_BY_DISTRO: dict[str, tuple[str, str]] = {
+    "alma9": (_INSTALL_DEFAULT_BASEOS_URL, _INSTALL_DEFAULT_APPSTREAM_URL),
+    "alma10": (
+        "https://repo.almalinux.org/almalinux/10/BaseOS/x86_64/os/",
+        "https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/",
+    ),
+}
+
 
 class Install(StrictModel):
     """Where Anaconda gets packages. `media` (default) uses the boot media's
@@ -736,12 +746,13 @@ class ExceptionDecl(StrictModel):
 _DEFAULT_SCAP_CONTENT_BY_DISTRO: dict[str, str] = {
     "alma9": "ssg-almalinux9-ds.xml",
     "alma8": "ssg-almalinux8-ds.xml",
+    "alma10": "ssg-almalinux10-ds.xml",
     "ubuntu2404": "ssg-ubuntu2404-ds.xml",
 }
 
 
 class HostConfig(StrictModel):
-    distro: Literal["alma9", "alma8", "ubuntu2404"] = "alma9"
+    distro: Literal["alma9", "alma8", "alma10", "ubuntu2404"] = "alma9"
     meta: Meta = Field(default_factory=Meta)
     system: System
     network: Network = Field(default_factory=Network)
@@ -778,7 +789,7 @@ class HostConfig(StrictModel):
                 "the Ubuntu autoinstall path does not consume install.* (the "
                 "setting would be silently ignored)."
             )
-        if self.distro != "alma9" and (
+        if self.distro not in _INSTALL_DEFAULT_URLS_BY_DISTRO and (
             self.install.baseos_url == _INSTALL_DEFAULT_BASEOS_URL
             or self.install.appstream_url == _INSTALL_DEFAULT_APPSTREAM_URL
         ):
@@ -839,6 +850,26 @@ class HostConfig(StrictModel):
                 if isinstance(data["meta"], dict):
                     data["meta"]["scap_content"] = expected
 
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def _install_urls_match_distro_before(cls, data: dict[str, Any]) -> dict[str, Any]:
+        """Fill in the distro's mirror URLs when the operator didn't name them.
+
+        Runs before construction so "was it explicitly set?" is still
+        answerable — after defaults are applied it no longer is.
+        """
+        distro = data.get("distro", "alma9")
+        urls = _INSTALL_DEFAULT_URLS_BY_DISTRO.get(distro)
+        if urls is None:
+            return data
+        install = data.get("install")
+        if not isinstance(install, dict):
+            return data
+        baseos, appstream = urls
+        install.setdefault("baseos_url", baseos)
+        install.setdefault("appstream_url", appstream)
         return data
 
     @model_validator(mode="after")

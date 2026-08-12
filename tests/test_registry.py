@@ -95,6 +95,53 @@ def test_registry_alma8_re_exports_same_rule_instances_as_alma9():
             )
 
 
+def test_registry_alma10_returns_same_rule_ids_as_alma9():
+    alma9_ids = {r.id for r in load_rules("alma9")}
+    alma10_ids = {r.id for r in load_rules("alma10")}
+    assert alma10_ids == alma9_ids
+
+
+def test_registry_alma10_re_exports_same_rule_instances_as_alma9():
+    """Same re-export pinning as alma8, with alma10's own divergence set.
+
+    Each entry in `_DIVERGENT` was established against the real AL10
+    datastream / repodata — see the rule docstrings and
+    tests/rules/test_alma10_divergences.py.
+    """
+    _DIVERGENT = {
+        # banner_etc_issue_net is gone from AL10 SSG (0.1.81).
+        "banner_text",
+        # sshd_use_approved_ciphers is gone; AL10 splits it into two
+        # harden_sshd_ciphers_* rules.
+        "crypto_policy",
+        # podman-plugins is not packaged for AL10.
+        "container_host",
+    }
+
+    alma9_rules = {r.id: r for r in load_rules("alma9")}
+    alma10_rules = {r.id: r for r in load_rules("alma10")}
+    for rid, alma10_rule in alma10_rules.items():
+        if rid in _DIVERGENT:
+            assert alma10_rule is not alma9_rules[rid], (
+                f"alma10 rule {rid!r} is in _DIVERGENT but still re-exports "
+                f"the alma9 instance. Either remove from _DIVERGENT or add "
+                f"a real implementation in src/ks_gen/rules/alma10/{rid}.py."
+            )
+        else:
+            assert alma10_rule is alma9_rules[rid], (
+                f"alma10 rule {rid!r} should re-export the alma9 instance "
+                f"(same Python object). If this rule diverged intentionally, "
+                f"add it to _DIVERGENT above."
+            )
+
+
+def test_registry_alma10_package_exists():
+    import importlib
+
+    pkg = importlib.import_module("ks_gen.rules.alma10")
+    assert pkg.__path__
+
+
 def test_registry_alma8_package_exists():
     """alma8 package marker exists; phase 2 populated it with re-exports."""
     import importlib

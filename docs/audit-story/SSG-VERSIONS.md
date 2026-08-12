@@ -11,6 +11,7 @@ time. Upstream SSG (`ComplianceAsCode/content`) was on `v0.1.81` on
 |---|---|---|---|
 | AlmaLinux 8.10 | `scap-security-guide` | `0.1.74-3.el8_10.alma.1` | https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.74-3.el8_10.alma.1.noarch.rpm |
 | AlmaLinux 9 (latest) | `scap-security-guide` | `0.1.80-1.el9_7.alma.2` | https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.80-1.el9_7.alma.2.noarch.rpm |
+| AlmaLinux 10 (latest) | `scap-security-guide` | `0.1.81-1.el10_2.alma.1` | https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el10_2.alma.1.noarch.rpm |
 | Ubuntu 24.04 (noble) | `ssg-debderived` | `0.1.79-1` | http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.79-1_all.deb |
 
 ## Re-extraction recipe (reproducibility for SSG version bumps)
@@ -50,6 +51,8 @@ in-place — `git diff` shows what SSG changed.
 
 - AlmaLinux 8: **1630** rules
 - AlmaLinux 9: **1530** rules
+- AlmaLinux 10: **1061** rules (measured 2026-08-11 for #58; the EL10 content
+  is younger than EL9's, and its `stig` profile selects **508** of them)
 - Ubuntu 24.04: **639** rules
 - Shared across all 3: **452** rules (universal STIG floor)
 - AL8 ∩ AL9: **1435** rules (88% of AL8, 94% of AL9) — confirms the alma8
@@ -57,6 +60,10 @@ in-place — `git diff` shows what SSG changed.
   is mostly directly valid on alma8
 
 Full distro-only sets and pairwise breakdowns: `cross-distro-rule-id-diff.md`.
+That file still covers alma8/alma9/ubuntu2404 only — the extractor rewrites it
+from whatever `--datastream` set it is given, so folding alma10 in means
+re-running the recipe above with all four datastreams at once, not a partial
+re-run.
 
 ## Why pin downstream versions, not upstream
 
