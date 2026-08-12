@@ -16,15 +16,14 @@ _TARGET = {
 }
 
 # ssg-ubuntu2404-ds.xml splits the banner checks into CIS and non-CIS variants.
-# Our civilian banner moots all of them. `sshd_enable_warning_banner_net` is
+# Our civilian banner moots them, but only the non-CIS ones are selected by the
+# stig profile — the three *_cis IDs were dropped via #61 because disabling a
+# rule the profile never selects is inert. `sshd_enable_warning_banner_net` is
 # intentionally NOT in this list — ssh_config_apply's sshd drop-in enables
 # the Banner directive, so that check is satisfied, not mooted.
 _PREFIX = "xccdf_org.ssgproject.content_rule_"
 _TAILORED = [
-    f"{_PREFIX}banner_etc_issue_cis",
     f"{_PREFIX}banner_etc_issue_net",
-    f"{_PREFIX}banner_etc_issue_net_cis",
-    f"{_PREFIX}banner_etc_motd_cis",
     f"{_PREFIX}dconf_gnome_banner_enabled",
     f"{_PREFIX}dconf_gnome_login_banner_text",
 ]

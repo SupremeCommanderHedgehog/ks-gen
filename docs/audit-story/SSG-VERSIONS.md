@@ -27,6 +27,8 @@ curl -sLo al8.rpm \
   https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.74-3.el8_10.alma.1.noarch.rpm
 curl -sLo al9.rpm \
   https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.80-1.el9_7.alma.2.noarch.rpm
+curl -sLo al10.rpm \
+  https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el10_2.alma.1.noarch.rpm
 curl -sLo ssg.deb \
   http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.79-1_all.deb
 
@@ -34,18 +36,26 @@ curl -sLo ssg.deb \
 rpm2cpio al8.rpm | cpio -id --quiet './usr/share/xml/scap/ssg/content/ssg-almalinux8-ds.xml'
 mkdir al9-ex && (cd al9-ex && rpm2cpio ../al9.rpm | cpio -id --quiet \
   './usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml')
+mkdir al10-ex && (cd al10-ex && rpm2cpio ../al10.rpm | cpio -id --quiet \
+  './usr/share/xml/scap/ssg/content/ssg-almalinux10-ds.xml')
 mkdir ubuntu-ex && dpkg-deb -x ssg.deb ubuntu-ex/
 
 # Run the extractor (from the ks-gen repo root)
 python3 scripts/audit_story/extract_ssg_rule_ids.py \
   --datastream alma8="$WORK/usr/share/xml/scap/ssg/content/ssg-almalinux8-ds.xml" \
   --datastream alma9="$WORK/al9-ex/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml" \
+  --datastream alma10="$WORK/al10-ex/usr/share/xml/scap/ssg/content/ssg-almalinux10-ds.xml" \
   --datastream ubuntu2404="$WORK/ubuntu-ex/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml" \
   --out-dir docs/audit-story/
 ```
 
-Re-running on a bump rewrites `*-rule-ids.txt` and `cross-distro-rule-id-diff.md`
-in-place — `git diff` shows what SSG changed.
+Re-running on a bump rewrites `*-rule-ids.txt`, `*-stig-selected.txt`, and
+`cross-distro-rule-id-diff.md` in-place — `git diff` shows what SSG changed.
+
+`*-stig-selected.txt` is the subset of each distro's rules that the `stig`
+profile actually selects (`<select selected="true">`). It exists because
+existence is too weak a guard: a rule can be in the datastream and still never
+run, and disabling one of those is inert (#61).
 
 ## Headline numbers (current pin, 2026-06-20)
 
@@ -67,10 +77,23 @@ The extractor rewrites that file from whatever `--datastream` set it is given,
 so always re-run it with **all four** at once — a partial run silently drops
 the distros you left out.
 
-`tests/test_rule_ids_exist_in_datastream.py` asserts that every SSG rule ID
-referenced by a rule exists in its distro's list here, so a stale pin or an
-upstream rename fails the suite instead of turning into a silent no-op on a
-live host.
+Two mechanical guards run off these lists:
+
+- `tests/test_rule_ids_exist_in_datastream.py` asserts every SSG rule ID
+  referenced by a rule **exists** in its distro's list, so a stale pin or an
+  upstream rename fails the suite instead of turning into a silent no-op on a
+  live host.
+- `tests/test_rule_ids_selected_by_stig.py` asserts every referenced ID is
+  **selected by the `stig` profile**. This is the stronger property: #61 was a
+  case where the IDs existed but were never selected, so the exception looked
+  real in `exceptions.md` while the checks that actually fire stayed enabled.
+
+## stig-selected counts (current pin)
+
+- AlmaLinux 8: **411** of 1630
+- AlmaLinux 9: **489** of 1530
+- AlmaLinux 10: **508** of 1061
+- Ubuntu 24.04: **230** of 639
 
 ## Why pin downstream versions, not upstream
 

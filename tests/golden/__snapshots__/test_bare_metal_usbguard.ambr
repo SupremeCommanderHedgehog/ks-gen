@@ -8,7 +8,7 @@
   
   ## Summary
   - Applied rules: 13
-  - Tailored XCCDF rules: 6
+  - Tailored XCCDF rules: 9
   - Declared exceptions: 0
   
   ## Applied rules
@@ -30,10 +30,13 @@
   | XCCDF rule | Tailored by |
   |---|---|
   | `xccdf_org.ssgproject.content_rule_banner_etc_issue` | `banner_text` |
-  | `xccdf_org.ssgproject.content_rule_banner_etc_issue_net` | `banner_text` |
   | `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled` | `banner_text` |
+  | `xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text` | `banner_text` |
   | `xccdf_org.ssgproject.content_rule_enable_fips_mode` | `crypto_policy` |
-  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root` | `faillock_safety` |
   
   ## Rule exception details
@@ -47,16 +50,19 @@
   
   Disabled XCCDF rules:
   - `xccdf_org.ssgproject.content_rule_banner_etc_issue`
-  - `xccdf_org.ssgproject.content_rule_banner_etc_issue_net`
   - `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled`
+  - `xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text`
   
   ### `crypto_policy` — MODERN crypto policy
   
-  _Reason:_ MODERN accepts loss of FIPS 140-3 certification in exchange for Curve25519 / Ed25519 / ChaCha20-Poly1305 support.
+  _Reason:_ MODERN accepts loss of FIPS 140-3 certification in exchange for Curve25519 / Ed25519 / ChaCha20-Poly1305 support. The system crypto policy variable is retuned to DEFAULT so configure_crypto_policy still evaluates against the chosen policy instead of being suppressed.
   
   Disabled XCCDF rules:
   - `xccdf_org.ssgproject.content_rule_enable_fips_mode`
-  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers`
+  - `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy`
+  - `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy`
+  - `xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy`
+  - `xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy`
   
   ### `dod_root_ca` — DoD root/intermediate CA bundle not installed.
   
@@ -161,11 +167,21 @@
   test -s /root/tailoring.xml
   head -c 5 /root/tailoring.xml | grep -q '<?xml'
   
+  # --profile below names a profile that exists ONLY in this tailoring file, so
+  # a mismatched tailoring makes oscap abort — and the `|| true` would swallow
+  # it, leaving a green install with zero remediation. Fail closed instead: this
+  # block is --erroronfail, so a wrong bundle stops the install loudly.
+  grep -q 'id="xccdf_ks-gen_profile_tailored"' /root/tailoring.xml || {
+    echo "ks-gen: /root/tailoring.xml does not define xccdf_ks-gen_profile_tailored" >&2
+    echo "ks-gen: refusing to install unremediated — check the ks.cfg/tailoring pair" >&2
+    exit 1
+  }
+  
   # --remediate can exit non-zero when rules remain failed (e.g., exception-
   # disabled rules). The next %post block (ks-gen rule overrides) re-asserts
   # critical state, so don't abort the install on a non-zero oscap exit.
   oscap xccdf eval --remediate \
-    --profile xccdf_org.ssgproject.content_profile_stig \
+    --profile xccdf_ks-gen_profile_tailored \
     --fetch-remote-resources \
     --tailoring-file /root/tailoring.xml \
     --results-arf /root/oscap-remediation-results.xml \
@@ -224,6 +240,16 @@
   Use of this system constitutes consent to such monitoring.
   __KS_GEN_EOF__
   chmod 644 /etc/motd
+  if [ -d /etc/dconf ]; then  # GDM greeter banner (/etc/dconf/db/gdm.d/01-ks-gen-banner)
+    mkdir -p /etc/dconf/db/gdm.d
+    cat > /etc/dconf/db/gdm.d/01-ks-gen-banner <<'__KS_GEN_EOF__'
+  [org/gnome/login-screen]
+  banner-message-enable=true
+  banner-message-text='WARNING: This is a private computer system. Unauthorized access is\nprohibited. All activity on this system may be monitored and logged.\nUse of this system constitutes consent to such monitoring.'
+  __KS_GEN_EOF__
+    chmod 0644 /etc/dconf/db/gdm.d/01-ks-gen-banner
+    dconf update || true
+  fi
   
   # ===== crypto_policy =====
   # Apply system-wide crypto policy: MODERN (DEFAULT)
@@ -408,10 +434,14 @@
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_auditd_disk_error_action">SUSPEND</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_auditd_max_log_file_action">ROTATE</xccdf:set-value>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_banner_etc_issue" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_banner_etc_issue_net" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_enable_fips_mode" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy" selected="false"/>
+      <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_system_crypto_policy">DEFAULT</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time">900</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_deny">3</xccdf:set-value>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root" selected="false"/>

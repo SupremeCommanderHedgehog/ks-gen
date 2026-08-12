@@ -13,7 +13,8 @@ def test_tailoring_disables_banner_content_rules(minimal_cfg):
     ops = RULE.emit_tailoring(minimal_cfg)
     disabled = {o.rule_id for o in ops if o.action == "disable"}
     assert any("banner_etc_issue" in r for r in disabled)
-    assert any("banner_etc_issue_net" in r for r in disabled)
+    # banner_etc_issue_net dropped in #61 — the stig profile never selects it.
+    assert not any(r.endswith("banner_etc_issue_net") for r in disabled)
 
 
 def test_post_does_not_contain_dod_text(minimal_cfg):

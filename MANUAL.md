@@ -1134,9 +1134,12 @@ For writing the resulting ISO to a USB stick on Windows, see §8.6.
 Once the system reboots and you can SSH in:
 
 ```bash
-# Confirm STIG profile applied
+# Confirm STIG profile applied.
+# --profile MUST name ks-gen's tailored profile, not the base SSG one:
+# oscap evaluates whatever --profile names, so passing the base id loads
+# the tailoring file and silently ignores every exception in it.
 sudo oscap xccdf eval \
-  --profile xccdf_org.ssgproject.content_profile_stig \
+  --profile xccdf_ks-gen_profile_tailored \
   --tailoring-file /root/tailoring.xml \
   /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml
 

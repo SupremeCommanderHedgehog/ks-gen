@@ -9,6 +9,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoes
 
 from ks_gen import __version__
 from ks_gen.config import HostConfig
+from ks_gen.tailoring import TAILORED_PROFILE_ID
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,7 @@ def render_skeleton(
         rule_packages=rule_packages or [],
         version=__version__,
         generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        tailored_profile_id=TAILORED_PROFILE_ID,
     )
 
 

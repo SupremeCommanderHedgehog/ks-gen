@@ -10,10 +10,16 @@ if TYPE_CHECKING:
     from ks_gen.config import HostConfig
 
 _PREFIX = "xccdf_org.ssgproject.content_rule_"
+# banner_etc_issue_net dropped via #61: it exists in the AL8 and AL9
+# datastreams but the stig profile selects neither, so disabling it was
+# inert. AL10 doesn't ship it at all.
+# dconf_gnome_login_banner_text added via #61: stig-selected on all three
+# Alma distros, and its remediation writes the DoD text into the GDM login
+# screen — the exact text this rule exists to replace.
 _TAILORED = [
     f"{_PREFIX}banner_etc_issue",
-    f"{_PREFIX}banner_etc_issue_net",
     f"{_PREFIX}dconf_gnome_banner_enabled",
+    f"{_PREFIX}dconf_gnome_login_banner_text",
 ]
 
 _TARGET = {
@@ -21,6 +27,30 @@ _TARGET = {
     "issue_net": "/etc/issue.net",
     "motd": "/etc/motd",
 }
+
+_GDM_DB = "/etc/dconf/db/gdm.d"
+_GDM_KEYFILE = f"{_GDM_DB}/01-ks-gen-banner"
+
+
+def _gdm_banner_lines(text: str) -> list[str]:
+    """Write the GDM greeter banner via dconf.
+
+    Single-line value: dconf keyfile syntax has no multi-line form, so the
+    banner's newlines are escaped into the string literal.
+    """
+    escaped = text.rstrip("\n").replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n")
+    return [
+        f"if [ -d /etc/dconf ]; then  # GDM greeter banner ({_GDM_KEYFILE})",
+        f"  mkdir -p {_GDM_DB}",
+        f"  cat > {_GDM_KEYFILE} <<'__KS_GEN_EOF__'",
+        "[org/gnome/login-screen]",
+        "banner-message-enable=true",
+        f"banner-message-text='{escaped}'",
+        "__KS_GEN_EOF__",
+        f"  chmod 0644 {_GDM_KEYFILE}",
+        "  dconf update || true",
+        "fi",
+    ]
 
 
 @dataclass(frozen=True)
@@ -41,7 +71,11 @@ class _Rule:
         lines = ["# Civilian-equivalent login banner"]
         for target in cfg.banner.apply_to:
             if target == "gdm":
-                continue  # GDM banner only meaningful with GUI; oscap rule above disabled
+                # We disable the two dconf banner rules, so oscap no longer
+                # writes the GDM greeter text — we must write it ourselves or
+                # a GUI host ends up with no login banner at all.
+                lines.extend(_gdm_banner_lines(text))
+                continue
             path = _TARGET[target]
             lines.append(f"cat > {path} <<'__KS_GEN_EOF__'")
             lines.append(text.rstrip("\n"))

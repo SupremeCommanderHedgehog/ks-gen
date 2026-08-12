@@ -15,7 +15,7 @@ def test_report_lists_disabled_xccdf_rules(minimal_cfg):
     rules = [r for r in topo_sort(load_rules(minimal_cfg.distro)) if r.applies(minimal_cfg)]
     md = render_exceptions_md(minimal_cfg, rules)
     assert "banner_etc_issue" in md
-    assert "sshd_use_approved_ciphers" in md
+    assert "harden_sshd_ciphers_openssh_conf_crypto_policy" in md
 
 
 def test_report_includes_declared_exceptions(minimal_cfg):
@@ -51,7 +51,7 @@ def test_expected_failure_rule_ids_includes_rule_exceptions(minimal_cfg):
 
     ids = expected_failure_rule_ids(minimal_cfg)
     assert "xccdf_org.ssgproject.content_rule_banner_etc_issue" in ids
-    assert "xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers" in ids
+    assert "xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy" in ids
 
 
 def test_expected_failure_rule_ids_includes_declared_exceptions(minimal_cfg):

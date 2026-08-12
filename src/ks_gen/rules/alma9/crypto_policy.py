@@ -10,17 +10,66 @@ if TYPE_CHECKING:
     from ks_gen.config import HostConfig
 
 _PREFIX = "xccdf_org.ssgproject.content_rule_"
-# Cleaned up via #127 PR B SSG-drift sweep: dropped sshd_use_approved_kex,
-# sshd_use_approved_macs, and sshd_use_approved_mac_ordered — none of
-# those exist in current ssg-almalinux9-ds.xml (0.1.80). The two surviving
-# IDs (enable_fips_mode, sshd_use_approved_ciphers) are the only crypto
-# checks our policy override moots on current AL9 SSG.
+# The XCCDF Value the stig profile refines to FIPS:STIG. Retuning it to the
+# operator's policy keeps configure_crypto_policy running *and passing*,
+# which beats disabling it (#61).
+_VAR_CRYPTO_POLICY = "xccdf_org.ssgproject.content_value_var_system_crypto_policy"
+
+# Fixed via #61: every ID here is selected by the AL9 stig profile, checked
+# against ssg-almalinux9-ds.xml (0.1.80). The previous set disabled
+# sshd_use_approved_ciphers, which the stig profile never selects — inert —
+# while the four harden_sshd_* rules that do fire stayed enabled. Each
+# asserts a FIPS-only algorithm list in the crypto-policies back-end files
+# that update-crypto-policies rewrites under MODERN/FUTURE.
 _TAILORED_WHEN_NOT_STIG = [
     f"{_PREFIX}enable_fips_mode",
-    f"{_PREFIX}sshd_use_approved_ciphers",
+    f"{_PREFIX}harden_sshd_ciphers_openssh_conf_crypto_policy",
+    f"{_PREFIX}harden_sshd_ciphers_opensshserver_conf_crypto_policy",
+    f"{_PREFIX}harden_sshd_macs_openssh_conf_crypto_policy",
+    f"{_PREFIX}harden_sshd_macs_opensshserver_conf_crypto_policy",
 ]
 
 _POLICY_NAME = {"STIG": "FIPS", "MODERN": "DEFAULT", "FUTURE": "FUTURE"}
+
+_EXCEPTION_REASON = (
+    "{policy} accepts loss of FIPS 140-3 certification in exchange for "
+    "Curve25519 / Ed25519 / ChaCha20-Poly1305 support. The system crypto "
+    "policy variable is retuned to {target} so configure_crypto_policy still "
+    "evaluates against the chosen policy instead of being suppressed."
+)
+
+
+def _emit_tailoring(cfg: HostConfig, disabled: list[str]) -> list[TailoringOp]:
+    """Shared tailoring for the RHEL-family crypto_policy rules.
+
+    Module-level so the alma8/alma10 siblings reuse one implementation; only
+    the disabled-ID list differs between them.
+    """
+    policy = cfg.crypto.policy.value
+    if policy == "STIG":
+        return []
+    ops = [TailoringOp(rule_id=r, action="disable") for r in disabled]
+    ops.append(
+        TailoringOp(
+            rule_id=_VAR_CRYPTO_POLICY,
+            action="set_value",
+            value=_POLICY_NAME[policy],
+        )
+    )
+    return ops
+
+
+def _exception_entry(cfg: HostConfig, disabled: list[str]) -> ExceptionEntry | None:
+    """Shared exception entry; mirrors _emit_tailoring's disabled set."""
+    policy = cfg.crypto.policy.value
+    if policy == "STIG":
+        return None
+    return ExceptionEntry(
+        rule_id=meta.ID,
+        summary=f"{policy} crypto policy",
+        stig_rules_disabled=list(disabled),
+        reason=_EXCEPTION_REASON.format(policy=policy, target=_POLICY_NAME[policy]),
+    )
 
 
 def _emit_post(cfg: HostConfig) -> str:
@@ -55,9 +104,7 @@ class _Rule:
         return True
 
     def emit_tailoring(self, cfg: HostConfig) -> list[TailoringOp]:
-        if cfg.crypto.policy.value == "STIG":
-            return []
-        return [TailoringOp(rule_id=r, action="disable") for r in _TAILORED_WHEN_NOT_STIG]
+        return _emit_tailoring(cfg, _TAILORED_WHEN_NOT_STIG)
 
     def emit_post(self, cfg: HostConfig) -> str:
         return _emit_post(cfg)
@@ -66,17 +113,7 @@ class _Rule:
         return []
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
-        if cfg.crypto.policy.value == "STIG":
-            return None
-        return ExceptionEntry(
-            rule_id=meta.ID,
-            summary=f"{cfg.crypto.policy.value} crypto policy",
-            stig_rules_disabled=list(_TAILORED_WHEN_NOT_STIG),
-            reason=(
-                f"{cfg.crypto.policy.value} accepts loss of FIPS 140-3 certification "
-                "in exchange for Curve25519 / Ed25519 / ChaCha20-Poly1305 support."
-            ),
-        )
+        return _exception_entry(cfg, _TAILORED_WHEN_NOT_STIG)
 
 
 RULE: Rule = cast(Rule, _Rule())

@@ -323,7 +323,7 @@ def test_build_bundle_ubuntu2404_tailoring_contains_audit_story_ops(tmp_path):
     bundle = build_bundle(cfg)
     assert "<xccdf:Tailoring" in bundle.tailoring_xml
     # banner_text disables (one spot-check from each rule with tailoring)
-    assert "banner_etc_issue_cis" in bundle.tailoring_xml
+    assert "banner_etc_issue_net" in bundle.tailoring_xml
     # crypto_policy disable on default (MODERN) policy
     assert "sshd_use_approved_ciphers_ordered_stig" in bundle.tailoring_xml
     # auditd_actions set-value
