@@ -1,0 +1,13 @@
+# Shell scripts must keep LF endings. They are executed under WSL/Linux, where
+# a CRLF shebang line fails with a confusing "bad interpreter: No such file or
+# directory". On a Windows checkout with core.autocrlf=true these would
+# otherwise arrive as CRLF and every script in tests/install-regression/ would
+# refuse to run.
+#
+# The shell assets under src/ks_gen/assets/ are read by Python with universal
+# newlines before being embedded in a kickstart, so they are unaffected either
+# way — but pinning them costs nothing and removes the question.
+*.sh text eol=lf
+
+# Kickstart/YAML fixtures the harness feeds to anaconda.
+*.tmpl text eol=lf

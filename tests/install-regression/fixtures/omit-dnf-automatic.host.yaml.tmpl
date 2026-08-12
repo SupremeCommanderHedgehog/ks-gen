@@ -1,0 +1,26 @@
+system:
+  hostname: regression.local
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "__SSH_PUBKEY__"
+    sudo: nopasswd_yes
+disk:
+  target: vda
+packages:
+  required:
+    - scap-security-guide
+    - openscap-scanner
+    - aide
+    - audit
+    - rsyslog
+    - chrony
+    - firewalld
+    - sudo
+    - policycoreutils-python-utils
+containers:
+  enabled: true
+  users: []
+  volume:
+    size: "5G"  # 60G test disk vs 44G of fixed LVs + swap + /boot + EFI ≈ 12G free
