@@ -3,6 +3,14 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.34.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.33.0...v0.34.0) (2026-08-12)
+
+
+### Features
+
+* **distro:** add alma10 (AlmaLinux 10) as a target ([#62](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/62)) ([cfd908d](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/cfd908d61f316a7e7f2aa3455ac9d24932bb4b8a))
+* **iso:** support EL10 install media (no isolinux, grub2 BIOS) ([#59](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/59)) ([c200533](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/c2005336149a84e9a10d16b8491bb83d4d695f08))
+
 ## [0.33.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.32.1...v0.33.0) (2026-07-26)
 
 
