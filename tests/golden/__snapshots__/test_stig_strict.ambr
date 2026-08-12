@@ -224,8 +224,13 @@
   fi
   
   # ===== crypto_policy =====
-  # Apply system-wide crypto policy: STIG (FIPS)
-  update-crypto-policies --set FIPS
+  # Apply system-wide crypto policy: STIG (FIPS:STIG)
+  if [ -f /etc/crypto-policies/policies/modules/STIG.pmod ]; then
+    update-crypto-policies --set FIPS:STIG
+  else
+    echo 'ks-gen: /etc/crypto-policies/policies/modules/STIG.pmod missing; oscap did not apply the STIG sub-policy, falling back to FIPS' >&2
+    update-crypto-policies --set FIPS
+  fi
   
   # ===== faillock_safety =====
   # Re-assert faillock.conf in case oscap over-tightened

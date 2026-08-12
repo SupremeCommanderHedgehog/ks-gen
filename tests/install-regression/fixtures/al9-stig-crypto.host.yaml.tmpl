@@ -1,0 +1,43 @@
+# AlmaLinux 9 with crypto.policy: STIG — the #66 path.
+#
+# The AL9 stig profile refines var_system_crypto_policy to FIPS:STIG (AL8 and
+# AL10 refine it to plain FIPS), and separately selects
+# fips_custom_stig_sub_policy, whose remediation writes
+# /etc/crypto-policies/policies/modules/STIG.pmod. This fixture exists to prove
+# %post applies FIPS:STIG rather than downgrading the system to FIPS, and that
+# configure_crypto_policy consequently passes.
+#
+# Uses a boot.iso, so install.source must be network.
+system:
+  hostname: regression.local
+distro: alma9
+install:
+  source: network
+crypto:
+  policy: STIG
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "__SSH_PUBKEY__"
+    sudo: nopasswd_yes
+disk:
+  target: vda
+packages:
+  required:
+    - scap-security-guide
+    - openscap-scanner
+    - aide
+    - audit
+    - rsyslog
+    - chrony
+    - firewalld
+    - sudo
+    - policycoreutils-python-utils
+# smoke-check.sh asserts the container-host state unconditionally, so every
+# fixture enables it.
+containers:
+  enabled: true
+  users: []
+  volume:
+    size: "5G"

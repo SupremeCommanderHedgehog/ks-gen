@@ -61,6 +61,47 @@ def extract_stig_selected_rule_ids(datastream_path: Path) -> set[str]:
     return selected
 
 
+def extract_stig_refine_values(datastream_path: Path) -> dict[str, str]:
+    """Return the ``stig`` profile's refine-value settings, resolved to values.
+
+    A profile picks an XCCDF Value's *selector*; the value itself lives on the
+    Value element. ks-gen has to apply the same string the profile expects
+    (e.g. `update-crypto-policies --set FIPS:STIG`), and the two are written in
+    different places, so this makes the expected side machine-readable (#66).
+    """
+    tree = ET.parse(datastream_path)
+
+    selectors: dict[str, dict[str, str]] = {}
+    for value in tree.iter(f"{{{XCCDF_NS}}}Value"):
+        vid = value.attrib.get("id")
+        if not vid:
+            continue
+        by_selector: dict[str, str] = {}
+        for child in value:
+            if child.tag == f"{{{XCCDF_NS}}}value" and child.attrib.get("selector"):
+                by_selector[child.attrib["selector"]] = (child.text or "").strip()
+        if by_selector:
+            selectors[vid] = by_selector
+
+    resolved: dict[str, str] = {}
+    for profile in tree.iter(f"{{{XCCDF_NS}}}Profile"):
+        if profile.attrib.get("id", "").rsplit("content_profile_", 1)[-1] != "stig":
+            continue
+        for refine in profile.iter(f"{{{XCCDF_NS}}}refine-value"):
+            idref = refine.attrib.get("idref")
+            selector = refine.attrib.get("selector")
+            if idref and selector and selector in selectors.get(idref, {}):
+                resolved[idref] = selectors[idref][selector]
+    return resolved
+
+
+def write_refine_values(values: dict[str, str], out_path: Path) -> None:
+    """One ``<value-id>\\t<resolved value>`` per line, sorted."""
+    lines = [f"{k}\t{v}" for k, v in sorted(values.items())]
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def write_rule_id_list(ids: set[str], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(sorted(ids)) + "\n", encoding="utf-8")
@@ -150,6 +191,11 @@ def main(argv: list[str] | None = None) -> int:
         sel_out = args.out_dir / f"{label}-stig-selected.txt"
         write_rule_id_list(selected, sel_out)
         print(f"{label}: {len(selected)} stig-selected -> {sel_out}")
+
+        refined = extract_stig_refine_values(path)
+        val_out = args.out_dir / f"{label}-stig-refine-values.txt"
+        write_refine_values(refined, val_out)
+        print(f"{label}: {len(refined)} stig refine-values -> {val_out}")
 
     if len(per_distro) >= 2:
         diff_out = args.out_dir / "cross-distro-rule-id-diff.md"
