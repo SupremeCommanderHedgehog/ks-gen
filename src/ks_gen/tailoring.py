@@ -10,6 +10,18 @@ from ks_gen.rules._types import TailoringOp
 # passing the base silently evaluates the untailored profile (#65).
 TAILORED_PROFILE_ID = "xccdf_ks-gen_profile_tailored"
 
+_BASE_PROFILE_PREFIX = "xccdf_org.ssgproject.content_profile_"
+
+
+def base_profile_id(profile: str) -> str:
+    """The SSG profile the tailoring extends, e.g. `stig` -> the full id.
+
+    One definition so the gen and verify sides cannot compute it differently
+    and produce spurious tailoring-drift.
+    """
+    return f"{_BASE_PROFILE_PREFIX}{profile}"
+
+
 _HEADER = (
     "<?xml version='1.0' encoding='UTF-8'?>\n"
     '<xccdf:Tailoring xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" '

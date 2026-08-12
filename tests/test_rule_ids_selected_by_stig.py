@@ -59,29 +59,53 @@ def test_declared_stig_rules_affected_are_stig_selected(distro):
     )
 
 
+def _for_distro(cfg, distro: str, **update):
+    """Re-validate rather than model_copy: `distro` drives a mode="before"
+    validator that derives meta.scap_content, and model_copy skips it."""
+    from ks_gen.config import HostConfig
+
+    # Drop the distro-derived blocks so they re-derive: meta.scap_content and
+    # the network-install mirrors are both cross-validated against `distro`.
+    base = cfg.model_dump(exclude={"meta", "install"})
+    return HostConfig.model_validate({**base, "distro": distro, **update})
+
+
+# Toggles that gate a rule's applies()/emit_tailoring branches. A disable that
+# only appears under one of these would otherwise never be walked.
+_TOGGLES: list[dict] = [
+    {},
+    {"containers": {"enabled": True}},
+    {"crypto": {"policy": "MODERN"}},
+    {"crypto": {"policy": "FUTURE"}},
+    {"crypto": {"policy": "STIG"}},
+    {"overrides": {"faillock": {"even_deny_root": False}}},
+]
+
+
 @pytest.mark.parametrize("distro", _DISTROS)
 def test_every_emitted_disable_is_declared_and_stig_selected(distro, minimal_cfg):
     """Covers rules that disable an ID via emit_tailoring without declaring it.
 
     The declared-list test above only sees `stig_rules_affected`; this walks
-    what the rules actually emit, which is what lands in tailoring.xml.
+    what the rules actually emit, across the toggles that gate those branches,
+    which is what lands in tailoring.xml.
     """
     selected = _stig_selected(distro)
-    cfg = minimal_cfg.model_copy(update={"distro": distro})
-    for rule in load_rules(distro):
-        if not rule.applies(cfg):
-            continue
-        declared = set(getattr(rule, "stig_rules_affected", []) or [])
-        emitted = {op.rule_id for op in rule.emit_tailoring(cfg) if op.action == "disable"}
-        assert emitted <= declared, (
-            f"{distro}/{rule.id} disables IDs it never declares in "
-            f"stig_rules_affected: {sorted(emitted - declared)} — the declared "
-            f"list is what exceptions.md and the other guard read."
-        )
-        assert emitted <= selected, (
-            f"{distro}/{rule.id} disables rules the stig profile never "
-            f"selects: {sorted(emitted - selected)}"
-        )
+    for update in _TOGGLES:
+        cfg = _for_distro(minimal_cfg, distro, **update)
+        for rule in load_rules(distro):
+            if not rule.applies(cfg):
+                continue
+            declared = set(getattr(rule, "stig_rules_affected", []) or [])
+            emitted = {op.rule_id for op in rule.emit_tailoring(cfg) if op.action == "disable"}
+            # emitted <= selected follows from this plus the declared-list
+            # test, so assert the one fact that is this test's own.
+            assert emitted <= declared, (
+                f"{distro}/{rule.id} under {update or 'defaults'} disables IDs it "
+                f"never declares in stig_rules_affected: {sorted(emitted - declared)} "
+                f"— the declared list is what exceptions.md and the other guard read."
+            )
+    assert selected, f"{distro} stig-selected list unexpectedly empty"
 
 
 @pytest.mark.parametrize("distro", _RHEL_FAMILY)

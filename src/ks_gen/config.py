@@ -740,6 +740,11 @@ class Overrides(StrictModel):
 class ExceptionDecl(StrictModel):
     id: str
     reason: str
+    # NOTE: these ids reach tailoring.xml verbatim and, since #65, genuinely
+    # deselect rules — a typo'd or bare name silently suppresses nothing while
+    # exceptions.md presents it as a documented exception. Validating the shape
+    # here would reject previously-loadable host.yaml files, so it needs its own
+    # change with a release note rather than riding along in a bugfix. See #69.
     stig_rules_disabled: list[str] = Field(..., min_length=1)
 
 

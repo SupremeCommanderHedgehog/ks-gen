@@ -183,6 +183,16 @@
   test -s /root/tailoring.xml
   head -c 5 /root/tailoring.xml | grep -q '<?xml'
   
+  # --profile below names a profile that exists ONLY in this tailoring file, so
+  # a mismatched tailoring makes oscap abort — and the `|| true` would swallow
+  # it, leaving a green install with zero remediation. Fail closed instead: this
+  # block is --erroronfail, so a wrong bundle stops the install loudly.
+  grep -q 'id="xccdf_ks-gen_profile_tailored"' /root/tailoring.xml || {
+    echo "ks-gen: /root/tailoring.xml does not define xccdf_ks-gen_profile_tailored" >&2
+    echo "ks-gen: refusing to install unremediated — check the ks.cfg/tailoring pair" >&2
+    exit 1
+  }
+  
   # --remediate can exit non-zero when rules remain failed (e.g., exception-
   # disabled rules). The next %post block (ks-gen rule overrides) re-asserts
   # critical state, so don't abort the install on a non-zero oscap exit.
@@ -246,6 +256,16 @@
   Use of this system constitutes consent to such monitoring.
   __KS_GEN_EOF__
   chmod 644 /etc/motd
+  if [ -d /etc/dconf ]; then  # GDM greeter banner (/etc/dconf/db/gdm.d/01-ks-gen-banner)
+    mkdir -p /etc/dconf/db/gdm.d
+    cat > /etc/dconf/db/gdm.d/01-ks-gen-banner <<'__KS_GEN_EOF__'
+  [org/gnome/login-screen]
+  banner-message-enable=true
+  banner-message-text='WARNING: This is a private computer system. Unauthorized access is\nprohibited. All activity on this system may be monitored and logged.\nUse of this system constitutes consent to such monitoring.'
+  __KS_GEN_EOF__
+    chmod 0644 /etc/dconf/db/gdm.d/01-ks-gen-banner
+    dconf update || true
+  fi
   
   # ===== crypto_policy =====
   # Apply system-wide crypto policy: MODERN (DEFAULT)

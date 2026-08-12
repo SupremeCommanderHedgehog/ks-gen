@@ -93,9 +93,18 @@ def test_kickstart_oscap_evaluates_the_tailored_profile(minimal_cfg):
     assert "--profile xccdf_org.ssgproject.content_profile_stig" not in ks
 
 
-def test_verify_oscap_command_evaluates_the_tailored_profile(minimal_cfg):
+def test_verify_oscap_command_evaluates_the_BASE_profile(minimal_cfg):
+    """The opposite of the install path, on purpose.
+
+    verify must see the full rule set to reconcile against host.yaml. A rule
+    the deployed tailoring deselects returns `notselected`, which reconcile
+    treats as clean — so scanning the tailored profile would let a stale or
+    hand-edited on-host tailoring shrink the scan meant to police it.
+    """
     from ks_gen.verify.remote import _oscap_command
 
     cmd = _oscap_command(minimal_cfg)
-    assert f"--profile {TAILORED_PROFILE_ID}" in cmd
-    assert "--profile xccdf_org.ssgproject.content_profile_stig" not in cmd
+    assert "--profile xccdf_org.ssgproject.content_profile_stig" in cmd
+    assert TAILORED_PROFILE_ID not in cmd
+    # ...but it still passes the tailoring, which --check-tailoring diffs.
+    assert "--tailoring-file /root/tailoring.xml" in cmd

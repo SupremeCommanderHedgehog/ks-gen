@@ -270,9 +270,12 @@ systemctl list-timers --all | grep -E 'dnf-automatic|reboot-if-needed'
 # from install time also live there.
 ls -l /root/tailoring.xml /root/oscap-remediation-*.{xml,html}
 
-# Re-run oscap evaluation against the live system to see what state landed
+# Re-run oscap evaluation against the live system to see what state landed.
+# --profile MUST name ks-gen's tailored profile: passing the base SSG id
+# loads the tailoring and ignores it, so exception-disabled rules would
+# show up as failures that aren't real.
 sudo oscap xccdf eval \
-  --profile xccdf_org.ssgproject.content_profile_stig \
+  --profile xccdf_ks-gen_profile_tailored \
   --tailoring-file /root/tailoring.xml \
   /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml | tail -40
 ```

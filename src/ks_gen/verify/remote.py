@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ks_gen.config import HostConfig
-from ks_gen.tailoring import TAILORED_PROFILE_ID
 from ks_gen.verify.errors import ArfMissingError, OscapInvocationError
 from ks_gen.verify.ssh import _first_stderr_line
 
@@ -27,9 +26,15 @@ def _oscap_command(cfg: HostConfig) -> str:
     return (
         "oscap xccdf eval "
         f"--tailoring-file {REMOTE_TAILORING} "
-        # Must name the tailoring's own profile; the base id evaluates
-        # untailored and silently ignores every exception (#65).
-        f"--profile {TAILORED_PROFILE_ID} "
+        # Deliberately the BASE profile, unlike the install-time call in
+        # ks.cfg.j2 which must name the tailored one (#65). verify's job is to
+        # police the host against host.yaml, so it has to see the full rule
+        # set: a deselected rule returns `notselected`, which reconcile buckets
+        # as clean, so scoping the scan with the host's own tailoring would let
+        # a stale or hand-edited tailoring shrink the very scan meant to catch
+        # it. Exceptions are reconciled from host.yaml instead, and tailoring
+        # drift is what --check-tailoring is for.
+        f"--profile xccdf_org.ssgproject.content_profile_{cfg.meta.profile} "
         "--fetch-remote-resources "
         f"--results-arf {REMOTE_CURRENT_ARF} "
         f"/usr/share/xml/scap/ssg/content/{cfg.meta.scap_content}"

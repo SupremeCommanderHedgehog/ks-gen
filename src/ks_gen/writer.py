@@ -11,7 +11,7 @@ from ks_gen.exceptions_report import render_exceptions_md
 from ks_gen.registry import load_rules
 from ks_gen.rules._types import TailoringOp
 from ks_gen.skeleton import PostBlock, render_meta_data, render_skeleton, render_user_data
-from ks_gen.tailoring import build_tailoring_xml
+from ks_gen.tailoring import base_profile_id, build_tailoring_xml
 from ks_gen.topo import topo_sort
 
 
@@ -82,7 +82,7 @@ def render_tailoring(cfg: HostConfig) -> str:
     for r in applicable:
         tailoring_ops.extend(r.emit_tailoring(cfg))
     tailoring_ops.extend(_exception_tailoring_ops(cfg))
-    profile_id = f"xccdf_org.ssgproject.content_profile_{cfg.meta.profile}"
+    profile_id = base_profile_id(cfg.meta.profile)
     return build_tailoring_xml(
         tailoring_ops, profile_id=profile_id, scap_content=cfg.meta.scap_content
     )
@@ -115,7 +115,7 @@ def _build_rhel_family_bundle(cfg: HostConfig) -> Bundle:
                 already.add(pkg)
 
     tailoring_ops.extend(_exception_tailoring_ops(cfg))
-    profile_id = f"xccdf_org.ssgproject.content_profile_{cfg.meta.profile}"
+    profile_id = base_profile_id(cfg.meta.profile)
     tailoring_xml = build_tailoring_xml(
         tailoring_ops, profile_id=profile_id, scap_content=cfg.meta.scap_content
     )
@@ -152,7 +152,7 @@ def _build_ubuntu2404_bundle(cfg: HostConfig) -> Bundle:
                 seen.add(pkg)
 
     tailoring_ops.extend(_exception_tailoring_ops(cfg))
-    profile_id = f"xccdf_org.ssgproject.content_profile_{cfg.meta.profile}"
+    profile_id = base_profile_id(cfg.meta.profile)
     tailoring_xml = build_tailoring_xml(
         tailoring_ops, profile_id=profile_id, scap_content=cfg.meta.scap_content
     )

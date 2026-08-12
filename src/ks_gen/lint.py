@@ -47,19 +47,23 @@ def _internal_checks(text: str) -> list[str]:
     if oscap_idx == -1:
         failures.append("missing: %post oscap remediation block")
     else:
-        if "oscap xccdf eval --remediate" not in text[oscap_idx:]:
+        # Bound the window to this block's %end. Searching to EOF would let a
+        # later %post (a rule body, or cfg.custom_post) satisfy these checks
+        # while the oscap invocation itself says something else.
+        _end = text.find("\n%end", oscap_idx)
+        oscap_region = text[oscap_idx:] if _end == -1 else text[oscap_idx:_end]
+        if "oscap xccdf eval --remediate" not in oscap_region:
             failures.append("missing: oscap remediation invocation in %post oscap block")
-        if "--tailoring-file /root/tailoring.xml" not in text[oscap_idx:]:
+        if "--tailoring-file /root/tailoring.xml" not in oscap_region:
             failures.append("missing: --tailoring-file reference in %post oscap block")
         # #65: oscap evaluates whatever --profile names. Naming the base
-        # profile loads the tailoring and ignores it, silently — every
-        # exception becomes decorative with no error anywhere.
-        if f"--profile {TAILORED_PROFILE_ID}" not in text[oscap_idx:]:
+        # profile loads the tailoring and ignores it, silently.
+        if f"--profile {TAILORED_PROFILE_ID}" not in oscap_region:
             failures.append(
                 f"missing: --profile {TAILORED_PROFILE_ID} in %post oscap block "
                 "(naming the base profile silently ignores the tailoring)"
             )
-        if "--fetch-remote-resources" not in text[oscap_idx:]:
+        if "--fetch-remote-resources" not in oscap_region:
             failures.append("missing: --fetch-remote-resources flag in %post oscap block")
     # If both blocks are present, check ordering and fetch-region content.
     if fetch_idx != -1 and oscap_idx != -1:
