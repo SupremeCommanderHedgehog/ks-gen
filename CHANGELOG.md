@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.34.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.34.0...v0.34.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* make ks-gen's tailoring actually apply, and disable the rules that actually fire ([#64](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/64)) ([abd03dc](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/abd03dc09b28fbbff6a8c64c44419ab79ea640da))
+
 ## [0.34.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.33.0...v0.34.0) (2026-08-12)
 
 
