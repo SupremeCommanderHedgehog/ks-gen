@@ -1,0 +1,34 @@
+# Regression fixture that ACTUALLY exercises create-rootless-user.sh by
+# giving containers a real user (the stock omit-dnf-automatic fixture uses
+# users: [] so the provisioning script — and its linger call — never runs).
+# This is the case that caught the %post-chroot linger abort (dev0, 2026-07-18).
+system:
+  hostname: regression.local
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "__SSH_PUBKEY__"
+    sudo: nopasswd_yes
+disk:
+  target: vda
+packages:
+  required:
+    - scap-security-guide
+    - openscap-scanner
+    - aide
+    - audit
+    - rsyslog
+    - chrony
+    - firewalld
+    - sudo
+    - policycoreutils-python-utils
+containers:
+  enabled: true
+  users:
+    - name: webapp
+      gecos: "Regression container user"
+      authorized_keys:
+        - "__SSH_PUBKEY__"
+  volume:
+    size: "5G"  # 60G test disk vs 44G of fixed LVs + swap + /boot + EFI ≈ 12G free

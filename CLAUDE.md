@@ -60,14 +60,23 @@ the rule change predicts and nothing else.
 - For debug rebuilds, edit `src/ks_gen/iso/_menu.py` to drop `quiet` and add
   `inst.text rd.info`. Don't commit it.
 
-## Install-regression harness (`.scratch/install-regression/`)
+## Install-regression harness (`tests/install-regression/`)
 
 An on-demand end-to-end install regression harness lives under
-`.scratch/install-regression/` (gitignored, per-developer). It runs the
-full `ks-gen gen` → `ks-gen iso` → QEMU EFI boot → anaconda install →
-SSH-in → smoke-check pipeline. Closed issue #57 (and that issue's final
-comment) document the full local-only recipe — bootstrap the harness on
-a new machine from there. Wall-clock: ~30-90 min on TCG.
+`tests/install-regression/`. It runs the full `ks-gen gen` → `ks-gen iso`
+→ QEMU EFI boot → anaconda install → SSH-in → smoke-check pipeline.
+Tracked but **not run by CI and not collected by pytest** — wall-clock is
+~13 min on KVM, 30-90 min on TCG. Requires WSL/Linux with qemu, xorriso,
+OVMF, KVM. See its README; issue #57 has the original rationale.
+(It lived under `.scratch/` until 2026-08-12, so older notes may say that.)
+
+**Two traps when driving it from an agent session:**
+- Never launch it backgrounded (a detached shell SIGHUPs QEMU) and never
+  pipe it through `tail` (the pipeline's exit status is `tail`'s, so a
+  failed run reports success). Run it in the foreground and let the tool
+  auto-background it on timeout.
+- `qemu-img info $BUILD/disk.qcow2` showing `disk size: ~196 KiB` means
+  nothing installed, whatever the console output claims.
 
 **When to recommend running it.** Only when the diff plausibly affects
 what anaconda does. Specifically:

@@ -1,0 +1,38 @@
+# AlmaLinux 10 regression fixture.
+#
+# AL10 boot media carries no package payload, so install.source must be
+# network — the per-distro mirror defaults from #62 fill in the AL10 URLs.
+# packages.required deliberately omits dnf-automatic/dnf-utils so the run
+# still exercises the #53 emit_packages regression on AL10.
+#
+# containers.enabled exercises the one remaining alma10 divergence
+# (container_host drops podman-plugins, unpackaged on AL10).
+system:
+  hostname: regression.local
+distro: alma10
+install:
+  source: network
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "__SSH_PUBKEY__"
+    sudo: nopasswd_yes
+disk:
+  target: vda
+packages:
+  required:
+    - scap-security-guide
+    - openscap-scanner
+    - aide
+    - audit
+    - rsyslog
+    - chrony
+    - firewalld
+    - sudo
+    - policycoreutils-python-utils
+containers:
+  enabled: true
+  users: []
+  volume:
+    size: "5G"

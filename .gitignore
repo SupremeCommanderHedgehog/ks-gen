@@ -40,3 +40,7 @@ ci-out.txt
 mypy-out.txt
 mypy.log
 pytest-out.txt
+
+# Convenience symlink created by tests/install-regression/run.sh at runtime
+# (points into ~/.cache; a symlink cannot be indexed by git on Windows).
+tests/install-regression/build
