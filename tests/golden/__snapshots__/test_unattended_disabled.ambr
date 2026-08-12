@@ -8,7 +8,7 @@
   
   ## Summary
   - Applied rules: 12
-  - Tailored XCCDF rules: 9
+  - Tailored XCCDF rules: 11
   - Declared exceptions: 0
   
   ## Applied rules
@@ -29,10 +29,12 @@
   | XCCDF rule | Tailored by |
   |---|---|
   | `xccdf_org.ssgproject.content_rule_banner_etc_issue` | `banner_text` |
-  | `xccdf_org.ssgproject.content_rule_banner_etc_issue_net` | `banner_text` |
   | `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled` | `banner_text` |
   | `xccdf_org.ssgproject.content_rule_enable_fips_mode` | `crypto_policy` |
-  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root` | `faillock_safety` |
   | `xccdf_org.ssgproject.content_rule_package_usbguard_installed` | `usbguard` |
   | `xccdf_org.ssgproject.content_rule_service_usbguard_enabled` | `usbguard` |
@@ -49,16 +51,18 @@
   
   Disabled XCCDF rules:
   - `xccdf_org.ssgproject.content_rule_banner_etc_issue`
-  - `xccdf_org.ssgproject.content_rule_banner_etc_issue_net`
   - `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled`
   
   ### `crypto_policy` — MODERN crypto policy
   
-  _Reason:_ MODERN accepts loss of FIPS 140-3 certification in exchange for Curve25519 / Ed25519 / ChaCha20-Poly1305 support.
+  _Reason:_ MODERN accepts loss of FIPS 140-3 certification in exchange for Curve25519 / Ed25519 / ChaCha20-Poly1305 support. The system crypto policy variable is retuned to DEFAULT so configure_crypto_policy still evaluates against the chosen policy instead of being suppressed.
   
   Disabled XCCDF rules:
   - `xccdf_org.ssgproject.content_rule_enable_fips_mode`
-  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers`
+  - `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy`
+  - `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy`
+  - `xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy`
+  - `xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy`
   
   ### `dod_root_ca` — DoD root/intermediate CA bundle not installed.
   
@@ -317,10 +321,13 @@
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_auditd_disk_error_action">SUSPEND</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_auditd_max_log_file_action">ROTATE</xccdf:set-value>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_banner_etc_issue" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_banner_etc_issue_net" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_enable_fips_mode" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy" selected="false"/>
+      <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_system_crypto_policy">DEFAULT</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time">900</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_deny">3</xccdf:set-value>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root" selected="false"/>

@@ -1,17 +1,15 @@
-"""Tests for the three rules where alma10 diverges from the alma9 re-export.
+"""alma10's divergence from the alma9 re-export, and the two that collapsed.
 
-Each divergence was established against the real
-ssg-almalinux10-ds.xml (scap-security-guide 0.1.81) and AlmaLinux 10
-BaseOS/AppStream repodata, not by assuming the alma9 mapping carries over:
+`container_host` is the only remaining real divergence: podman-plugins is not
+packaged for AL10 (podman 5.x uses netavark), and a missing name in %packages
+aborts the install.
 
-  banner_text    banner_etc_issue_net no longer exists in AL10 SSG; the
-                 surviving banner_etc_issue_net_cis is not selected by the
-                 stig profile, so disabling it would be inert.
-  crypto_policy  sshd_use_approved_ciphers is gone; AL10 splits the same
-                 check into two harden_sshd_ciphers_* rules, both selected
-                 by the stig profile.
-  container_host podman-plugins is not packaged for AL10 (podman 5.x), and
-                 a missing name in %packages aborts the install.
+`banner_text` and `crypto_policy` *were* divergent, because alma9 referenced
+SSG rule IDs that AL10 no longer ships. #61 showed the AL9 stig profile never
+selected those IDs either — they were inert on alma9 too. Dropping them from
+alma9 left both distros emitting identical tailoring, so the alma10 modules
+are re-exports again. The tests below pin that the shared implementation is
+still correct *for AL10*, which is the property the divergence used to carry.
 """
 
 from __future__ import annotations
@@ -28,10 +26,10 @@ def _al10(cfg, **update):
     return cfg.model_copy(update={"distro": "alma10", **update})
 
 
-# ---------------- banner_text ----------------
+# ---------------- banner_text (shared with alma9 since #61) ----------------
 
 
-def test_banner_tailoring_drops_the_issue_net_rule(minimal_cfg):
+def test_banner_tailoring_is_the_two_al10_rules(minimal_cfg):
     ops = BANNER.emit_tailoring(_al10(minimal_cfg))
     assert {o.rule_id for o in ops} == {
         f"{_PREFIX}banner_etc_issue",
@@ -48,27 +46,24 @@ def test_banner_does_not_reference_rules_absent_from_al10(minimal_cfg):
     assert f"{_PREFIX}banner_etc_issue_net_cis" not in ids
 
 
-def test_banner_post_matches_alma9(minimal_cfg):
+def test_banner_now_re_exports_alma9(minimal_cfg):
     from ks_gen.rules.alma9.banner_text import RULE as ALMA9
 
-    assert BANNER.emit_post(_al10(minimal_cfg)) == ALMA9.emit_post(minimal_cfg)
+    assert BANNER is ALMA9
 
 
-def test_banner_exception_entry_lists_the_two_disabled_ids(minimal_cfg):
-    entry = BANNER.exception_entry(_al10(minimal_cfg))
-    assert entry is not None
-    assert len(entry.stig_rules_disabled) == 2
+# ---------------- crypto_policy (shared with alma9 since #61) ----------------
 
 
-# ---------------- crypto_policy ----------------
-
-
-def test_crypto_tailoring_uses_al10_cipher_rules(minimal_cfg):
+def test_crypto_tailoring_uses_the_al10_cipher_and_mac_rules(minimal_cfg):
     ops = CRYPTO.emit_tailoring(_al10(minimal_cfg))
-    assert {o.rule_id for o in ops} == {
+    disabled = {o.rule_id for o in ops if o.action == "disable"}
+    assert disabled == {
         f"{_PREFIX}enable_fips_mode",
         f"{_PREFIX}harden_sshd_ciphers_openssh_conf_crypto_policy",
         f"{_PREFIX}harden_sshd_ciphers_opensshserver_conf_crypto_policy",
+        f"{_PREFIX}harden_sshd_macs_openssh_conf_crypto_policy",
+        f"{_PREFIX}harden_sshd_macs_opensshserver_conf_crypto_policy",
     }
 
 
@@ -87,13 +82,13 @@ def test_crypto_exception_entry_returns_none_when_stig(minimal_cfg):
     assert CRYPTO.exception_entry(cfg) is None
 
 
-def test_crypto_post_reuses_alma9_helper(minimal_cfg):
+def test_crypto_now_re_exports_alma9(minimal_cfg):
     from ks_gen.rules.alma9.crypto_policy import RULE as ALMA9
 
-    assert CRYPTO.emit_post(_al10(minimal_cfg)) == ALMA9.emit_post(minimal_cfg)
+    assert CRYPTO is ALMA9
 
 
-# ---------------- container_host ----------------
+# ---------------- container_host (the remaining divergence) ----------------
 
 
 def test_container_packages_omit_podman_plugins(minimal_cfg):

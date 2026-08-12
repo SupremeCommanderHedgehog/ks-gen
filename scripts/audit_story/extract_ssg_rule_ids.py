@@ -13,9 +13,15 @@ Usage:
         --out-dir docs/audit-story/
 
 For each ``--datastream <label>=<path>`` pair, writes
-``<out-dir>/<label>-rule-ids.txt`` (one rule ID per line, sorted, deduped).
-With 2+ datastreams, also writes ``<out-dir>/cross-distro-rule-id-diff.md``
-with set ops (all-in-all, pairwise intersections, distro-only sets).
+``<out-dir>/<label>-rule-ids.txt`` (one rule ID per line, sorted, deduped)
+and ``<out-dir>/<label>-stig-selected.txt`` (the subset the ``stig`` profile
+actually selects). With 2+ datastreams, also writes
+``<out-dir>/cross-distro-rule-id-diff.md`` with set ops (all-in-all, pairwise
+intersections, distro-only sets).
+
+The stig-selected list exists because rule *existence* is too weak a guard:
+disabling a rule the ``stig`` profile never selects is inert, and looks like
+a working exception (see #61).
 """
 
 from __future__ import annotations
@@ -33,6 +39,26 @@ def extract_rule_ids(datastream_path: Path) -> set[str]:
     """Return the set of xccdf:Rule@id values in the given SSG datastream."""
     tree = ET.parse(datastream_path)
     return {elem.attrib["id"] for elem in tree.iter(f"{{{XCCDF_NS}}}Rule") if "id" in elem.attrib}
+
+
+def extract_stig_selected_rule_ids(datastream_path: Path) -> set[str]:
+    """Return the rule IDs the ``stig`` profile selects in the given datastream.
+
+    Profile IDs look like ``xccdf_org.ssgproject.content_profile_stig``; the
+    trailing component after ``content_profile_`` is the profile name.
+    """
+    tree = ET.parse(datastream_path)
+    selected: set[str] = set()
+    for profile in tree.iter(f"{{{XCCDF_NS}}}Profile"):
+        name = profile.attrib.get("id", "").rsplit("content_profile_", 1)[-1]
+        if name != "stig":
+            continue
+        selected |= {
+            sel.attrib["idref"]
+            for sel in profile.iter(f"{{{XCCDF_NS}}}select")
+            if sel.attrib.get("selected") == "true" and "idref" in sel.attrib
+        }
+    return selected
 
 
 def write_rule_id_list(ids: set[str], out_path: Path) -> None:
@@ -119,6 +145,11 @@ def main(argv: list[str] | None = None) -> int:
         out = args.out_dir / f"{label}-rule-ids.txt"
         write_rule_id_list(ids, out)
         print(f"{label}: {len(ids)} rules -> {out}")
+
+        selected = extract_stig_selected_rule_ids(path)
+        sel_out = args.out_dir / f"{label}-stig-selected.txt"
+        write_rule_id_list(selected, sel_out)
+        print(f"{label}: {len(selected)} stig-selected -> {sel_out}")
 
     if len(per_distro) >= 2:
         diff_out = args.out_dir / "cross-distro-rule-id-diff.md"

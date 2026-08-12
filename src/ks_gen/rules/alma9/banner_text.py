@@ -10,9 +10,11 @@ if TYPE_CHECKING:
     from ks_gen.config import HostConfig
 
 _PREFIX = "xccdf_org.ssgproject.content_rule_"
+# banner_etc_issue_net dropped via #61: it exists in the AL8 and AL9
+# datastreams but the stig profile selects neither, so disabling it was
+# inert. AL10 doesn't ship it at all.
 _TAILORED = [
     f"{_PREFIX}banner_etc_issue",
-    f"{_PREFIX}banner_etc_issue_net",
     f"{_PREFIX}dconf_gnome_banner_enabled",
 ]
 

@@ -33,15 +33,14 @@ def test_applies_always_true(ubuntu_cfg_factory):
 
 def test_emit_tailoring_disables_six_ubuntu_banner_rules(ubuntu_cfg_factory):
     # ssg-ubuntu2404-ds.xml splits banner checks into CIS + non-CIS variants.
-    # Our civilian banner moots all six. sshd_enable_warning_banner_net is
-    # intentionally NOT disabled — ssh_config_apply's sshd drop-in enables
-    # the Banner directive, so that check is satisfied.
+    # Our civilian banner moots both, but #61 dropped the three *_cis IDs:
+    # the stig profile selects only the non-CIS variants, so disabling the
+    # CIS ones was inert. sshd_enable_warning_banner_net is intentionally NOT
+    # disabled — ssh_config_apply's sshd drop-in enables the Banner directive,
+    # so that check is satisfied.
     ops = RULE.emit_tailoring(ubuntu_cfg_factory())
     expected_rule_ids = {
-        "xccdf_org.ssgproject.content_rule_banner_etc_issue_cis",
         "xccdf_org.ssgproject.content_rule_banner_etc_issue_net",
-        "xccdf_org.ssgproject.content_rule_banner_etc_issue_net_cis",
-        "xccdf_org.ssgproject.content_rule_banner_etc_motd_cis",
         "xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled",
         "xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text",
     }
@@ -57,8 +56,8 @@ def test_exception_entry_carries_meta_summary_and_reason(ubuntu_cfg_factory):
     assert entry.rule_id == meta_mod.ID
     assert entry.summary == meta_mod.EXCEPTION_SUMMARY
     assert entry.reason == meta_mod.EXCEPTION_REASON
-    # All six tailored rule IDs reproduced in the exception entry's audit list.
-    assert len(entry.stig_rules_disabled) == 6
+    # All tailored rule IDs reproduced in the exception entry's audit list.
+    assert len(entry.stig_rules_disabled) == 3
 
 
 def test_emit_packages_is_empty(ubuntu_cfg_factory):

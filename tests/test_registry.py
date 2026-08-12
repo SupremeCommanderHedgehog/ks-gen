@@ -109,13 +109,11 @@ def test_registry_alma10_re_exports_same_rule_instances_as_alma9():
     tests/rules/test_alma10_divergences.py.
     """
     _DIVERGENT = {
-        # banner_etc_issue_net is gone from AL10 SSG (0.1.81).
-        "banner_text",
-        # sshd_use_approved_ciphers is gone; AL10 splits it into two
-        # harden_sshd_ciphers_* rules.
-        "crypto_policy",
         # podman-plugins is not packaged for AL10.
         "container_host",
+        # banner_text and crypto_policy were divergent until #61: alma9 was
+        # referencing IDs its own stig profile never selected, and dropping
+        # them left both distros emitting identical tailoring.
     }
 
     alma9_rules = {r.id: r for r in load_rules("alma9")}
