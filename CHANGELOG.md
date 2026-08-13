@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.34.3](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.34.2...v0.34.3) (2026-08-13)
+
+
+### Bug Fixes
+
+* **config:** reject STIG configs whose keys cannot authenticate ([#77](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/77)) ([4986f97](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/4986f976c01f3bd5919681e4a6d9d4dbc4c6cf00))
+
 ## [0.34.2](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.34.1...v0.34.2) (2026-08-13)
 
 
