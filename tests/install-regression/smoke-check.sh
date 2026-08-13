@@ -66,11 +66,19 @@ ok "ks-gen-disabled rule banner_etc_issue is notselected in the ARF"
 # ...and the converse: configure_crypto_policy is deliberately NOT disabled
 # under MODERN/FUTURE, because crypto_policy retunes its Value instead. It
 # must therefore be evaluated and pass (#61).
+# Two legitimate non-failing outcomes, depending on crypto.policy:
+#   MODERN/FUTURE -> `pass`  : the set_value retune (#61) means the rule
+#                              already agrees with the host, nothing to fix.
+#   STIG          -> `fixed` : no tailoring is emitted, so oscap finds the
+#                              stock policy and remediates it itself.
+# Anything else (fail/error/notselected) means the policy handling is wrong.
 crypto_result=$(grep -aA 5 'rule-result idref="xccdf_org.ssgproject.content_rule_configure_crypto_policy"' \
   /root/oscap-remediation-results.xml | grep -ao '<result>[a-z]*</result>' | head -1)
-[[ "$crypto_result" == "<result>pass</result>" ]] \
-  || fail "configure_crypto_policy result is ${crypto_result:-missing}, expected pass — the var_system_crypto_policy retune didn't take (#61)"
-ok "configure_crypto_policy evaluated and passed (set_value retune works)"
+case "$crypto_result" in
+  "<result>pass</result>"|"<result>fixed</result>") ;;
+  *) fail "configure_crypto_policy result is ${crypto_result:-missing}, expected pass or fixed (#61/#66)" ;;
+esac
+ok "configure_crypto_policy evaluated cleanly (${crypto_result})"
 
 # --- root + console login locked, per kickstart contract
 # AlmaLinux 9 / shadow-utils prints "LK" in the status field, not " L ".

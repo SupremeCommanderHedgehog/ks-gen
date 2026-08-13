@@ -8,6 +8,10 @@
 # configure_crypto_policy consequently passes.
 #
 # Uses a boot.iso, so install.source must be network.
+#
+# MUST be run with KEY_TYPE=rsa. A FIPS/STIG host drops ssh-ed25519 from
+# PubkeyAcceptedAlgorithms, so the harness's default ed25519 key cannot log in
+# and the run times out at the SSH wait even when the install is perfect (#73).
 system:
   hostname: regression.local
 distro: alma9

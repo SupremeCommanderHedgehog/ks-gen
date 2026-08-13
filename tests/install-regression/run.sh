@@ -67,13 +67,22 @@ done
 [[ -r "$SRC_ISO"            ]] || { echo "missing: $SRC_ISO"                              >&2; exit 1; }
 
 # ---- step 1: SSH key ------------------------------------------------------
+# KEY_TYPE must suit the fixture's crypto policy. A FIPS/STIG host removes
+# ssh-ed25519 from PubkeyAcceptedAlgorithms, so an ed25519 key cannot log in
+# at all and the run times out at the SSH wait even on a perfect install
+# (#73). Use KEY_TYPE=rsa for any crypto.policy: STIG fixture.
+KEY_TYPE="${KEY_TYPE:-ed25519}"
+KEY="$KEYS/id_$KEY_TYPE"
 mkdir -p "$KEYS"
 chmod 700 "$KEYS"
-if [[ ! -f "$KEYS/id_ed25519" ]]; then
-  ssh-keygen -t ed25519 -N '' -C 'ks-gen-install-regression' -f "$KEYS/id_ed25519" >/dev/null
+if [[ ! -f "$KEY" ]]; then
+  keygen_args=(-t "$KEY_TYPE" -N '' -C 'ks-gen-install-regression' -f "$KEY")
+  # RSA defaults to 2048; FIPS/STIG wants >= 3072.
+  [[ "$KEY_TYPE" == "rsa" ]] && keygen_args+=(-b 3072)
+  ssh-keygen "${keygen_args[@]}" >/dev/null
 fi
-chmod 600 "$KEYS/id_ed25519"
-PUBKEY="$(cat "$KEYS/id_ed25519.pub")"
+chmod 600 "$KEY"
+PUBKEY="$(cat "$KEY.pub")"
 
 # ---- step 2: render host.yaml ---------------------------------------------
 HOST_YAML="$BUILD/host.yaml"
@@ -176,7 +185,7 @@ trap cleanup EXIT
 # logging to console; bump STAGNATION_BUDGET=1800 to absorb that.
 DEADLINE=$(( $(date +%s) + ${DEADLINE_SECONDS:-5400} ))
 STAGNATION_BUDGET="${STAGNATION_BUDGET:-600}"
-SSH_OPTS=(-i "$KEYS/id_ed25519"
+SSH_OPTS=(-i "$KEY"
           -o StrictHostKeyChecking=no
           -o UserKnownHostsFile=/dev/null
           -o ConnectTimeout=5
@@ -218,7 +227,7 @@ fi
 
 # ---- step 8: smoke check --------------------------------------------------
 scp -P "$SSH_HOST_PORT" \
-    -i "$KEYS/id_ed25519" \
+    -i "$KEY" \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
     "$HERE/smoke-check.sh" opsadmin@127.0.0.1:/tmp/smoke-check.sh
