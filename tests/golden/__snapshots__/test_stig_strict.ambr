@@ -173,7 +173,7 @@
   
   install -d -m 700 -o stigops -g stigops /home/stigops/.ssh
   cat > /home/stigops/.ssh/authorized_keys <<'__KS_GEN_EOF__'
-  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYstigstrict ops@bastion
+  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABTESTKEYstigstrict ops@bastion
   __KS_GEN_EOF__
   chmod 600 /home/stigops/.ssh/authorized_keys
   chown stigops:stigops /home/stigops/.ssh/authorized_keys

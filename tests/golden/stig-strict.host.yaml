@@ -4,7 +4,7 @@ user:
   admin:
     name: stigops
     authorized_keys:
-      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYstigstrict ops@bastion"
+      - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABTESTKEYstigstrict ops@bastion"
     sudo: nopasswd_yes
 crypto:
   policy: STIG

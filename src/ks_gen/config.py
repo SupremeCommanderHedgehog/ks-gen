@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from ks_gen.ssh_key_types import describe_key_types, has_fips_usable_key
+
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -782,6 +784,52 @@ class HostConfig(StrictModel):
                     "crypto.policy=MODERN/FUTURE conflicts with overrides.fips_mode=true: "
                     "FIPS kernel mode blocks Curve25519/Ed25519 at the kernel layer."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _stig_requires_a_usable_admin_key(self) -> HostConfig:
+        """#73: a locked admin with no FIPS-usable key can never log in.
+
+        Only fires when the account is passwd -l'd — with a password set,
+        console login and password SSH remain, so dead keys are recoverable.
+        """
+        admin = self.user.admin
+        if self.crypto.policy is not CryptoPolicy.STIG:
+            return self
+        if admin.password is not None:
+            return self
+        if has_fips_usable_key(admin.authorized_keys):
+            return self
+        raise ValueError(
+            "crypto.policy=STIG removes Ed25519 from PubkeyAcceptedAlgorithms, "
+            "so none of user.admin.authorized_keys can authenticate (found: "
+            f"{describe_key_types(admin.authorized_keys)}). The admin account "
+            "is passwd -l'd (user.admin.password unset) and console login is "
+            "off by design, so the installed host would be unreachable. Add an "
+            "ssh-rsa/rsa-sha2-* or ecdsa-sha2-nistp{256,384,521} key, or set "
+            "crypto.policy=MODERN."
+        )
+
+    @model_validator(mode="after")
+    def _stig_requires_usable_container_user_keys(self) -> HostConfig:
+        """#73, for the rootless container accounts.
+
+        ContainerUser has no password field, so authorized_keys is the only
+        way in and there is no unlocked-account exemption.
+        """
+        if self.crypto.policy is not CryptoPolicy.STIG or not self.containers.enabled:
+            return self
+        for i, u in enumerate(self.containers.users):
+            if has_fips_usable_key(u.authorized_keys):
+                continue
+            raise ValueError(
+                "crypto.policy=STIG removes Ed25519 from "
+                "PubkeyAcceptedAlgorithms, so none of "
+                f"containers.users[{i}] ({u.name!r}) authorized_keys can "
+                f"authenticate (found: {describe_key_types(u.authorized_keys)}). "
+                "Add an ssh-rsa/rsa-sha2-* or ecdsa-sha2-nistp{256,384,521} "
+                "key, or set crypto.policy=MODERN."
+            )
         return self
 
     @model_validator(mode="after")
