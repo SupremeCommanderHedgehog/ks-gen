@@ -8,7 +8,7 @@
   
   ## Summary
   - Applied rules: 13
-  - Tailored XCCDF rules: 12
+  - Tailored XCCDF rules: 15
   - Declared exceptions: 0
   
   ## Applied rules
@@ -37,6 +37,9 @@
   | `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_sysctl_crypto_fips_enabled` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_enable_dracut_fips_module` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_fips_crypto_subpolicy` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root` | `faillock_safety` |
   | `xccdf_org.ssgproject.content_rule_package_usbguard_installed` | `usbguard` |
   | `xccdf_org.ssgproject.content_rule_service_usbguard_enabled` | `usbguard` |
@@ -66,6 +69,9 @@
   - `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy`
   - `xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy`
   - `xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy`
+  - `xccdf_org.ssgproject.content_rule_sysctl_crypto_fips_enabled`
+  - `xccdf_org.ssgproject.content_rule_enable_dracut_fips_module`
+  - `xccdf_org.ssgproject.content_rule_fips_crypto_subpolicy`
   
   ### `dod_root_ca` — DoD root/intermediate CA bundle not installed.
   
@@ -452,6 +458,9 @@
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sysctl_crypto_fips_enabled" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_enable_dracut_fips_module" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_fips_crypto_subpolicy" selected="false"/>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_system_crypto_policy">DEFAULT</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time">900</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_deny">3</xccdf:set-value>

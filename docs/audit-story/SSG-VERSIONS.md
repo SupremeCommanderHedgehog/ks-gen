@@ -57,6 +57,13 @@ profile actually selects (`<select selected="true">`). It exists because
 existence is too weak a guard: a rule can be in the datastream and still never
 run, and disabling one of those is inert (#61).
 
+`*-fips-candidates.txt` is the subset of the stig-selected rules whose OVAL
+check or shell remediation mentions FIPS, each line carrying the markers that
+matched (`check:fips`, `fix:fips-mode-setup`, …). It is a "classify me" queue,
+deliberately over-inclusive: a candidate is a rule someone must judge, not a
+rule that must be disabled — `aide_use_fips_hashes` is on the list and passes
+fine off FIPS. See `tests/test_fips_dependent_rules.py` (#67).
+
 ## Headline numbers (current pin, 2026-06-20)
 
 - AlmaLinux 8: **1630** rules
@@ -77,7 +84,7 @@ The extractor rewrites that file from whatever `--datastream` set it is given,
 so always re-run it with **all four** at once — a partial run silently drops
 the distros you left out.
 
-Two mechanical guards run off these lists:
+Three mechanical guards run off these lists:
 
 - `tests/test_rule_ids_exist_in_datastream.py` asserts every SSG rule ID
   referenced by a rule **exists** in its distro's list, so a stale pin or an
@@ -87,6 +94,11 @@ Two mechanical guards run off these lists:
   **selected by the `stig` profile**. This is the stronger property: #61 was a
   case where the IDs existed but were never selected, so the exception looked
   real in `exceptions.md` while the checks that actually fire stayed enabled.
+- `tests/test_fips_dependent_rules.py` asserts the **converse**: every
+  FIPS-dependent stig-selected rule is either disabled on a MODERN/FUTURE host
+  or explicitly classified as passing anyway, with a reason. #67 was the gap —
+  rules that cannot pass off FIPS stayed enabled, and one of them
+  (`enable_dracut_fips_module` on AL8) remediated a non-FIPS host into FIPS.
 
 ## stig-selected counts (current pin)
 

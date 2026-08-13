@@ -1,15 +1,17 @@
-"""alma10's divergence from the alma9 re-export, and the two that collapsed.
+"""alma10's divergences from the alma9 re-export, and the one that collapsed.
 
-`container_host` is the only remaining real divergence: podman-plugins is not
-packaged for AL10 (podman 5.x uses netavark), and a missing name in %packages
-aborts the install.
+`container_host` diverges because podman-plugins is not packaged for AL10
+(podman 5.x uses netavark), and a missing name in %packages aborts the install.
 
-`banner_text` and `crypto_policy` *were* divergent, because alma9 referenced
-SSG rule IDs that AL10 no longer ships. #61 showed the AL9 stig profile never
-selected those IDs either — they were inert on alma9 too. Dropping them from
-alma9 left both distros emitting identical tailoring, so the alma10 modules
-are re-exports again. The tests below pin that the shared implementation is
-still correct *for AL10*, which is the property the divergence used to carry.
+`crypto_policy` diverges again as of #67: the AL10 stig profile selects
+`system_booted_in_fips_mode` and does not select `enable_dracut_fips_module`,
+so its FIPS-only disable set is neither alma9's nor alma8's.
+
+`banner_text` *was* divergent, because alma9 referenced SSG rule IDs that AL10
+no longer ships. #61 showed the AL9 stig profile never selected those IDs
+either — they were inert on alma9 too — so it is a re-export again. The tests
+below pin that the shared implementation is still correct *for AL10*, which is
+the property the divergence used to carry.
 """
 
 from __future__ import annotations
@@ -55,10 +57,10 @@ def test_banner_now_re_exports_alma9(minimal_cfg):
     assert BANNER is ALMA9
 
 
-# ---------------- crypto_policy (shared with alma9 since #61) ----------------
+# ---------------- crypto_policy (divergent again since #67) ----------------
 
 
-def test_crypto_tailoring_uses_the_al10_cipher_and_mac_rules(minimal_cfg):
+def test_crypto_tailoring_uses_the_al10_cipher_mac_and_fips_rules(minimal_cfg):
     ops = CRYPTO.emit_tailoring(_al10(minimal_cfg))
     disabled = {o.rule_id for o in ops if o.action == "disable"}
     assert disabled == {
@@ -67,7 +69,16 @@ def test_crypto_tailoring_uses_the_al10_cipher_and_mac_rules(minimal_cfg):
         f"{_PREFIX}harden_sshd_ciphers_opensshserver_conf_crypto_policy",
         f"{_PREFIX}harden_sshd_macs_openssh_conf_crypto_policy",
         f"{_PREFIX}harden_sshd_macs_opensshserver_conf_crypto_policy",
+        f"{_PREFIX}sysctl_crypto_fips_enabled",
+        f"{_PREFIX}fips_crypto_subpolicy",
+        f"{_PREFIX}system_booted_in_fips_mode",
     }
+
+
+def test_crypto_skips_the_dracut_rule_al10_does_not_select(minimal_cfg):
+    """AL10 ships no dracut FIPS module rule; disabling it would be inert (#61)."""
+    ops = CRYPTO.emit_tailoring(_al10(minimal_cfg))
+    assert f"{_PREFIX}enable_dracut_fips_module" not in {o.rule_id for o in ops}
 
 
 def test_crypto_drops_the_rule_al10_no_longer_ships(minimal_cfg):
@@ -85,10 +96,18 @@ def test_crypto_exception_entry_returns_none_when_stig(minimal_cfg):
     assert CRYPTO.exception_entry(cfg) is None
 
 
-def test_crypto_now_re_exports_alma9(minimal_cfg):
+def test_crypto_diverges_from_the_alma9_re_export(minimal_cfg):
     from ks_gen.rules.alma9.crypto_policy import RULE as ALMA9
 
-    assert CRYPTO is ALMA9
+    assert CRYPTO is not ALMA9
+
+
+def test_crypto_post_matches_alma9(minimal_cfg):
+    """Only the disabled set diverges — %post comes from the shared helper."""
+    from ks_gen.rules.alma9.crypto_policy import RULE as ALMA9
+
+    cfg = _al10(minimal_cfg)
+    assert CRYPTO.emit_post(cfg) == ALMA9.emit_post(cfg)
 
 
 # ---------------- container_host (the remaining divergence) ----------------

@@ -15,18 +15,36 @@ _PREFIX = "xccdf_org.ssgproject.content_rule_"
 # which beats disabling it (#61).
 _VAR_CRYPTO_POLICY = "xccdf_org.ssgproject.content_value_var_system_crypto_policy"
 
-# Fixed via #61: every ID here is selected by the AL9 stig profile, checked
-# against ssg-almalinux9-ds.xml (0.1.80). The previous set disabled
-# sshd_use_approved_ciphers, which the stig profile never selects — inert —
-# while the four harden_sshd_* rules that do fire stayed enabled. Each
-# asserts a FIPS-only algorithm list in the crypto-policies back-end files
-# that update-crypto-policies rewrites under MODERN/FUTURE.
-_TAILORED_WHEN_NOT_STIG = [
+# Stig-selected on AL8, AL9 and AL10 alike, and unsatisfiable off FIPS. Fixed
+# via #61: the previous set disabled sshd_use_approved_ciphers, which the stig
+# profile never selects — inert — while the four harden_sshd_* rules that do
+# fire stayed enabled. Each of those asserts a FIPS-only algorithm list in the
+# crypto-policies back-end files that update-crypto-policies rewrites under
+# MODERN/FUTURE; sysctl_crypto_fips_enabled wants crypto.fips_enabled=1, which
+# only a fips=1 boot provides (#67).
+#
+# Every ID is confirmed selected *and* FIPS-dependent against the pinned
+# datastreams — see docs/audit-story/<distro>-fips-candidates.txt and the
+# classification in tests/test_fips_dependent_rules.py.
+_FIPS_ONLY_COMMON = [
     f"{_PREFIX}enable_fips_mode",
     f"{_PREFIX}harden_sshd_ciphers_openssh_conf_crypto_policy",
     f"{_PREFIX}harden_sshd_ciphers_opensshserver_conf_crypto_policy",
     f"{_PREFIX}harden_sshd_macs_openssh_conf_crypto_policy",
     f"{_PREFIX}harden_sshd_macs_opensshserver_conf_crypto_policy",
+    f"{_PREFIX}sysctl_crypto_fips_enabled",
+]
+
+# AL9-only additions (#67). enable_dracut_fips_module reads
+# /etc/dracut.conf.d/40-fips.conf, which only a FIPS install writes, and
+# ssg-almalinux9 0.1.80 ships no remediation for it — a permanent fail.
+# fips_crypto_subpolicy requires /etc/crypto-policies/config to match
+# ^FIPS$|^FIPS:(OSPP|NO-SHA1|NO-CAMELLIA|ECDHE-ONLY|STIG)$, which DEFAULT and
+# FUTURE cannot.
+_TAILORED_WHEN_NOT_STIG = [
+    *_FIPS_ONLY_COMMON,
+    f"{_PREFIX}enable_dracut_fips_module",
+    f"{_PREFIX}fips_crypto_subpolicy",
 ]
 
 # What `update-crypto-policies --set` must be given for each ks-gen policy.

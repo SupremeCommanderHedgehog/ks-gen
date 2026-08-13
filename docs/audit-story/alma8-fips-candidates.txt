@@ -1,0 +1,8 @@
+xccdf_org.ssgproject.content_rule_configure_crypto_policy	check:crypto-policies/config fix:update-crypto-policies
+xccdf_org.ssgproject.content_rule_enable_dracut_fips_module	check:fips fix:40-fips fix:fips-mode-setup
+xccdf_org.ssgproject.content_rule_enable_fips_mode	check:fips fix:fips-mode-setup fix:update-crypto-policies
+xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy	check:fips
+xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy	check:fips
+xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy	check:fips
+xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy	check:fips
+xccdf_org.ssgproject.content_rule_sysctl_crypto_fips_enabled	check:fips

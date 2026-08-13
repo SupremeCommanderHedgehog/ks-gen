@@ -111,9 +111,12 @@ def test_registry_alma10_re_exports_same_rule_instances_as_alma9():
     _DIVERGENT = {
         # podman-plugins is not packaged for AL10.
         "container_host",
-        # banner_text and crypto_policy were divergent until #61: alma9 was
-        # referencing IDs its own stig profile never selected, and dropping
-        # them left both distros emitting identical tailoring.
+        # AL10's stig profile selects system_booted_in_fips_mode and drops
+        # enable_dracut_fips_module, so its FIPS-only disable set differs (#67).
+        "crypto_policy",
+        # banner_text was divergent until #61: alma9 was referencing IDs its
+        # own stig profile never selected, and dropping them left both distros
+        # emitting identical tailoring.
     }
 
     alma9_rules = {r.id: r for r in load_rules("alma9")}

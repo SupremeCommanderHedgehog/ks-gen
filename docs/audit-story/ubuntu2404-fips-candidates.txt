@@ -1,0 +1,1 @@
+xccdf_org.ssgproject.content_rule_is_fips_mode_enabled	check:/proc/sys/crypto check:fips
