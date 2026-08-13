@@ -1013,7 +1013,7 @@ exact XCCDF IDs.
 | `admin_user_and_keys` | Creates the wheel admin in `%post`, drops `authorized_keys`, writes `/etc/sudoers.d/00-ks-gen-admin`. **Runs first.** |
 | `ssh_keep_open` | If `ssh.port != 22`: `semanage port -a -t ssh_port_t -p tcp <port>`. Always (when enabled): `firewall-offline-cmd --add-port=<port>/tcp`. **Runs before firewalld is enabled.** |
 | `faillock_safety` | Tailors `unlock_time` and `deny` variables; when `even_deny_root=false`, disables the matching XCCDF rule; re-asserts `/etc/security/faillock.conf` in `%post`. |
-| `crypto_policy` | `update-crypto-policies --set {FIPS|DEFAULT|FUTURE}`. When not STIG: tailoring disables `enable_fips_mode`, `sshd_use_approved_{ciphers,kex,macs,mac_ordered}`; `%post` runs `ssh-keygen -A` to generate Ed25519 host keys (which `sshd-keygen` won't make in FIPS mode). |
+| `crypto_policy` | `update-crypto-policies --set {FIPS[:STIG]\|DEFAULT\|FUTURE}` — the STIG target is per-distro (AL9 expects `FIPS:STIG`, AL8/AL10 plain `FIPS`). When not STIG: tailoring retunes `var_system_crypto_policy` to the chosen policy and disables the FIPS-only rules that host can never pass — the exact set differs per distro, so read `exceptions.md` or run `ks-gen rules` for the live list. `%post` runs `ssh-keygen -A` to generate Ed25519 host keys (which `sshd-keygen` won't make in FIPS mode). |
 | `ssh_config_apply` | Writes `/etc/ssh/sshd_config.d/00-ks-gen.conf` with `Port`, `PermitRootLogin`, `PasswordAuthentication`, `ClientAlive*`, `MaxAuthTries`, `UsePAM`; runs `sshd -t` to validate. Hard depends on `admin_user_and_keys` and `ssh_keep_open`. |
 
 ### DoD-content neutralization

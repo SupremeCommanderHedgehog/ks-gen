@@ -4,11 +4,15 @@ alma8 is the first rule (per #127 PR B) where the alma8 implementation
 diverges from the alma9 re-export. See
 src/ks_gen/rules/alma8/crypto_policy.py for the rationale.
 
-Re-derived for #61: the divergence is now a single ID. AL8's stig profile
-still selects sshd_use_approved_kex_ordered_stig, which ssg-almalinux9
-(0.1.80) dropped entirely. The other two IDs alma8 used to add
+Re-derived for #61: the divergence was a single ID — AL8's stig profile still
+selects sshd_use_approved_kex_ordered_stig, which ssg-almalinux9 (0.1.80)
+dropped entirely. The other two IDs alma8 used to add
 (sshd_use_approved_ciphers, sshd_use_approved_macs) exist in the AL8
 datastream but the stig profile selects neither, so disabling them was inert.
+
+#67 made it two-way: alma8 additionally disables enable_dracut_fips_module
+(its AL8 remediation runs `fips-mode-setup --enable`) while alma9 disables
+fips_crypto_subpolicy, which the AL8 profile does not select.
 """
 
 from __future__ import annotations
@@ -26,7 +30,7 @@ def test_alma8_diverges_from_alma9_re_export():
     assert RULE is not ALMA9_RULE
 
 
-def test_alma8_modern_tailoring_disables_alma9_set_plus_the_al8_kex_rule(minimal_cfg):
+def test_alma8_modern_tailoring_diverges_from_alma9_in_both_directions(minimal_cfg):
     from ks_gen.rules.alma9.crypto_policy import RULE as ALMA9_RULE
 
     cfg = minimal_cfg.model_copy(update={"distro": "alma8"})
@@ -34,11 +38,25 @@ def test_alma8_modern_tailoring_disables_alma9_set_plus_the_al8_kex_rule(minimal
     alma9_disabled = {
         o.rule_id for o in ALMA9_RULE.emit_tailoring(minimal_cfg) if o.action == "disable"
     }
-    # The whole divergence is one extra ID that AL8's stig profile still
-    # selects and AL9's datastream no longer ships at all.
-    assert disabled == alma9_disabled | {
+    # AL8-only: still selected here, gone from the AL9 datastream entirely.
+    assert disabled - alma9_disabled == {
         "xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig",
     }
+    # AL9-only: the AL8 stig profile does not select the sub-policy rule.
+    assert alma9_disabled - disabled == {
+        "xccdf_org.ssgproject.content_rule_fips_crypto_subpolicy",
+    }
+
+
+def test_alma8_disables_the_dracut_rule_whose_fix_would_enable_fips(minimal_cfg):
+    """#67: AL8's remediation runs `fips-mode-setup --enable`.
+
+    Left enabled, oscap would put fips=1 on the kernel command line of a host
+    that explicitly opted out of FIPS.
+    """
+    cfg = minimal_cfg.model_copy(update={"distro": "alma8"})
+    disabled = {o.rule_id for o in RULE.emit_tailoring(cfg) if o.action == "disable"}
+    assert "xccdf_org.ssgproject.content_rule_enable_dracut_fips_module" in disabled
 
 
 def test_alma8_stig_policy_emits_no_tailoring(minimal_cfg):
@@ -48,13 +66,14 @@ def test_alma8_stig_policy_emits_no_tailoring(minimal_cfg):
     assert RULE.emit_tailoring(cfg) == []
 
 
-def test_alma8_exception_entry_lists_six_ids_when_not_stig(minimal_cfg):
+def test_alma8_exception_entry_lists_every_disabled_id_when_not_stig(minimal_cfg):
     cfg = minimal_cfg.model_copy(update={"distro": "alma8"})
     entry = RULE.exception_entry(cfg)
     assert entry is not None
     assert "MODERN" in entry.summary
-    # 6 IDs (alma9's 5 + the AL8-only kex rule) — see test above for the set.
-    assert len(entry.stig_rules_disabled) == 6
+    # exceptions.md must name exactly what the tailoring suppresses.
+    disabled = {o.rule_id for o in RULE.emit_tailoring(cfg) if o.action == "disable"}
+    assert set(entry.stig_rules_disabled) == disabled
 
 
 def test_alma8_exception_entry_returns_none_when_stig(minimal_cfg):

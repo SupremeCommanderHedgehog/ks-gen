@@ -136,3 +136,123 @@ def test_cli_errors_on_missing_datastream(tmp_path, capsys):
 def test_cli_requires_label_equals_path_format():
     with pytest.raises(SystemExit):
         extract_ssg_rule_ids.main(["--datastream", "no-equals-here", "--out-dir", "/tmp"])
+
+
+# ---------------- fips candidate extraction (#67) ----------------
+#
+# Every miss here is silent: the candidate list *is* the universe
+# tests/test_fips_dependent_rules.py checks, so a rule that never lands on it
+# stays enabled on a MODERN host with CI green. Each test below hides the only
+# FIPS marker behind one layer of OVAL indirection.
+
+_RULE_ID = "xccdf_org.ssgproject.content_rule_neutral_name"
+
+
+def _write_oval_ds(tmp_path: Path, refs: list[str], oval_body: str) -> Path:
+    """XCCDF 1.2 rule with the given oval check refs, plus raw OVAL elements."""
+    check_refs = "\n".join(
+        f'      <xccdf:check-content-ref href="o.xml" name="{ref}"/>' for ref in refs
+    )
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<xccdf:Benchmark xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" id="xccdf_x">\n'
+        f'  <xccdf:Rule id="{_RULE_ID}">\n'
+        '    <xccdf:check system="http://oval.mitre.org/XMLSchema/oval-definitions-5">\n'
+        f"{check_refs}\n"
+        "    </xccdf:check>\n"
+        "  </xccdf:Rule>\n"
+        f"{oval_body}\n"
+        "</xccdf:Benchmark>\n"
+    )
+    p = tmp_path / "ds.xml"
+    p.write_text(body, encoding="utf-8")
+    return p
+
+
+def _candidates(path: Path) -> dict[str, str]:
+    return extract_ssg_rule_ids.extract_fips_candidates(path, {_RULE_ID})
+
+
+def test_fips_candidates_follow_extend_definition(tmp_path):
+    """SSG delegates criteria to shared definitions; stopping at the top misses them."""
+    ds = _write_oval_ds(
+        tmp_path,
+        ["oval:x:def:1"],
+        """
+  <definition id="oval:x:def:1">
+    <criteria><extend_definition definition_ref="oval:x:def:2"/></criteria>
+  </definition>
+  <definition id="oval:x:def:2">
+    <criteria><criterion test_ref="oval:x:tst:1" comment="checked elsewhere"/></criteria>
+  </definition>
+  <textfilecontent54_test id="oval:x:tst:1">
+    <object object_ref="oval:x:obj:1"/>
+  </textfilecontent54_test>
+  <textfilecontent54_object id="oval:x:obj:1">
+    <filepath>/proc/sys/crypto/enabled</filepath>
+  </textfilecontent54_object>""",
+    )
+    assert _RULE_ID in _candidates(ds)
+
+
+def test_fips_candidates_resolve_var_ref_indirection(tmp_path):
+    """A state can defer its value to a variable; the marker lives there, not inline."""
+    ds = _write_oval_ds(
+        tmp_path,
+        ["oval:x:def:1"],
+        """
+  <definition id="oval:x:def:1">
+    <criteria><criterion test_ref="oval:x:tst:1" comment="algorithms"/></criteria>
+  </definition>
+  <textfilecontent54_test id="oval:x:tst:1">
+    <state state_ref="oval:x:ste:1"/>
+  </textfilecontent54_test>
+  <textfilecontent54_state id="oval:x:ste:1">
+    <subexpression var_ref="oval:x:var:1"/>
+  </textfilecontent54_state>
+  <constant_variable id="oval:x:var:1" comment="approved algorithms by FIPS"/>""",
+    )
+    assert _RULE_ID in _candidates(ds)
+
+
+def test_fips_candidates_scan_every_check_ref_not_just_the_last(tmp_path):
+    ds = _write_oval_ds(
+        tmp_path,
+        ["oval:x:def:1", "oval:x:def:2"],
+        """
+  <definition id="oval:x:def:1">
+    <criteria><criterion test_ref="oval:x:tst:1" comment="fips mode required"/></criteria>
+  </definition>
+  <definition id="oval:x:def:2">
+    <criteria><criterion test_ref="oval:x:tst:2" comment="something unrelated"/></criteria>
+  </definition>""",
+    )
+    assert _RULE_ID in _candidates(ds)
+
+
+def test_fips_candidates_skip_rules_with_no_marker(tmp_path):
+    """The queue must stay a queue — flagging everything is as useless as flagging nothing."""
+    ds = _write_oval_ds(
+        tmp_path,
+        ["oval:x:def:1"],
+        """
+  <definition id="oval:x:def:1">
+    <criteria><criterion test_ref="oval:x:tst:1" comment="permissions on a log file"/></criteria>
+  </definition>""",
+    )
+    assert _candidates(ds) == {}
+
+
+def test_write_fips_candidates_marks_an_empty_result(tmp_path):
+    """An empty file would read as a truncated extraction, not as 'found none'."""
+    out = tmp_path / "dist-fips-candidates.txt"
+    extract_ssg_rule_ids.write_fips_candidates({}, out)
+    text = out.read_text(encoding="utf-8")
+    assert text.strip()
+    assert text.startswith("#")
+
+
+def test_write_fips_candidates_sorts_and_keeps_markers(tmp_path):
+    out = tmp_path / "dist-fips-candidates.txt"
+    extract_ssg_rule_ids.write_fips_candidates({"b": "check:fips", "a": "fix:fips=1"}, out)
+    assert out.read_text(encoding="utf-8") == "a\tfix:fips=1\nb\tcheck:fips\n"

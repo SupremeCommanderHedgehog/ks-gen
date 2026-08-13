@@ -13,26 +13,40 @@ Usage:
         --out-dir docs/audit-story/
 
 For each ``--datastream <label>=<path>`` pair, writes
-``<out-dir>/<label>-rule-ids.txt`` (one rule ID per line, sorted, deduped)
-and ``<out-dir>/<label>-stig-selected.txt`` (the subset the ``stig`` profile
-actually selects). With 2+ datastreams, also writes
+``<out-dir>/<label>-rule-ids.txt`` (one rule ID per line, sorted, deduped),
+``<out-dir>/<label>-stig-selected.txt`` (the subset the ``stig`` profile
+actually selects), ``<out-dir>/<label>-stig-refine-values.txt`` and
+``<out-dir>/<label>-fips-candidates.txt`` (stig-selected rules whose check or
+remediation touches FIPS). With 2+ datastreams, also writes
 ``<out-dir>/cross-distro-rule-id-diff.md`` with set ops (all-in-all, pairwise
 intersections, distro-only sets).
 
 The stig-selected list exists because rule *existence* is too weak a guard:
 disabling a rule the ``stig`` profile never selects is inert, and looks like
 a working exception (see #61).
+
+The fips-candidates list exists for the converse guard (#67): a stig-selected
+rule that cannot pass without FIPS stays enabled unless someone notices it, so
+every candidate must be explicitly classified by
+``tests/test_fips_dependent_rules.py``.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import xml.etree.ElementTree as ET
 from itertools import combinations
 from pathlib import Path
 
 XCCDF_NS = "http://checklists.nist.gov/xccdf/1.2"
+
+# Deliberately broad: the list is a "classify me" queue, not a disable list.
+# False positives (aide_use_fips_hashes wants sha512 in aide.conf and passes
+# under any policy) are cheap — an unclassified new rule is not.
+_CHECK_MARKERS = re.compile(r"fips|/proc/sys/crypto|crypto-policies/config", re.IGNORECASE)
+_FIX_MARKERS = re.compile(r"fips-mode-setup|update-crypto-policies|fips=1|40-fips")
 
 
 def extract_rule_ids(datastream_path: Path) -> set[str]:
@@ -93,6 +107,155 @@ def extract_stig_refine_values(datastream_path: Path) -> dict[str, str]:
             if idref and selector and selector in selectors.get(idref, {}):
                 resolved[idref] = selectors[idref][selector]
     return resolved
+
+
+def _local_tag(elem: ET.Element) -> str:
+    return elem.tag.rsplit("}", 1)[-1]
+
+
+def _index_oval(tree: ET.ElementTree) -> dict[str, dict[str, ET.Element]]:
+    """Map OVAL definitions/tests/objects/states/variables by id.
+
+    `var` covers constant/local/external variables, which states reference
+    through `var_ref` rather than carrying the value inline.
+    """
+    index: dict[str, dict[str, ET.Element]] = {
+        "def": {},
+        "tst": {},
+        "obj": {},
+        "ste": {},
+        "var": {},
+    }
+    for elem in tree.iter():
+        eid = elem.get("id")
+        if not eid:
+            continue
+        tag = _local_tag(elem)
+        if tag == "definition":
+            index["def"][eid] = elem
+        elif tag.endswith("_test"):
+            index["tst"][eid] = elem
+        elif tag.endswith("_object"):
+            index["obj"][eid] = elem
+        elif tag.endswith("_state"):
+            index["ste"][eid] = elem
+        elif tag.endswith("_variable"):
+            index["var"][eid] = elem
+    return index
+
+
+def _node_text(node: ET.Element, index: dict[str, dict[str, ET.Element]]) -> list[str]:
+    """An object/state serialized, plus any variable it defers its value to."""
+    parts = [ET.tostring(node, encoding="unicode")]
+    for descendant in node.iter():
+        var = index["var"].get(descendant.get("var_ref") or "")
+        if var is not None:
+            parts.append(ET.tostring(var, encoding="unicode"))
+    return parts
+
+
+def _definition_text(
+    def_id: str,
+    index: dict[str, dict[str, ET.Element]],
+    seen: set[str],
+) -> list[str]:
+    """One definition's criteria, tests, objects, states and extended definitions.
+
+    Follows `extend_definition`: SSG routinely delegates a rule's real criteria
+    to a shared definition, and stopping at the top level would read as "this
+    rule's check mentions nothing" — a silent false negative in the candidate
+    queue.
+    """
+    definition = index["def"].get(def_id)
+    if definition is None or def_id in seen:
+        return []
+    seen.add(def_id)
+
+    parts: list[str] = []
+    for node in definition.iter():
+        tag = _local_tag(node)
+        if tag == "extend_definition":
+            parts += _definition_text(node.get("definition_ref") or "", index, seen)
+            continue
+        if tag != "criterion":
+            continue
+        parts.append(node.get("comment") or "")
+        test = index["tst"].get(node.get("test_ref") or "")
+        if test is None:
+            continue
+        parts.append(test.get("comment") or "")
+        for ref in test:
+            target = ref.get("object_ref") or ref.get("state_ref") or ""
+            referenced = index["obj"].get(target)
+            if referenced is None:
+                referenced = index["ste"].get(target)
+            if referenced is not None:
+                parts += _node_text(referenced, index)
+    return parts
+
+
+def _oval_check_text(rule: ET.Element, index: dict[str, dict[str, ET.Element]]) -> str:
+    """Every OVAL check the rule references, flattened to one string.
+
+    All refs, not just the last: a rule may carry several checks, and markers
+    in the earlier ones would otherwise be lost.
+    """
+    seen: set[str] = set()
+    parts: list[str] = []
+    for child in rule.iter():
+        name = child.get("name") or ""
+        if _local_tag(child) == "check-content-ref" and name.startswith("oval:"):
+            parts += _definition_text(name, index, seen)
+    return " ".join(parts)
+
+
+def _shell_fix_text(rule: ET.Element) -> str:
+    return "".join(
+        "".join(child.itertext())
+        for child in rule
+        if _local_tag(child) == "fix" and child.get("system", "").endswith("script:sh")
+    )
+
+
+def extract_fips_candidates(datastream_path: Path, selected: set[str]) -> dict[str, str]:
+    """Return stig-selected rules whose OVAL check or shell fix touches FIPS.
+
+    Keyed by rule ID, valued by the markers that matched, so a reviewer can see
+    *why* a rule is on the queue without re-reading the datastream. A check
+    marker means the rule may be unable to pass off FIPS; a fix marker means its
+    remediation may reconfigure a deliberately non-FIPS host (#67).
+    """
+    tree = ET.parse(datastream_path)
+    index = _index_oval(tree)
+
+    candidates: dict[str, str] = {}
+    for rule in tree.iter(f"{{{XCCDF_NS}}}Rule"):
+        rule_id = rule.get("id")
+        if not rule_id or rule_id not in selected:
+            continue
+        check_text = _oval_check_text(rule, index)
+        check_hits = sorted({m.group(0).lower() for m in _CHECK_MARKERS.finditer(check_text)})
+        fix_hits = sorted({m.group(0) for m in _FIX_MARKERS.finditer(_shell_fix_text(rule))})
+        if not check_hits and not fix_hits:
+            continue
+        markers = [f"check:{h}" for h in check_hits] + [f"fix:{h}" for h in fix_hits]
+        candidates[rule_id] = " ".join(markers)
+    return candidates
+
+
+_NO_FIPS_CANDIDATES = "# no fips candidates"
+
+
+def write_fips_candidates(candidates: dict[str, str], out_path: Path) -> None:
+    """One ``<rule-id>\\t<markers>`` per line, sorted.
+
+    A distro with no candidates gets an explicit marker line rather than an
+    empty file, so "extracted, found none" stays distinguishable from a
+    truncated or half-written extraction.
+    """
+    lines = [f"{k}\t{v}" for k, v in sorted(candidates.items())] or [_NO_FIPS_CANDIDATES]
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def write_refine_values(values: dict[str, str], out_path: Path) -> None:
@@ -191,6 +354,11 @@ def main(argv: list[str] | None = None) -> int:
         sel_out = args.out_dir / f"{label}-stig-selected.txt"
         write_rule_id_list(selected, sel_out)
         print(f"{label}: {len(selected)} stig-selected -> {sel_out}")
+
+        fips = extract_fips_candidates(path, selected)
+        fips_out = args.out_dir / f"{label}-fips-candidates.txt"
+        write_fips_candidates(fips, fips_out)
+        print(f"{label}: {len(fips)} fips candidates -> {fips_out}")
 
         refined = extract_stig_refine_values(path)
         val_out = args.out_dir / f"{label}-stig-refine-values.txt"

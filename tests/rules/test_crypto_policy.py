@@ -20,6 +20,7 @@ def test_modern_tailoring_disables_fips_and_the_crypto_policy_backend_rules(mini
     # selected, so disabling it was inert; the four harden_sshd_* rules are
     # the ones that fire, and each asserts a FIPS-only algorithm list in the
     # crypto-policies back-end files that MODERN/FUTURE rewrites.
+    # Per #67: the three FIPS-only rules below can never pass off FIPS either.
     ops = RULE.emit_tailoring(minimal_cfg)
     disabled = {o.rule_id for o in ops if o.action == "disable"}
     assert disabled == {
@@ -28,7 +29,22 @@ def test_modern_tailoring_disables_fips_and_the_crypto_policy_backend_rules(mini
         "xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy",
         "xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy",
         "xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy",
+        "xccdf_org.ssgproject.content_rule_sysctl_crypto_fips_enabled",
+        "xccdf_org.ssgproject.content_rule_enable_dracut_fips_module",
+        "xccdf_org.ssgproject.content_rule_fips_crypto_subpolicy",
     }
+
+
+def test_modern_tailoring_leaves_the_rules_that_pass_off_fips_enabled(minimal_cfg):
+    """#67's care rule: only rules that cannot pass get disabled.
+
+    aide_use_fips_hashes wants sha512 in aide.conf and fips_custom_stig_sub_policy
+    checks a file its own remediation writes — both pass under DEFAULT, so
+    disabling them would put a misleading line in exceptions.md.
+    """
+    disabled = {o.rule_id for o in RULE.emit_tailoring(minimal_cfg) if o.action == "disable"}
+    assert "xccdf_org.ssgproject.content_rule_aide_use_fips_hashes" not in disabled
+    assert "xccdf_org.ssgproject.content_rule_fips_custom_stig_sub_policy" not in disabled
 
 
 def test_modern_tailoring_retunes_the_crypto_policy_variable(minimal_cfg):
