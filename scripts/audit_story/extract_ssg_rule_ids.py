@@ -114,8 +114,18 @@ def _local_tag(elem: ET.Element) -> str:
 
 
 def _index_oval(tree: ET.ElementTree) -> dict[str, dict[str, ET.Element]]:
-    """Map OVAL definitions/tests/objects/states by id, from the embedded components."""
-    index: dict[str, dict[str, ET.Element]] = {"def": {}, "tst": {}, "obj": {}, "ste": {}}
+    """Map OVAL definitions/tests/objects/states/variables by id.
+
+    `var` covers constant/local/external variables, which states reference
+    through `var_ref` rather than carrying the value inline.
+    """
+    index: dict[str, dict[str, ET.Element]] = {
+        "def": {},
+        "tst": {},
+        "obj": {},
+        "ste": {},
+        "var": {},
+    }
     for elem in tree.iter():
         eid = elem.get("id")
         if not eid:
@@ -129,36 +139,73 @@ def _index_oval(tree: ET.ElementTree) -> dict[str, dict[str, ET.Element]]:
             index["obj"][eid] = elem
         elif tag.endswith("_state"):
             index["ste"][eid] = elem
+        elif tag.endswith("_variable"):
+            index["var"][eid] = elem
     return index
 
 
-def _oval_check_text(rule: ET.Element, index: dict[str, dict[str, ET.Element]]) -> str:
-    """The rule's OVAL criteria, tests, objects and states flattened to one string."""
-    def_id = None
-    for child in rule.iter():
-        name = child.get("name") or ""
-        if _local_tag(child) == "check-content-ref" and name.startswith("oval:"):
-            def_id = name
-    definition = index["def"].get(def_id or "")
-    if definition is None:
-        return ""
+def _node_text(node: ET.Element, index: dict[str, dict[str, ET.Element]]) -> list[str]:
+    """An object/state serialized, plus any variable it defers its value to."""
+    parts = [ET.tostring(node, encoding="unicode")]
+    for descendant in node.iter():
+        var = index["var"].get(descendant.get("var_ref") or "")
+        if var is not None:
+            parts.append(ET.tostring(var, encoding="unicode"))
+    return parts
+
+
+def _definition_text(
+    def_id: str,
+    index: dict[str, dict[str, ET.Element]],
+    seen: set[str],
+) -> list[str]:
+    """One definition's criteria, tests, objects, states and extended definitions.
+
+    Follows `extend_definition`: SSG routinely delegates a rule's real criteria
+    to a shared definition, and stopping at the top level would read as "this
+    rule's check mentions nothing" — a silent false negative in the candidate
+    queue.
+    """
+    definition = index["def"].get(def_id)
+    if definition is None or def_id in seen:
+        return []
+    seen.add(def_id)
 
     parts: list[str] = []
-    for criterion in definition.iter():
-        if _local_tag(criterion) != "criterion":
+    for node in definition.iter():
+        tag = _local_tag(node)
+        if tag == "extend_definition":
+            parts += _definition_text(node.get("definition_ref") or "", index, seen)
             continue
-        parts.append(criterion.get("comment") or "")
-        test = index["tst"].get(criterion.get("test_ref") or "")
+        if tag != "criterion":
+            continue
+        parts.append(node.get("comment") or "")
+        test = index["tst"].get(node.get("test_ref") or "")
         if test is None:
             continue
         parts.append(test.get("comment") or "")
         for ref in test:
             target = ref.get("object_ref") or ref.get("state_ref") or ""
-            node = index["obj"].get(target)
-            if node is None:
-                node = index["ste"].get(target)
-            if node is not None:
-                parts.append(ET.tostring(node, encoding="unicode"))
+            referenced = index["obj"].get(target)
+            if referenced is None:
+                referenced = index["ste"].get(target)
+            if referenced is not None:
+                parts += _node_text(referenced, index)
+    return parts
+
+
+def _oval_check_text(rule: ET.Element, index: dict[str, dict[str, ET.Element]]) -> str:
+    """Every OVAL check the rule references, flattened to one string.
+
+    All refs, not just the last: a rule may carry several checks, and markers
+    in the earlier ones would otherwise be lost.
+    """
+    seen: set[str] = set()
+    parts: list[str] = []
+    for child in rule.iter():
+        name = child.get("name") or ""
+        if _local_tag(child) == "check-content-ref" and name.startswith("oval:"):
+            parts += _definition_text(name, index, seen)
     return " ".join(parts)
 
 
@@ -196,9 +243,17 @@ def extract_fips_candidates(datastream_path: Path, selected: set[str]) -> dict[s
     return candidates
 
 
+_NO_FIPS_CANDIDATES = "# no fips candidates"
+
+
 def write_fips_candidates(candidates: dict[str, str], out_path: Path) -> None:
-    """One ``<rule-id>\\t<markers>`` per line, sorted."""
-    lines = [f"{k}\t{v}" for k, v in sorted(candidates.items())]
+    """One ``<rule-id>\\t<markers>`` per line, sorted.
+
+    A distro with no candidates gets an explicit marker line rather than an
+    empty file, so "extracted, found none" stays distinguishable from a
+    truncated or half-written extraction.
+    """
+    lines = [f"{k}\t{v}" for k, v in sorted(candidates.items())] or [_NO_FIPS_CANDIDATES]
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

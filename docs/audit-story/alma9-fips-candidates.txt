@@ -1,7 +1,7 @@
 xccdf_org.ssgproject.content_rule_aide_use_fips_hashes	check:fips
 xccdf_org.ssgproject.content_rule_configure_crypto_policy	check:crypto-policies/config fix:update-crypto-policies
 xccdf_org.ssgproject.content_rule_enable_dracut_fips_module	check:fips
-xccdf_org.ssgproject.content_rule_enable_fips_mode	check:/proc/sys/crypto check:fips fix:fips=1
+xccdf_org.ssgproject.content_rule_enable_fips_mode	check:/proc/sys/crypto check:crypto-policies/config check:fips fix:fips=1
 xccdf_org.ssgproject.content_rule_fips_crypto_subpolicy	check:crypto-policies/config check:fips
 xccdf_org.ssgproject.content_rule_fips_custom_stig_sub_policy	check:fips fix:update-crypto-policies
 xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy	check:fips

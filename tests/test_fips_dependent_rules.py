@@ -68,7 +68,15 @@ _PASSES_ANYWAY: dict[str, dict[str, str]] = {
             "passes under DEFAULT and FUTURE too"
         ),
     },
-    "ubuntu2404": {},
+    "ubuntu2404": {
+        "ssh_use_approved_macs_ordered_stig": (
+            "the *client* twin of the sshd_ rule, checking /etc/ssh/ssh_config{,.d} "
+            "against the profile's ssh_approved_macs variable — 'by FIPS' in that "
+            "variable's comment is what flags it here. ks-gen writes only the sshd "
+            "drop-in, so oscap's own remediation populates 00-mac-list.conf and the "
+            "rule passes"
+        ),
+    },
 }
 
 
@@ -82,9 +90,11 @@ def _candidates(distro: str) -> set[str]:
         f"missing {path.name} — re-run scripts/audit_story/extract_ssg_rule_ids.py "
         f"with all four datastreams (see docs/audit-story/SSG-VERSIONS.md)."
     )
-    ids = {line.split("\t", 1)[0] for line in path.read_text(encoding="utf-8").split("\n") if line}
-    assert ids, f"{path.name} is empty"
-    return ids
+    lines = [line for line in path.read_text(encoding="utf-8").split("\n") if line]
+    # A truncated extraction is a real failure; "extracted, found none" is not,
+    # and the extractor writes an explicit marker line for it.
+    assert lines, f"{path.name} is empty — the extraction was truncated"
+    return {line.split("\t", 1)[0] for line in lines if not line.startswith("#")}
 
 
 def _allow_listed(distro: str) -> set[str]:
