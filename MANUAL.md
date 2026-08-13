@@ -538,12 +538,14 @@ user:
       - "ssh-ed25519 AAAA... opsadmin@laptop"
 ```
 
-Two cross-field invariants are enforced at load time:
+Three cross-field invariants are enforced at load time:
 
 - `name` cannot be `root` (literal string `"root"` raises a
   validation error).
 - If `password` is `null`, `authorized_keys` must have at least one
   entry. Empty list + null password is rejected.
+- Under `crypto.policy: STIG`, a `null`-password admin needs at least
+  one key of a type FIPS keeps. See §3.5.
 
 ### 4.6 `ssh`
 

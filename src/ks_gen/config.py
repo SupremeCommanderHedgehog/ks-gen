@@ -806,7 +806,7 @@ class HostConfig(StrictModel):
             f"{describe_key_types(admin.authorized_keys)}). The admin account "
             "is passwd -l'd (user.admin.password unset) and console login is "
             "off by design, so the installed host would be unreachable. Add an "
-            "ssh-rsa (>=3072-bit) or ecdsa-sha2-nistp{256,384,521} key, or set "
+            "ssh-rsa/rsa-sha2-* or ecdsa-sha2-nistp{256,384,521} key, or set "
             "crypto.policy=MODERN."
         )
 
@@ -827,7 +827,7 @@ class HostConfig(StrictModel):
                 "PubkeyAcceptedAlgorithms, so none of "
                 f"containers.users[{i}] ({u.name!r}) authorized_keys can "
                 f"authenticate (found: {describe_key_types(u.authorized_keys)}). "
-                "Add an ssh-rsa (>=3072-bit) or ecdsa-sha2-nistp{256,384,521} "
+                "Add an ssh-rsa/rsa-sha2-* or ecdsa-sha2-nistp{256,384,521} "
                 "key, or set crypto.policy=MODERN."
             )
         return self

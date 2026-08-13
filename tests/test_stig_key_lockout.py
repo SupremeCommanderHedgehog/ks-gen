@@ -47,6 +47,15 @@ def test_stig_with_an_options_prefixed_rsa_key_is_accepted():
     HostConfig.model_validate(_payload([entry]))
 
 
+def test_stig_is_not_fooled_by_an_algorithm_name_in_a_forced_command():
+    """End-to-end guard against the fail-open parse: the option value mentions
+    ssh-rsa, but the only real key is Ed25519, so the host is unreachable."""
+    entry = 'command="/usr/local/bin/wrap ssh-rsa mode" ssh-ed25519 AAAAC3Nz a@b'
+    with pytest.raises(ValidationError) as e:
+        HostConfig.model_validate(_payload([entry]))
+    assert "ssh-ed25519" in str(e.value)
+
+
 def test_stig_with_a_typoed_key_type_is_rejected():
     with pytest.raises(ValidationError) as e:
         HostConfig.model_validate(_payload(["ssh-edd25519 AAAAC3Nz ops@bastion"]))

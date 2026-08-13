@@ -30,6 +30,47 @@ def test_key_type_ignores_a_type_name_in_the_comment():
     assert key_type("ssh-ed25519 AAAAC3Nz my ssh-rsa backup key") == "ssh-ed25519"
 
 
+def test_key_type_is_not_fooled_by_an_algorithm_name_inside_an_option_value():
+    """The fail-open direction: a quoted option value must not supply the type.
+
+    A plain str.split() reads `ssh-rsa` out of the forced command and calls an
+    Ed25519-only key list usable under FIPS — the exact lockout #73 prevents.
+    """
+    entry = 'command="/usr/local/bin/wrap ssh-rsa mode" ssh-ed25519 AAAAC3Nz a@b'
+    assert key_type(entry) == "ssh-ed25519"
+    assert not has_fips_usable_key([entry])
+
+
+def test_key_type_is_not_fooled_by_a_stripped_algorithm_in_an_option_value():
+    """The fail-closed direction: a usable key must not be rejected."""
+    entry = 'environment="NOTE=my ssh-ed25519 key" ssh-rsa AAAAB3Nz a@b'
+    assert key_type(entry) == "ssh-rsa"
+    assert has_fips_usable_key([entry])
+
+
+def test_key_type_handles_an_escaped_quote_inside_an_option_value():
+    entry = 'command="echo \\"ssh-rsa\\"" ssh-ed25519 AAAAC3Nz a@b'
+    assert key_type(entry) == "ssh-ed25519"
+
+
+def test_an_unbalanced_quote_fails_closed():
+    # The rest of the line is swallowed into one token, so no type is found
+    # and the key counts as unusable rather than as whatever it mentions.
+    assert key_type('command="unterminated ssh-rsa AAAAB3Nz a@b') is None
+
+
+def test_cert_authority_prefixed_keys_read_as_their_base_type():
+    assert key_type("cert-authority ssh-rsa AAAAB3Nz ca@bastion") == "ssh-rsa"
+
+
+def test_certificate_key_types_are_not_usable():
+    # Deliberate: the STIG PubkeyAcceptedAlgorithms list ks-gen writes on
+    # Ubuntu carries no cert forms, so a cert-only list cannot authenticate.
+    entry = "ecdsa-sha2-nistp256-cert-v01@openssh.com AAAAB3Nz a@b"
+    assert key_type(entry) is None
+    assert not has_fips_usable_key([entry])
+
+
 def test_key_type_returns_none_for_an_unrecognized_type():
     assert key_type("ssh-edd25519 AAAAC3Nz typo@bastion") is None
     assert key_type("") is None
