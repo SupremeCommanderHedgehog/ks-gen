@@ -81,6 +81,31 @@ def test_sub_policy_target_is_guarded_by_its_module_file(minimal_cfg):
     assert post.isascii(), "generated %post shell must stay ASCII"
 
 
+@pytest.mark.parametrize("distro", _RHEL_FAMILY)
+def test_stig_generates_fips_approved_host_keys(distro, minimal_cfg):
+    """#72: without a host key, ssh_config_apply's `sshd -t` aborts the install.
+
+    ssh-keygen -A would also mint an Ed25519 key, which is exactly what the
+    STIG branch avoids under FIPS — so the approved types are generated
+    explicitly, guarded so an existing key is never clobbered.
+    """
+    cfg = _cfg_for(minimal_cfg, distro, CryptoPolicy.STIG)
+    post = next(r for r in load_rules(distro) if r.id == "crypto_policy").emit_post(cfg)
+
+    assert "ssh-keygen -q -t rsa -b 3072 -f /etc/ssh/ssh_host_rsa_key" in post
+    assert "ssh-keygen -q -t ecdsa -b 384 -f /etc/ssh/ssh_host_ecdsa_key" in post
+    assert "[ -f /etc/ssh/ssh_host_rsa_key ] ||" in post
+    assert "ed25519" not in post, "Ed25519 is not FIPS 140 approved"
+    assert "ssh-keygen -A" not in post, "-A would create an Ed25519 host key"
+
+
+@pytest.mark.parametrize("distro", _RHEL_FAMILY)
+def test_non_stig_still_uses_ssh_keygen_A(distro, minimal_cfg):
+    cfg = _cfg_for(minimal_cfg, distro, CryptoPolicy.MODERN)
+    post = next(r for r in load_rules(distro) if r.id == "crypto_policy").emit_post(cfg)
+    assert "ssh-keygen -A" in post
+
+
 @pytest.mark.parametrize("distro", ["alma8", "alma10"])
 def test_plain_policies_need_no_module_guard(distro, minimal_cfg):
     cfg = _cfg_for(minimal_cfg, distro, CryptoPolicy.STIG)

@@ -126,6 +126,17 @@ def _emit_post(cfg: HostConfig) -> str:
     if policy != "STIG":
         lines.append("# Generate any missing host keys (incl. Ed25519, not produced under FIPS)")
         lines.append("ssh-keygen -A")
+    else:
+        # ssh_config_apply validates its drop-in with `sshd -t`, which exits
+        # non-zero when no host key exists at all — that aborted every STIG
+        # install (#72). ssh-keygen -A would also mint an Ed25519 key, which
+        # is the thing this branch exists to avoid under FIPS, so generate the
+        # FIPS-approved types explicitly. Guarded on the file so re-runs and
+        # anaconda's own key generation are not clobbered.
+        lines.append("# FIPS-approved host keys only; Ed25519 is not FIPS 140 approved")
+        for keytype, bits in (("rsa", 3072), ("ecdsa", 384)):
+            key = f"/etc/ssh/ssh_host_{keytype}_key"
+            lines.append(f"[ -f {key} ] || ssh-keygen -q -t {keytype} -b {bits} -f {key} -N ''")
     return "\n".join(lines) + "\n"
 
 

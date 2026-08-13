@@ -231,6 +231,9 @@
     echo 'ks-gen: /etc/crypto-policies/policies/modules/STIG.pmod missing; oscap did not apply the STIG sub-policy, falling back to FIPS' >&2
     update-crypto-policies --set FIPS
   fi
+  # FIPS-approved host keys only; Ed25519 is not FIPS 140 approved
+  [ -f /etc/ssh/ssh_host_rsa_key ] || ssh-keygen -q -t rsa -b 3072 -f /etc/ssh/ssh_host_rsa_key -N ''
+  [ -f /etc/ssh/ssh_host_ecdsa_key ] || ssh-keygen -q -t ecdsa -b 384 -f /etc/ssh/ssh_host_ecdsa_key -N ''
   
   # ===== faillock_safety =====
   # Re-assert faillock.conf in case oscap over-tightened
