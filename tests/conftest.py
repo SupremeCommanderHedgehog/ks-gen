@@ -12,7 +12,9 @@ def minimal_cfg() -> HostConfig:
         user=User(
             admin=AdminUser(
                 name="opsadmin",
-                authorized_keys=["ssh-ed25519 AAAA a@b"],
+                # Two types so the fixture is valid under every crypto.policy:
+                # STIG strips Ed25519 from PubkeyAcceptedAlgorithms (#73).
+                authorized_keys=["ssh-ed25519 AAAA a@b", "ssh-rsa BBBB a@b"],
                 sudo="nopasswd_yes",
             )
         ),

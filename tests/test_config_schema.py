@@ -305,7 +305,7 @@ def test_stig_crypto_without_fips_allowed():
             "user": {
                 "admin": {
                     "name": "ops",
-                    "authorized_keys": ["ssh-ed25519 A a@b"],
+                    "authorized_keys": ["ssh-rsa A a@b"],
                     "sudo": "nopasswd_yes",
                 }
             },
