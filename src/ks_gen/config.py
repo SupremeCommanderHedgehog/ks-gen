@@ -811,6 +811,28 @@ class HostConfig(StrictModel):
         )
 
     @model_validator(mode="after")
+    def _stig_requires_usable_container_user_keys(self) -> HostConfig:
+        """#73, for the rootless container accounts.
+
+        ContainerUser has no password field, so authorized_keys is the only
+        way in and there is no unlocked-account exemption.
+        """
+        if self.crypto.policy is not CryptoPolicy.STIG or not self.containers.enabled:
+            return self
+        for i, u in enumerate(self.containers.users):
+            if has_fips_usable_key(u.authorized_keys):
+                continue
+            raise ValueError(
+                "crypto.policy=STIG removes Ed25519 from "
+                "PubkeyAcceptedAlgorithms, so none of "
+                f"containers.users[{i}] ({u.name!r}) authorized_keys can "
+                f"authenticate (found: {describe_key_types(u.authorized_keys)}). "
+                "Add an ssh-rsa (>=3072-bit) or ecdsa-sha2-nistp{256,384,521} "
+                "key, or set crypto.policy=MODERN."
+            )
+        return self
+
+    @model_validator(mode="after")
     def _network_install_source_is_supported(self) -> HostConfig:
         if self.install.source != InstallSourceKind.NETWORK:
             return self

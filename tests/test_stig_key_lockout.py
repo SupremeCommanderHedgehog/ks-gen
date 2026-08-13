@@ -68,3 +68,35 @@ def test_stig_with_an_unlocked_admin_is_accepted():
 @pytest.mark.parametrize("policy", ["MODERN", "FUTURE"])
 def test_non_stig_policies_still_accept_ed25519_only(policy):
     HostConfig.model_validate(_payload([_ED25519], policy=policy))
+
+
+def _containers_payload(user_keys, enabled=True, policy="STIG"):
+    payload = _payload([_RSA], policy=policy)
+    payload["containers"] = {
+        "enabled": enabled,
+        "users": [{"name": "webapp", "authorized_keys": user_keys}],
+    }
+    return payload
+
+
+def test_stig_container_user_with_only_ed25519_is_rejected():
+    with pytest.raises(ValidationError) as e:
+        HostConfig.model_validate(_containers_payload([_ED25519]))
+    msg = str(e.value)
+    assert "containers.users[0]" in msg
+    assert "webapp" in msg
+    assert "ssh-ed25519" in msg
+
+
+def test_stig_container_user_with_an_rsa_key_is_accepted():
+    HostConfig.model_validate(_containers_payload([_ED25519, _RSA]))
+
+
+def test_disabled_containers_are_not_checked():
+    """`containers.enabled: false` provisions no accounts, matching how
+    _validate_users_distinct short-circuits."""
+    HostConfig.model_validate(_containers_payload([_ED25519], enabled=False))
+
+
+def test_non_stig_container_users_still_accept_ed25519_only():
+    HostConfig.model_validate(_containers_payload([_ED25519], policy="MODERN"))
