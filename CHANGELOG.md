@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.34.2](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.34.1...v0.34.2) (2026-08-13)
+
+
+### Bug Fixes
+
+* **crypto:** apply each distro's expected STIG policy, and let STIG installs complete ([#74](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/74)) ([af14726](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/af1472674df0ad86ad24cde4cd6f606d23209e5d))
+
 ## [0.34.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.34.0...v0.34.1) (2026-08-12)
 
 
