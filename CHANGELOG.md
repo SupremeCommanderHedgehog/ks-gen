@@ -3,6 +3,17 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.35.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.34.3...v0.35.0) (2026-08-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* two host.yaml shapes that loaded before are now rejected: a password-set admin with Ed25519-only keys under crypto.policy STIG, and a keyless password-only admin with ssh.password_authentication false. Both are unreachable hosts on a console-less machine. `ks-gen verify` loads the same host.yaml, so a deployed fleet member carrying either shape needs the config edited before it verifies again. Migration is in MANUAL.md §4.5: add an RSA/ECDSA key, set ssh.password_authentication true, or set overrides.console_login_only true if the machine has a console.
+
+### Bug Fixes
+
+* require every host to keep one admin login path open ([#79](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/79)) ([b1c9e33](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/b1c9e33eb99334c293614f01728718883bd73c38))
+
 ## [0.34.3](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.34.2...v0.34.3) (2026-08-13)
 
 
