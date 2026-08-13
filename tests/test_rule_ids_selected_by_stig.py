@@ -134,7 +134,7 @@ def test_crypto_policy_set_value_matches_the_policy_post_applies(
 ):
     """The tailored value must equal what %post's update-crypto-policies sets.
 
-    Both come from _POLICY_NAME; if they ever diverge, configure_crypto_policy
+    Both come from _policy_target(); if they ever diverge, configure_crypto_policy
     asserts a value the host never has. FUTURE was previously unpinned.
     """
     cfg = minimal_cfg.model_copy(update={"distro": distro, "crypto": Crypto(policy=policy)})

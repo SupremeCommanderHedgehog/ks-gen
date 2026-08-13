@@ -67,13 +67,33 @@ done
 [[ -r "$SRC_ISO"            ]] || { echo "missing: $SRC_ISO"                              >&2; exit 1; }
 
 # ---- step 1: SSH key ------------------------------------------------------
+# KEY_TYPE must suit the fixture's crypto policy. A FIPS/STIG host removes
+# ssh-ed25519 from PubkeyAcceptedAlgorithms, so an ed25519 key cannot log in
+# at all and the run times out at the SSH wait even on a perfect install
+# (#73). Use KEY_TYPE=rsa for any crypto.policy: STIG fixture.
+# Derived from the fixture rather than left to the caller: getting it wrong
+# costs a full 13-90 min cycle and reports a spurious SSH timeout that looks
+# like a product failure.
+if [[ -z "${KEY_TYPE:-}" ]] && grep -qE '^[[:space:]]*policy:[[:space:]]*STIG' "$FIXTURE_TEMPLATE"; then
+  KEY_TYPE=rsa
+  echo "[fixture is crypto.policy: STIG] defaulting KEY_TYPE=rsa (ed25519 cannot log in under FIPS)"
+fi
+KEY_TYPE="${KEY_TYPE:-ed25519}"
+if [[ "$KEY_TYPE" == "ed25519" ]] && grep -qE '^[[:space:]]*policy:[[:space:]]*STIG' "$FIXTURE_TEMPLATE"; then
+  echo "refusing to run a crypto.policy: STIG fixture with an ed25519 key — it cannot authenticate (#73)" >&2
+  exit 1
+fi
+KEY="$KEYS/id_$KEY_TYPE"
 mkdir -p "$KEYS"
 chmod 700 "$KEYS"
-if [[ ! -f "$KEYS/id_ed25519" ]]; then
-  ssh-keygen -t ed25519 -N '' -C 'ks-gen-install-regression' -f "$KEYS/id_ed25519" >/dev/null
+if [[ ! -f "$KEY" ]]; then
+  keygen_args=(-t "$KEY_TYPE" -N '' -C 'ks-gen-install-regression' -f "$KEY")
+  # RSA defaults to 2048; FIPS/STIG wants >= 3072.
+  [[ "$KEY_TYPE" == "rsa" ]] && keygen_args+=(-b 3072)
+  ssh-keygen "${keygen_args[@]}" >/dev/null
 fi
-chmod 600 "$KEYS/id_ed25519"
-PUBKEY="$(cat "$KEYS/id_ed25519.pub")"
+chmod 600 "$KEY"
+PUBKEY="$(cat "$KEY.pub")"
 
 # ---- step 2: render host.yaml ---------------------------------------------
 HOST_YAML="$BUILD/host.yaml"
@@ -90,6 +110,14 @@ awk -v pk="$PUBKEY" '{ gsub(/__SSH_PUBKEY__/, pk); print }' \
 # ---- step 3: ks-gen gen ---------------------------------------------------
 rm -rf "$BUNDLE_DIR"
 "$KS_GEN" gen --config "$HOST_YAML" --out "$BUNDLE_DIR"
+
+# The crypto policy the kickstart intends to leave the host in, taken from the
+# rule's own header comment ("... policy: STIG (FIPS:STIG)"). The ARF cannot
+# show whether %post achieved it — oscap runs BEFORE the rule %post — so the
+# smoke check asserts the live state against this instead (#66).
+EXPECTED_CRYPTO_POLICY="$(sed -n 's/^# Apply system-wide crypto policy: .*(\(.*\))$/\1/p' \
+  "$BUNDLE_DIR/ks.cfg" | head -1)"
+echo "expected crypto policy: ${EXPECTED_CRYPTO_POLICY:-<none found>}"
 
 # ---- step 4: ks-gen iso (twice; locks in PR #55 / issue #52) --------------
 # Uses build-debug-iso.py instead of the CLI so we can inject the debug
@@ -176,7 +204,7 @@ trap cleanup EXIT
 # logging to console; bump STAGNATION_BUDGET=1800 to absorb that.
 DEADLINE=$(( $(date +%s) + ${DEADLINE_SECONDS:-5400} ))
 STAGNATION_BUDGET="${STAGNATION_BUDGET:-600}"
-SSH_OPTS=(-i "$KEYS/id_ed25519"
+SSH_OPTS=(-i "$KEY"
           -o StrictHostKeyChecking=no
           -o UserKnownHostsFile=/dev/null
           -o ConnectTimeout=5
@@ -218,13 +246,13 @@ fi
 
 # ---- step 8: smoke check --------------------------------------------------
 scp -P "$SSH_HOST_PORT" \
-    -i "$KEYS/id_ed25519" \
+    -i "$KEY" \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
     "$HERE/smoke-check.sh" opsadmin@127.0.0.1:/tmp/smoke-check.sh
 
 ssh "${SSH_OPTS[@]}" opsadmin@127.0.0.1 \
-  "sudo DATA_DISK_MARKER='$DATA_DISK_MARKER' bash /tmp/smoke-check.sh"
+  "sudo DATA_DISK_MARKER='$DATA_DISK_MARKER' EXPECTED_CRYPTO_POLICY='$EXPECTED_CRYPTO_POLICY' bash /tmp/smoke-check.sh"
 
 echo
 echo "install-regression PASS — install completed end-to-end + smoke check green"

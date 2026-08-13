@@ -66,11 +66,34 @@ ok "ks-gen-disabled rule banner_etc_issue is notselected in the ARF"
 # ...and the converse: configure_crypto_policy is deliberately NOT disabled
 # under MODERN/FUTURE, because crypto_policy retunes its Value instead. It
 # must therefore be evaluated and pass (#61).
+# --- the LIVE crypto policy (#66) -----------------------------------------
+# This is the assertion that can actually catch #66. The ARF cannot: it is
+# written by the oscap %post, which runs BEFORE ks-gen's rule %post, so it
+# records what oscap remediated to and looks identical whether %post then
+# applies FIPS:STIG or downgrades the host to FIPS.
+if [[ -n "${EXPECTED_CRYPTO_POLICY:-}" ]]; then
+  live_policy=$(update-crypto-policies --show 2>/dev/null || cat /etc/crypto-policies/config)
+  [[ "$live_policy" == "$EXPECTED_CRYPTO_POLICY" ]] \
+    || fail "live crypto policy is '$live_policy', kickstart intended '$EXPECTED_CRYPTO_POLICY' (#66)"
+  ok "live crypto policy is $live_policy (as the kickstart intended)"
+fi
+
+# configure_crypto_policy's ARF result is policy-dependent:
+#   MODERN/FUTURE -> `pass`  : the set_value retune (#61) means the rule
+#                              already agrees with the host, nothing to fix.
+#   FIPS-based    -> `fixed` : no tailoring is emitted for STIG, so oscap
+#                              finds the stock policy and remediates it.
+# Accepting `fixed` unconditionally would let a #61 regression pass on a
+# MODERN host, so the expectation is derived from the policy in force.
 crypto_result=$(grep -aA 5 'rule-result idref="xccdf_org.ssgproject.content_rule_configure_crypto_policy"' \
   /root/oscap-remediation-results.xml | grep -ao '<result>[a-z]*</result>' | head -1)
-[[ "$crypto_result" == "<result>pass</result>" ]] \
-  || fail "configure_crypto_policy result is ${crypto_result:-missing}, expected pass — the var_system_crypto_policy retune didn't take (#61)"
-ok "configure_crypto_policy evaluated and passed (set_value retune works)"
+case "${EXPECTED_CRYPTO_POLICY:-}" in
+  FIPS*) accepted="<result>fixed</result> <result>pass</result>" ;;
+  *)     accepted="<result>pass</result>" ;;
+esac
+[[ " $accepted " == *" $crypto_result "* ]] \
+  || fail "configure_crypto_policy result is ${crypto_result:-missing}; expected one of [$accepted] for policy ${EXPECTED_CRYPTO_POLICY:-unknown} (#61/#66)"
+ok "configure_crypto_policy result ${crypto_result} matches policy ${EXPECTED_CRYPTO_POLICY:-unknown}"
 
 # --- root + console login locked, per kickstart contract
 # AlmaLinux 9 / shadow-utils prints "LK" in the status field, not " L ".

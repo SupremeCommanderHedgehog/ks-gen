@@ -29,7 +29,30 @@ _TAILORED_WHEN_NOT_STIG = [
     f"{_PREFIX}harden_sshd_macs_opensshserver_conf_crypto_policy",
 ]
 
-_POLICY_NAME = {"STIG": "FIPS", "MODERN": "DEFAULT", "FUTURE": "FUTURE"}
+# What `update-crypto-policies --set` must be given for each ks-gen policy.
+# STIG is per-distro (#66): the AL9 stig profile refines
+# var_system_crypto_policy to FIPS:STIG and separately checks the STIG
+# sub-policy, while AL8 and AL10 refine it to plain FIPS. Setting FIPS on AL9
+# leaves configure_crypto_policy failing forever with no expected-failure
+# entry; setting FIPS:STIG on AL8/AL10 would create that same bug there.
+# Values are pinned against the datastreams by
+# tests/test_stig_crypto_policy_value.py.
+_STIG_POLICY_BY_DISTRO = {"alma8": "FIPS", "alma9": "FIPS:STIG", "alma10": "FIPS"}
+_NON_STIG_POLICY = {"MODERN": "DEFAULT", "FUTURE": "FUTURE"}
+
+
+def _policy_target(cfg: HostConfig) -> str:
+    """The crypto-policies name for this host's chosen policy.
+
+    Indexed, not `.get(..., "FIPS")`: a new RHEL-family distro whose profile
+    refines to `FIPS:<sub>` would silently inherit plain FIPS and reproduce
+    #66. A KeyError at generation time is the correct failure.
+    """
+    policy = cfg.crypto.policy.value
+    if policy == "STIG":
+        return _STIG_POLICY_BY_DISTRO[cfg.distro]
+    return _NON_STIG_POLICY[policy]
+
 
 _EXCEPTION_REASON = (
     "{policy} accepts loss of FIPS 140-3 certification in exchange for "
@@ -53,7 +76,7 @@ def _emit_tailoring(cfg: HostConfig, disabled: list[str]) -> list[TailoringOp]:
         TailoringOp(
             rule_id=_VAR_CRYPTO_POLICY,
             action="set_value",
-            value=_POLICY_NAME[policy],
+            value=_policy_target(cfg),
         )
     )
     return ops
@@ -68,7 +91,7 @@ def _exception_entry(cfg: HostConfig, disabled: list[str]) -> ExceptionEntry | N
         rule_id=meta.ID,
         summary=f"{policy} crypto policy",
         stig_rules_disabled=list(disabled),
-        reason=_EXCEPTION_REASON.format(policy=policy, target=_POLICY_NAME[policy]),
+        reason=_EXCEPTION_REASON.format(policy=policy, target=_policy_target(cfg)),
     )
 
 
@@ -82,14 +105,50 @@ def _emit_post(cfg: HostConfig) -> str:
     byte-for-byte the same.
     """
     policy = cfg.crypto.policy.value
-    target = _POLICY_NAME[policy]
-    lines = [
-        f"# Apply system-wide crypto policy: {policy} ({target})",
-        f"update-crypto-policies --set {target}",
-    ]
+    target = _policy_target(cfg)
+    lines = [f"# Apply system-wide crypto policy: {policy} ({target})"]
+
+    base, _, submodule = target.partition(":")
+    if submodule:
+        # A sub-policy needs its .pmod module present. The OS does not ship
+        # one — SSG's own fips_custom_stig_sub_policy remediation writes it
+        # earlier in this install. This block runs under `set -e` with
+        # --erroronfail, so an absent module would abort the install; degrade
+        # to the base policy and say so instead (#66).
+        # Both search paths: SSG's remediation writes the module under /etc,
+        # but update-crypto-policies also resolves the stock modules shipped
+        # under /usr/share, so testing only /etc would fall back needlessly if
+        # a future crypto-policies package ships this one.
+        etc_pmod = f"/etc/crypto-policies/policies/modules/{submodule}.pmod"
+        usr_pmod = f"/usr/share/crypto-policies/policies/modules/{submodule}.pmod"
+        lines += [
+            f"if [ -f {etc_pmod} ] || [ -f {usr_pmod} ]; then",
+            f"  update-crypto-policies --set {target}",
+            "else",
+            f"  echo 'ks-gen: {submodule}.pmod not found in /etc or /usr/share;"
+            f" oscap did not apply the sub-policy, falling back to {base}' >&2",
+            f"  update-crypto-policies --set {base}",
+            "fi",
+        ]
+    else:
+        lines.append(f"update-crypto-policies --set {target}")
+
     if policy != "STIG":
         lines.append("# Generate any missing host keys (incl. Ed25519, not produced under FIPS)")
         lines.append("ssh-keygen -A")
+    else:
+        # ssh_config_apply validates its drop-in with `sshd -t`, which exits
+        # non-zero when no host key exists at all — that aborted every STIG
+        # install (#72). Generate the FIPS-approved types rather than
+        # `ssh-keygen -A`, guarded on the file so nothing existing is
+        # clobbered. Note the installed host ends up with an Ed25519 key
+        # anyway, created by sshd-keygen.service at first boot; sshd does not
+        # offer it under a FIPS policy, so this only controls what ks-gen
+        # itself puts there.
+        lines.append("# FIPS-approved host keys; sshd will not offer Ed25519 under FIPS")
+        for keytype, bits in (("rsa", 3072), ("ecdsa", 384)):
+            key = f"/etc/ssh/ssh_host_{keytype}_key"
+            lines.append(f"[ -f {key} ] || ssh-keygen -q -t {keytype} -b {bits} -f {key} -N ''")
     return "\n".join(lines) + "\n"
 
 
