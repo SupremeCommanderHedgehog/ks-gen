@@ -215,7 +215,7 @@ bootloader kernel cmdline:
 
 | `crypto.policy` | System crypto-policy | FIPS kernel mode | Ed25519 / X25519 / ChaCha20 |
 |---|---|---|---|
-| `STIG`   | `FIPS`    | `fips=1` | blocked at kernel layer |
+| `STIG`   | `FIPS` (AL8/AL10), `FIPS:STIG` (AL9) | `fips=1` | blocked at kernel layer |
 | `MODERN` | `DEFAULT` | off       | allowed |
 | `FUTURE` | `FUTURE`  | off       | allowed (and SHA-1 banned everywhere) |
 
@@ -224,6 +224,16 @@ bootloader kernel cmdline:
 mode would block Curve25519 below the application layer; the policies
 would silently conflict at runtime. The generator refuses to produce
 that combo.
+
+**Hard constraint:** `crypto.policy: STIG` requires at least one
+`ssh-rsa`/`rsa-sha2-*` or `ecdsa-sha2-nistp{256,384,521}` key in
+`user.admin.authorized_keys` — and in every `containers.users[]` entry
+when `containers.enabled` is true. FIPS strips `ssh-ed25519` from
+sshd's `PubkeyAcceptedAlgorithms`, so an Ed25519-only key list means
+no key can authenticate. With the admin account `passwd -l`'d and
+`PasswordAuthentication no`, that is an unrecoverable lockout, so it
+is rejected at config load. An admin with a password set is exempt —
+that account still has console login. (#73)
 
 `MODERN` is the default and the recommendation for most servers in
 2026. It costs you FIPS 140-3 certification but earns you modern
