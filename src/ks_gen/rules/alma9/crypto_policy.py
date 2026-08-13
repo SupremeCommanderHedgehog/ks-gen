@@ -42,10 +42,15 @@ _NON_STIG_POLICY = {"MODERN": "DEFAULT", "FUTURE": "FUTURE"}
 
 
 def _policy_target(cfg: HostConfig) -> str:
-    """The crypto-policies name for this host's chosen policy."""
+    """The crypto-policies name for this host's chosen policy.
+
+    Indexed, not `.get(..., "FIPS")`: a new RHEL-family distro whose profile
+    refines to `FIPS:<sub>` would silently inherit plain FIPS and reproduce
+    #66. A KeyError at generation time is the correct failure.
+    """
     policy = cfg.crypto.policy.value
     if policy == "STIG":
-        return _STIG_POLICY_BY_DISTRO.get(cfg.distro, "FIPS")
+        return _STIG_POLICY_BY_DISTRO[cfg.distro]
     return _NON_STIG_POLICY[policy]
 
 
@@ -110,13 +115,18 @@ def _emit_post(cfg: HostConfig) -> str:
         # earlier in this install. This block runs under `set -e` with
         # --erroronfail, so an absent module would abort the install; degrade
         # to the base policy and say so instead (#66).
-        pmod = f"/etc/crypto-policies/policies/modules/{submodule}.pmod"
+        # Both search paths: SSG's remediation writes the module under /etc,
+        # but update-crypto-policies also resolves the stock modules shipped
+        # under /usr/share, so testing only /etc would fall back needlessly if
+        # a future crypto-policies package ships this one.
+        etc_pmod = f"/etc/crypto-policies/policies/modules/{submodule}.pmod"
+        usr_pmod = f"/usr/share/crypto-policies/policies/modules/{submodule}.pmod"
         lines += [
-            f"if [ -f {pmod} ]; then",
+            f"if [ -f {etc_pmod} ] || [ -f {usr_pmod} ]; then",
             f"  update-crypto-policies --set {target}",
             "else",
-            f"  echo 'ks-gen: {pmod} missing; oscap did not apply the"
-            f" {submodule} sub-policy, falling back to {base}' >&2",
+            f"  echo 'ks-gen: {submodule}.pmod not found in /etc or /usr/share;"
+            f" oscap did not apply the sub-policy, falling back to {base}' >&2",
             f"  update-crypto-policies --set {base}",
             "fi",
         ]
@@ -129,11 +139,13 @@ def _emit_post(cfg: HostConfig) -> str:
     else:
         # ssh_config_apply validates its drop-in with `sshd -t`, which exits
         # non-zero when no host key exists at all — that aborted every STIG
-        # install (#72). ssh-keygen -A would also mint an Ed25519 key, which
-        # is the thing this branch exists to avoid under FIPS, so generate the
-        # FIPS-approved types explicitly. Guarded on the file so re-runs and
-        # anaconda's own key generation are not clobbered.
-        lines.append("# FIPS-approved host keys only; Ed25519 is not FIPS 140 approved")
+        # install (#72). Generate the FIPS-approved types rather than
+        # `ssh-keygen -A`, guarded on the file so nothing existing is
+        # clobbered. Note the installed host ends up with an Ed25519 key
+        # anyway, created by sshd-keygen.service at first boot; sshd does not
+        # offer it under a FIPS policy, so this only controls what ks-gen
+        # itself puts there.
+        lines.append("# FIPS-approved host keys; sshd will not offer Ed25519 under FIPS")
         for keytype, bits in (("rsa", 3072), ("ecdsa", 384)):
             key = f"/etc/ssh/ssh_host_{keytype}_key"
             lines.append(f"[ -f {key} ] || ssh-keygen -q -t {keytype} -b {bits} -f {key} -N ''")

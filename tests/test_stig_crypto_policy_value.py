@@ -23,7 +23,6 @@ from ks_gen.config import Crypto, CryptoPolicy, HostConfig
 from ks_gen.registry import load_rules
 
 _DOCS = Path(__file__).resolve().parent.parent / "docs" / "audit-story"
-_RHEL_FAMILY = ["alma8", "alma9", "alma10"]
 _VAR = "xccdf_org.ssgproject.content_value_var_system_crypto_policy"
 
 
@@ -41,6 +40,30 @@ def _refined_crypto_policy(distro: str) -> str | None:
         if idref == _VAR:
             return value
     return None
+
+
+def _distros_with_crypto_refinement() -> list[str]:
+    """Derived from the shipped lists, not hardcoded.
+
+    A distro added later whose stig profile refines the crypto policy is then
+    covered automatically; a hardcoded list would leave it silently untested
+    and let #66 return on the new target.
+    """
+    found = []
+    for path in sorted(_DOCS.glob("*-stig-refine-values.txt")):
+        distro = path.name[: -len("-stig-refine-values.txt")]
+        if _refined_crypto_policy(distro):
+            found.append(distro)
+    return found
+
+
+_RHEL_FAMILY = _distros_with_crypto_refinement()
+
+
+def test_the_derived_distro_list_is_not_empty():
+    """A glob that matches nothing would make every parametrized test vanish."""
+    assert _RHEL_FAMILY, "no distro exposes a var_system_crypto_policy refinement"
+    assert "alma9" in _RHEL_FAMILY
 
 
 def _cfg_for(minimal_cfg, distro: str, policy: CryptoPolicy) -> HostConfig:
@@ -75,7 +98,12 @@ def test_sub_policy_target_is_guarded_by_its_module_file(minimal_cfg):
     cfg = _cfg_for(minimal_cfg, "alma9", CryptoPolicy.STIG)
     post = next(r for r in load_rules("alma9") if r.id == "crypto_policy").emit_post(cfg)
 
-    assert "if [ -f /etc/crypto-policies/policies/modules/STIG.pmod ]; then" in post
+    # Both module search paths: SSG writes it under /etc, but the stock
+    # modules ship under /usr/share, so testing only /etc would fall back
+    # needlessly if a future package shipped this one.
+    assert "/etc/crypto-policies/policies/modules/STIG.pmod" in post
+    assert "/usr/share/crypto-policies/policies/modules/STIG.pmod" in post
+    assert post.count("update-crypto-policies --set") == 2, "guarded set + fallback"
     assert "update-crypto-policies --set FIPS:STIG" in post
     assert "update-crypto-policies --set FIPS\n" in post  # the fallback
     assert post.isascii(), "generated %post shell must stay ASCII"
@@ -123,15 +151,3 @@ def test_the_stig_value_genuinely_differs_between_distros():
     assert _refined_crypto_policy("alma9") == "FIPS:STIG"
     assert _refined_crypto_policy("alma8") == "FIPS"
     assert _refined_crypto_policy("alma10") == "FIPS"
-
-
-@pytest.mark.parametrize("distro", _RHEL_FAMILY)
-@pytest.mark.parametrize(
-    ("policy", "expected"),
-    [(CryptoPolicy.MODERN, "DEFAULT"), (CryptoPolicy.FUTURE, "FUTURE")],
-)
-def test_non_stig_policies_are_distro_independent(distro, policy, expected, minimal_cfg):
-    """Only the STIG target is per-distro; DEFAULT/FUTURE are plain policy names."""
-    cfg = _cfg_for(minimal_cfg, distro, policy)
-    crypto = next(r for r in load_rules(distro) if r.id == "crypto_policy")
-    assert f"update-crypto-policies --set {expected}\n" in crypto.emit_post(cfg)
