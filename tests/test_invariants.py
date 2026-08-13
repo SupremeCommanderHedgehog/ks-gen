@@ -17,14 +17,16 @@ from ks_gen.config import (
 )
 from ks_gen.writer import build_bundle
 
+# Two types so these fixtures stay valid under every crypto.policy: STIG
+# strips Ed25519 from PubkeyAcceptedAlgorithms (#73).
+_KEYS = ["ssh-ed25519 A a@b", "ssh-rsa B a@b"]
+
 
 def _cfg(**overrides_kwargs):
     overrides_obj = Overrides(**overrides_kwargs) if overrides_kwargs else None
     base = dict(
         system=System(hostname="x.example"),
-        user=User(
-            admin=AdminUser(name="ops", authorized_keys=["ssh-ed25519 A a@b"], sudo="nopasswd_yes")
-        ),
+        user=User(admin=AdminUser(name="ops", authorized_keys=_KEYS, sudo="nopasswd_yes")),
     )
     if overrides_obj is not None:
         base["overrides"] = overrides_obj
@@ -38,21 +40,13 @@ def _fuzz_configs():
         for pw in (True, False):
             yield HostConfig(
                 system=System(hostname="x"),
-                user=User(
-                    admin=AdminUser(
-                        name="ops", authorized_keys=["ssh-ed25519 A a@b"], sudo="nopasswd_yes"
-                    )
-                ),
+                user=User(admin=AdminUser(name="ops", authorized_keys=_KEYS, sudo="nopasswd_yes")),
                 ssh=Ssh(port=port, password_authentication=pw),
             )
     for policy in CryptoPolicy:
         yield HostConfig(
             system=System(hostname="x"),
-            user=User(
-                admin=AdminUser(
-                    name="ops", authorized_keys=["ssh-ed25519 A a@b"], sudo="nopasswd_yes"
-                )
-            ),
+            user=User(admin=AdminUser(name="ops", authorized_keys=_KEYS, sudo="nopasswd_yes")),
             crypto=Crypto(policy=policy),
         )
 
