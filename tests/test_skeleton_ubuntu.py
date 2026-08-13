@@ -156,7 +156,7 @@ def test_render_user_data_users_block_carries_authorized_keys(ubuntu_cfg_factory
 
 
 def test_render_user_data_users_block_no_keys_emits_empty_list(ubuntu_cfg_factory):
-    from ks_gen.config import AdminUser, HostConfig, System, User
+    from ks_gen.config import AdminUser, HostConfig, Overrides, System, User
 
     cfg = HostConfig(
         distro="ubuntu2404",
@@ -169,6 +169,8 @@ def test_render_user_data_users_block_no_keys_emits_empty_list(ubuntu_cfg_factor
                 password="$6$abc$hash",
             )
         ),
+        # A keyless admin is only a legal host when the console is declared (#76).
+        overrides=Overrides(console_login_only=True),
     )
     text = render_user_data(cfg, post_blocks=[])
     doc = yaml.safe_load(text)

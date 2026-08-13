@@ -727,6 +727,8 @@ class UnattendedUpdatesCfg(StrictModel):
 
 class Overrides(StrictModel):
     fips_mode: bool = False
+    # Asserts a physical console exists; ks-gen cannot tell. See #76.
+    console_login_only: bool = False
     faillock: FaillockCfg = Field(default_factory=FaillockCfg)
     auditd: AuditdActionsCfg = Field(default_factory=AuditdActionsCfg)
     ssh_keep_open: SshKeepOpenCfg = Field(default_factory=SshKeepOpenCfg)
@@ -787,27 +789,67 @@ class HostConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def _stig_requires_a_usable_admin_key(self) -> HostConfig:
-        """#73: a locked admin with no FIPS-usable key can never log in.
+    def _console_login_only_needs_an_unlocked_admin(self) -> HostConfig:
+        if self.overrides.console_login_only and self.user.admin.password is None:
+            raise ValueError(
+                "overrides.console_login_only=true requires user.admin.password: "
+                "without one the admin is passwd -l'd, so console login is shut "
+                "too and the flag would waive a real lockout rather than declare "
+                "a working way in."
+            )
+        return self
 
-        Only fires when the account is passwd -l'd — with a password set,
-        console login and password SSH remain, so dead keys are recoverable.
+    @model_validator(mode="after")
+    def _host_needs_a_working_login_path(self) -> HostConfig:
+        """#73/#76: root is always `rootpw --lock`, so if every admin path is
+        shut the installed host is unreachable for good.
+
+        Subsumes the older STIG-only key check: with no password the password
+        and console paths are shut by definition, so this rejects every config
+        that one did.
         """
         admin = self.user.admin
-        if self.crypto.policy is not CryptoPolicy.STIG:
+        locked = admin.password is None
+        stig = self.crypto.policy is CryptoPolicy.STIG
+        pubkey_ok = (
+            has_fips_usable_key(admin.authorized_keys) if stig else bool(admin.authorized_keys)
+        )
+        password_ok = not locked and self.ssh.password_authentication
+        console_ok = not locked and self.overrides.console_login_only
+        if pubkey_ok or password_ok or console_ok:
             return self
-        if admin.password is not None:
-            return self
-        if has_fips_usable_key(admin.authorized_keys):
-            return self
+
+        if not admin.authorized_keys:
+            closed = ["  - SSH pubkey: user.admin.authorized_keys is empty"]
+        else:
+            # Only STIG reaches here: any key at all opens this path otherwise.
+            closed = [
+                "  - SSH pubkey: crypto.policy=STIG removes Ed25519 from "
+                "PubkeyAcceptedAlgorithms, so none of user.admin.authorized_keys "
+                f"can authenticate (found: {describe_key_types(admin.authorized_keys)})"
+            ]
+        if locked:
+            closed.append(
+                "  - SSH password / console: user.admin.password is unset, so "
+                "the account is passwd -l'd"
+            )
+        else:
+            closed.append("  - SSH password: ssh.password_authentication is false")
+            closed.append("  - console: overrides.console_login_only is false")
         raise ValueError(
-            "crypto.policy=STIG removes Ed25519 from PubkeyAcceptedAlgorithms, "
-            "so none of user.admin.authorized_keys can authenticate (found: "
-            f"{describe_key_types(admin.authorized_keys)}). The admin account "
-            "is passwd -l'd (user.admin.password unset) and console login is "
-            "off by design, so the installed host would be unreachable. Add an "
-            "ssh-rsa/rsa-sha2-* or ecdsa-sha2-nistp{256,384,521} key, or set "
-            "crypto.policy=MODERN."
+            "\n".join(
+                [
+                    f"no working login path for admin {admin.name!r} — the "
+                    "installed host would be unreachable:",
+                    *closed,
+                    "Open one: add an ssh-rsa/rsa-sha2-* or "
+                    "ecdsa-sha2-nistp{256,384,521} key (any type if crypto.policy "
+                    "is not STIG), or set user.admin.password with "
+                    "ssh.password_authentication=true, or set "
+                    "overrides.console_login_only=true if this host has a "
+                    "physical console.",
+                ]
+            )
         )
 
     @model_validator(mode="after")
