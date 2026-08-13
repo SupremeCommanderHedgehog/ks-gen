@@ -18,6 +18,7 @@ autoinstall:
 {% endfor %}
 {% if cfg.user.admin.password %}
         passwd: {{ cfg.user.admin.password | tojson }}
+        lock_passwd: false
 {% endif %}
 {% if rule_packages %}
   packages:

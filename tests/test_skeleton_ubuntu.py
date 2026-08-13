@@ -156,7 +156,7 @@ def test_render_user_data_users_block_carries_authorized_keys(ubuntu_cfg_factory
 
 
 def test_render_user_data_users_block_no_keys_emits_empty_list(ubuntu_cfg_factory):
-    from ks_gen.config import AdminUser, HostConfig, System, User
+    from ks_gen.config import AdminUser, HostConfig, Overrides, System, User
 
     cfg = HostConfig(
         distro="ubuntu2404",
@@ -169,6 +169,8 @@ def test_render_user_data_users_block_no_keys_emits_empty_list(ubuntu_cfg_factor
                 password="$6$abc$hash",
             )
         ),
+        # A keyless admin is only a legal host when the console is declared (#76).
+        overrides=Overrides(console_login_only=True),
     )
     text = render_user_data(cfg, post_blocks=[])
     doc = yaml.safe_load(text)
@@ -245,11 +247,37 @@ def test_render_user_data_users_block_passwd_emitted_when_password_set():
     assert doc["autoinstall"]["user-data"]["users"][0]["passwd"] == "$6$abc$hash"
 
 
+def test_render_user_data_users_block_unlocks_the_account_when_password_set():
+    # cloud-init's lock_passwd defaults to true: it writes the hash and then
+    # runs `passwd -l` anyway. Without this the passwd emitted for #96 is
+    # inert, and the console / SSH-password paths #76 validates against do
+    # not exist on ubuntu at all.
+    from ks_gen.config import AdminUser, HostConfig, System, User
+
+    cfg = HostConfig(
+        distro="ubuntu2404",
+        system=System(hostname="u24-pw"),
+        user=User(
+            admin=AdminUser(
+                name="ops",
+                authorized_keys=["ssh-ed25519 AAAA a@b"],
+                password="$6$abc$hash",
+                sudo="nopasswd_no",
+            )
+        ),
+    )
+    doc = yaml.safe_load(render_user_data(cfg, post_blocks=[]))
+    assert doc["autoinstall"]["user-data"]["users"][0]["lock_passwd"] is False
+
+
 def test_render_user_data_users_block_passwd_omitted_when_password_none(ubuntu_cfg_factory):
     # Default factory sets password=None — passwd must not appear.
     text = render_user_data(ubuntu_cfg_factory(), post_blocks=[])
     doc = yaml.safe_load(text)
-    assert "passwd" not in doc["autoinstall"]["user-data"]["users"][0]
+    user = doc["autoinstall"]["user-data"]["users"][0]
+    assert "passwd" not in user
+    # No password means the account must stay locked — cloud-init's default.
+    assert "lock_passwd" not in user
 
 
 def test_render_user_data_identity_password_stays_locked_even_when_admin_password_set():

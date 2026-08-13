@@ -102,6 +102,8 @@ def test_top_level_user_line_password_iscrypted_when_set(tmp_path):
                 name: opsadmin
                 password: "$6$abc$xyz"
                 sudo: nopasswd_yes
+            # A keyless admin is only a legal host when the console is declared (#76).
+            overrides: {console_login_only: true}
             """
         ),
         encoding="utf-8",

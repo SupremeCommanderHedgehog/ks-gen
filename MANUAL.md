@@ -232,8 +232,8 @@ when `containers.enabled` is true. FIPS strips `ssh-ed25519` from
 sshd's `PubkeyAcceptedAlgorithms`, so an Ed25519-only key list means
 no key can authenticate. With the admin account `passwd -l`'d and
 `PasswordAuthentication no`, that is an unrecoverable lockout, so it
-is rejected at config load. An admin with a password set is exempt —
-that account still has console login. (#73)
+is rejected at config load. A password on the admin is *not* on its
+own an exemption — see the login-path invariant in §4.5. (#73, #76)
 
 `MODERN` is the default and the recommendation for most servers in
 2026. It costs you FIPS 140-3 certification but earns you modern
@@ -538,14 +538,43 @@ user:
       - "ssh-ed25519 AAAA... opsadmin@laptop"
 ```
 
-Three cross-field invariants are enforced at load time:
+Cross-field invariants enforced at load time:
 
 - `name` cannot be `root` (literal string `"root"` raises a
   validation error).
 - If `password` is `null`, `authorized_keys` must have at least one
   entry. Empty list + null password is rejected.
-- Under `crypto.policy: STIG`, a `null`-password admin needs at least
-  one key of a type FIPS keeps. See §3.5.
+- **At least one login path must stay open.** `rootpw --lock` is
+  unconditional, so the admin account is the only way in. It has three
+  paths, and a host where all three are shut is rejected:
+
+  | path | open when |
+  |---|---|
+  | SSH pubkey | ≥1 `authorized_keys` entry — under `crypto.policy: STIG`, one of a type FIPS keeps (§3.5) |
+  | SSH password | `password` set **and** `ssh.password_authentication: true` |
+  | console | `password` set **and** `overrides.console_login_only: true` |
+
+  ks-gen cannot tell whether a monitor is attached, so the console path
+  is one you declare. Setting `overrides.console_login_only: true` with
+  a `null` password is itself rejected — that account is `passwd -l`'d,
+  so the console is shut too and the flag would waive a real lockout
+  rather than declare a way in. (#76)
+
+**Migrating a config that now fails to load.** Two shapes were accepted
+before v0.35.0 and are not any more:
+
+- a password-set admin with Ed25519-only keys under `crypto.policy:
+  STIG` — every path is shut, since FIPS strips those keys and the
+  password reaches neither sshd nor a declared console;
+- a keyless password-only admin with `ssh.password_authentication:
+  false` (the default) — the #76 case.
+
+Both are real lockouts on a console-less host. Open a path deliberately:
+add an RSA/ECDSA key, set `ssh.password_authentication: true`, or set
+`overrides.console_login_only: true` if the machine genuinely has a
+console. `ks-gen verify` loads the same `host.yaml`, so a deployed fleet
+member carrying one of these shapes needs the same edit before it can be
+verified again.
 
 ### 4.6 `ssh`
 
@@ -719,6 +748,9 @@ or loosen the STIG/remote-safe tradeoff for a specific host.
 ```yaml
 overrides:
   fips_mode: false                 # bool; mutex with crypto.policy != STIG
+  console_login_only: false        # bool; declares a physical console exists,
+                                   # opening the console login path (§4.5).
+                                   # Requires user.admin.password.
   faillock:
     enable: true
     deny: 3
