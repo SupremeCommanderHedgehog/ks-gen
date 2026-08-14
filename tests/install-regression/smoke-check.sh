@@ -140,22 +140,33 @@ case "${EXPECTED_CRYPTO_POLICY:-}" in
     # Live re-scan, not the ARF: the ARF is written pre-reboot, when
     # fips_enabled is still 0 and every one of these legitimately fails.
     # $ds / /root/tailoring.xml were discovered and checked above.
-    # Absent is legitimate — each distro's stig profile selects a different
-    # subset, and a rule its datastream does not ship has no result.
+    #
+    # notselected/empty must NOT read as ok here: a tailoring bug that
+    # disables a FIPS rule on a STIG host yields exactly notselected, and a
+    # broken oscap invocation (bad $ds, missing tailoring) yields empty for
+    # every rule. So presence is checked directly against $ds — the rule's
+    # own id string in the datastream content — rather than inferred from
+    # an empty scan result, which can't tell "absent" from "broken".
+    evaluated=0
     for rid in enable_fips_mode sysctl_crypto_fips_enabled fips_crypto_subpolicy \
                system_booted_in_fips_mode enable_dracut_fips_module; do
-      # `|| true`: oscap exits 2 on any failing rule; pipefail would abort here.
+      full_rid="xccdf_org.ssgproject.content_rule_${rid}"
+      if ! grep -q "\"${full_rid}\"" "$ds"; then
+        ok "${rid}: absent from this datastream"
+        continue
+      fi
+      # `|| true`: oscap exits 2 on a failing rule; pipefail would abort here.
       live=$(oscap xccdf eval --profile xccdf_ks-gen_profile_tailored \
         --tailoring-file /root/tailoring.xml \
-        --rule "xccdf_org.ssgproject.content_rule_${rid}" "$ds" 2>/dev/null \
+        --rule "$full_rid" "$ds" 2>/dev/null \
         | awk '/^Result/{print $2; exit}' || true)
-      case "$live" in
-        pass | "" | notselected | notapplicable | notchecked)
-          ok "${rid}: ${live:-absent from this datastream}" ;;
-        *)
-          fail "${rid} is '${live}' on a ${EXPECTED_CRYPTO_POLICY} host — the kernel is not in FIPS mode (#84)" ;;
-      esac
+      [[ "$live" == "pass" ]] \
+        || fail "${rid} is '${live:-no result}' on a ${EXPECTED_CRYPTO_POLICY} host — the kernel is not in FIPS mode (#84)"
+      ok "${rid}: pass"
+      evaluated=$((evaluated + 1))
     done
+    [[ "$evaluated" -gt 0 ]] \
+      || fail "no FIPS rule was evaluated on a ${EXPECTED_CRYPTO_POLICY} host — broken scan, not a clean host (#84)"
     ;;
   *)
     if grep -qw 'fips=1' /proc/cmdline; then
