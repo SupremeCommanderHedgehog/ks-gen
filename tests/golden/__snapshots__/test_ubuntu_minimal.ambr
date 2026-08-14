@@ -176,7 +176,7 @@
     - vsftpd
     - ypserv
   overrides:
-    fips_mode: false
+    fips_mode: null
     console_login_only: false
     faillock:
       enable: true
