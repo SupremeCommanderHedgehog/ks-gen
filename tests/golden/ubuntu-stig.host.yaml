@@ -1,0 +1,11 @@
+distro: ubuntu2404
+system:
+  hostname: u2404-stig.example.com
+user:
+  admin:
+    name: stigops
+    authorized_keys:
+      - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABTESTKEYubuntustig ops@bastion"
+    sudo: nopasswd_yes
+crypto:
+  policy: STIG
