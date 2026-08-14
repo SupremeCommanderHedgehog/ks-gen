@@ -2,17 +2,25 @@
 
 The per-distro rule-ID lists under this directory were extracted from these
 specific downstream `scap-security-guide` / `ssg-debderived` package versions.
-**These are the versions that will be installed on a freshly-built ks-gen
-host as of 2026-06-20** — i.e., what `oscap` will actually see at install
-time. Upstream SSG (`ComplianceAsCode/content`) was on `v0.1.81` on
-2026-06-20; each downstream lags by 1-7 patch releases.
+**These were the versions installed on a freshly-built ks-gen host as of
+2026-08-14** — i.e., what `oscap` saw at install time on that date.
+
+> **These lists are a snapshot, and nothing detects drift from them.** No
+> test, no CI job and no runtime check compares them against what the distro
+> currently ships; they only go stale quietly. That is #90: AlmaLinux 8 moved
+> from SSG 0.1.74 to 0.1.81, its `stig` profile switched to the `FIPS:STIG`
+> sub-policy and dropped most of the FIPS-only rules it used to select, and
+> ks-gen kept applying plain `FIPS` — so `configure_crypto_policy` failed on
+> every AL8 STIG host until a real install turned it up. Re-extract per the
+> recipe below whenever a target's SSG package moves, and treat the date above
+> as the age of everything in this directory.
 
 | Distro | Package | Version | Source URL |
 |---|---|---|---|
-| AlmaLinux 8.10 | `scap-security-guide` | `0.1.74-3.el8_10.alma.1` | https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.74-3.el8_10.alma.1.noarch.rpm |
-| AlmaLinux 9 (latest) | `scap-security-guide` | `0.1.80-1.el9_7.alma.2` | https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.80-1.el9_7.alma.2.noarch.rpm |
+| AlmaLinux 8.10 | `scap-security-guide` | `0.1.81-1.el8_10.alma.1` | https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el8_10.alma.1.noarch.rpm |
+| AlmaLinux 9 (latest) | `scap-security-guide` | `0.1.81-1.el9_8.alma.1` | https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el9_8.alma.1.noarch.rpm |
 | AlmaLinux 10 (latest) | `scap-security-guide` | `0.1.81-1.el10_2.alma.1` | https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el10_2.alma.1.noarch.rpm |
-| Ubuntu 24.04 (noble) | `ssg-debderived` | `0.1.79-1` | http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.79-1_all.deb |
+| Ubuntu 24.04 (noble) | `ssg-debderived` | `0.1.80-1` | http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.80-1_all.deb |
 
 ## Re-extraction recipe (reproducibility for SSG version bumps)
 
@@ -24,13 +32,13 @@ WORK=/tmp/ssg-extract
 mkdir -p "$WORK" && cd "$WORK"
 
 curl -sLo al8.rpm \
-  https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.74-3.el8_10.alma.1.noarch.rpm
+  https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el8_10.alma.1.noarch.rpm
 curl -sLo al9.rpm \
-  https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.80-1.el9_7.alma.2.noarch.rpm
+  https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el9_8.alma.1.noarch.rpm
 curl -sLo al10.rpm \
   https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el10_2.alma.1.noarch.rpm
 curl -sLo ssg.deb \
-  http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.79-1_all.deb
+  http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.80-1_all.deb
 
 # Extract the datastream files
 rpm2cpio al8.rpm | cpio -id --quiet './usr/share/xml/scap/ssg/content/ssg-almalinux8-ds.xml'
@@ -64,17 +72,17 @@ deliberately over-inclusive: a candidate is a rule someone must judge, not a
 rule that must be disabled — `aide_use_fips_hashes` is on the list and passes
 fine off FIPS. See `tests/test_fips_dependent_rules.py` (#67).
 
-## Headline numbers (current pin, 2026-06-20)
+## Headline numbers (snapshot of 2026-08-14)
 
-- AlmaLinux 8: **1630** rules
-- AlmaLinux 9: **1530** rules
+- AlmaLinux 8: **1699** rules
+- AlmaLinux 9: **1532** rules
 - AlmaLinux 10: **1061** rules (added 2026-08-11 for #58; the EL10 content is
   younger than EL9's, and its `stig` profile selects **508** of them)
-- Ubuntu 24.04: **639** rules
-- Shared across all 4: **409** rules (universal STIG floor)
-- AL9 ∩ AL10: **991** rules (65% of AL10) — the alma10 re-export gambit holds
-  for 12 of 15 rules; the 3 that diverge are documented in their rule modules
-- AL8 ∩ AL9: **1435** rules (88% of AL8, 94% of AL9) — confirms the alma8
+- Ubuntu 24.04: **642** rules
+- Shared across all 4: **427** rules (universal STIG floor)
+- AL9 ∩ AL10: **992** rules (65% of AL9) — the alma10 re-export gambit holds
+  for 13 of 15 rules; the 2 that diverge are documented in their rule modules
+- AL8 ∩ AL9: **1468** rules (86% of AL8, 96% of AL9) — confirms the alma8
   re-export gambit from #121 phase 2: the alma9 `emit_tailoring` output
   is mostly directly valid on alma8
 
@@ -98,14 +106,16 @@ Three mechanical guards run off these lists:
   FIPS-dependent stig-selected rule is either disabled on a MODERN/FUTURE host
   or explicitly classified as passing anyway, with a reason. #67 was the gap —
   rules that cannot pass off FIPS stayed enabled, and one of them
-  (`enable_dracut_fips_module` on AL8) remediated a non-FIPS host into FIPS.
+  (`enable_dracut_fips_module`, then stig-selected on AL8) remediated a
+  non-FIPS host into FIPS. AL8 stopped selecting it in 0.1.81.
 
-## stig-selected counts (current pin)
+## stig-selected counts (snapshot of 2026-08-14)
 
-- AlmaLinux 8: **411** of 1630
-- AlmaLinux 9: **489** of 1530
+- AlmaLinux 8: **392** of 1699 — down from 411 under 0.1.74, and the profile
+  now refines `var_system_crypto_policy` to `FIPS:STIG` (#90)
+- AlmaLinux 9: **488** of 1532
 - AlmaLinux 10: **508** of 1061
-- Ubuntu 24.04: **230** of 639
+- Ubuntu 24.04: **230** of 642
 
 ## Why pin downstream versions, not upstream
 
@@ -118,4 +128,5 @@ latest upstream release. So we pin against what's actually deployable today.
 
 When a downstream bumps SSG, re-extract per the recipe above. If the diff
 moves rule IDs that ks-gen rules reference, update the rules and bump the
-pin in this file.
+versions in this file. Nothing notices the bump for you — see the note at the
+top.

@@ -72,9 +72,9 @@ def test_registry_alma8_re_exports_same_rule_instances_as_alma9():
     # Rules where alma8 has its own implementation (NOT a re-export of alma9).
     # When this set grows, document each addition's rationale here.
     _DIVERGENT = {
-        # crypto_policy: alma8 SSG has 2 sshd cipher checks that alma9 SSG
-        # dropped (sshd_use_approved_kex_ordered_stig, _macs). alma8's
-        # emit_tailoring disables 4 IDs; alma9's only 2. (#127 PR B)
+        # crypto_policy: ssg-almalinux8 0.1.81's stig profile selects only one
+        # of the FIPS-only rules alma9's does, so alma8's emit_tailoring
+        # disables 1 ID against alma9's 6 (#90).
         "crypto_policy",
     }
 
@@ -111,8 +111,9 @@ def test_registry_alma10_re_exports_same_rule_instances_as_alma9():
     _DIVERGENT = {
         # podman-plugins is not packaged for AL10.
         "container_host",
-        # AL10's stig profile selects system_booted_in_fips_mode and drops
-        # enable_dracut_fips_module, so its FIPS-only disable set differs (#67).
+        # AL10's stig profile selects enable_fips_mode and
+        # system_booted_in_fips_mode on top of AL9's, so its FIPS-only disable
+        # set differs (#67, re-derived for #90).
         "crypto_policy",
         # banner_text was divergent until #61: alma9 was referencing IDs its
         # own stig profile never selected, and dropping them left both distros

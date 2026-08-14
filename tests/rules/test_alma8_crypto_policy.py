@@ -4,21 +4,20 @@ alma8 is the first rule (per #127 PR B) where the alma8 implementation
 diverges from the alma9 re-export. See
 src/ks_gen/rules/alma8/crypto_policy.py for the rationale.
 
-Re-derived for #61: the divergence was a single ID — AL8's stig profile still
-selects sshd_use_approved_kex_ordered_stig, which ssg-almalinux9 (0.1.80)
-dropped entirely. The other two IDs alma8 used to add
-(sshd_use_approved_ciphers, sshd_use_approved_macs) exist in the AL8
-datastream but the stig profile selects neither, so disabling them was inert.
-
-#67 made it two-way: alma8 additionally disables enable_dracut_fips_module
-(its AL8 remediation runs `fips-mode-setup --enable`) while alma9 disables
-fips_crypto_subpolicy, which the AL8 profile does not select.
+Re-derived for #90 against ssg-almalinux8 0.1.81: the AL8 stig profile moved
+onto the STIG sub-policy and dropped nearly every FIPS-only rule it used to
+select. alma8 is now down to one disabled ID, fips_crypto_subpolicy, which is
+a strict subset of alma9's six — the divergence is one-way again, and the
+rules alma8 used to add (sshd_use_approved_kex_ordered_stig,
+enable_dracut_fips_module) would be inert here now (#61).
 """
 
 from __future__ import annotations
 
 from ks_gen.config import Crypto, CryptoPolicy
 from ks_gen.rules.alma8.crypto_policy import RULE
+
+_PREFIX = "xccdf_org.ssgproject.content_rule_"
 
 
 def test_alma8_diverges_from_alma9_re_export():
@@ -30,7 +29,14 @@ def test_alma8_diverges_from_alma9_re_export():
     assert RULE is not ALMA9_RULE
 
 
-def test_alma8_modern_tailoring_diverges_from_alma9_in_both_directions(minimal_cfg):
+def test_alma8_modern_tailoring_is_the_one_rule_al8_still_selects(minimal_cfg):
+    cfg = minimal_cfg.model_copy(update={"distro": "alma8"})
+    disabled = {o.rule_id for o in RULE.emit_tailoring(cfg) if o.action == "disable"}
+    assert disabled == {f"{_PREFIX}fips_crypto_subpolicy"}
+
+
+def test_alma8_disable_set_is_a_strict_subset_of_alma9s(minimal_cfg):
+    """ssg 0.1.81 left AL8 selecting far fewer FIPS-only rules than AL9 (#90)."""
     from ks_gen.rules.alma9.crypto_policy import RULE as ALMA9_RULE
 
     cfg = minimal_cfg.model_copy(update={"distro": "alma8"})
@@ -38,25 +44,24 @@ def test_alma8_modern_tailoring_diverges_from_alma9_in_both_directions(minimal_c
     alma9_disabled = {
         o.rule_id for o in ALMA9_RULE.emit_tailoring(minimal_cfg) if o.action == "disable"
     }
-    # AL8-only: still selected here, gone from the AL9 datastream entirely.
-    assert disabled - alma9_disabled == {
-        "xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig",
-    }
-    # AL9-only: the AL8 stig profile does not select the sub-policy rule.
-    assert alma9_disabled - disabled == {
-        "xccdf_org.ssgproject.content_rule_fips_crypto_subpolicy",
-    }
+    assert disabled < alma9_disabled
 
 
-def test_alma8_disables_the_dracut_rule_whose_fix_would_enable_fips(minimal_cfg):
-    """#67: AL8's remediation runs `fips-mode-setup --enable`.
-
-    Left enabled, oscap would put fips=1 on the kernel command line of a host
-    that explicitly opted out of FIPS.
-    """
+def test_alma8_no_longer_disables_the_rules_0_1_81_stopped_selecting(minimal_cfg):
+    """Disabling an unselected rule is inert and misreports in exceptions.md (#61)."""
     cfg = minimal_cfg.model_copy(update={"distro": "alma8"})
     disabled = {o.rule_id for o in RULE.emit_tailoring(cfg) if o.action == "disable"}
-    assert "xccdf_org.ssgproject.content_rule_enable_dracut_fips_module" in disabled
+    for short in (
+        "enable_fips_mode",
+        "enable_dracut_fips_module",
+        "sysctl_crypto_fips_enabled",
+        "sshd_use_approved_kex_ordered_stig",
+        "harden_sshd_ciphers_openssh_conf_crypto_policy",
+        "harden_sshd_ciphers_opensshserver_conf_crypto_policy",
+        "harden_sshd_macs_openssh_conf_crypto_policy",
+        "harden_sshd_macs_opensshserver_conf_crypto_policy",
+    ):
+        assert f"{_PREFIX}{short}" not in disabled
 
 
 def test_alma8_stig_policy_emits_no_tailoring(minimal_cfg):

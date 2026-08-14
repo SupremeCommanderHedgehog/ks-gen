@@ -15,19 +15,25 @@ _PREFIX = "xccdf_org.ssgproject.content_rule_"
 # which beats disabling it (#61).
 _VAR_CRYPTO_POLICY = "xccdf_org.ssgproject.content_value_var_system_crypto_policy"
 
-# Stig-selected on AL8, AL9 and AL10 alike, and unsatisfiable off FIPS. Fixed
-# via #61: the previous set disabled sshd_use_approved_ciphers, which the stig
-# profile never selects — inert — while the four harden_sshd_* rules that do
-# fire stayed enabled. Each of those asserts a FIPS-only algorithm list in the
-# crypto-policies back-end files that update-crypto-policies rewrites under
-# MODERN/FUTURE; sysctl_crypto_fips_enabled wants crypto.fips_enabled=1, which
-# only a fips=1 boot provides (#67).
+# Stig-selected on AL9 and unsatisfiable off FIPS. The four harden_sshd_* rules
+# each assert a FIPS-only algorithm list in the crypto-policies back-end files
+# that update-crypto-policies rewrites under MODERN/FUTURE;
+# sysctl_crypto_fips_enabled wants crypto.fips_enabled=1, which only a fips=1
+# boot provides; fips_crypto_subpolicy requires /etc/crypto-policies/config to
+# match ^FIPS$|^FIPS:(OSPP|NO-SHA1|NO-CAMELLIA|ECDHE-ONLY|STIG)$, which DEFAULT
+# and FUTURE cannot (#67).
 #
-# Every ID is confirmed selected *and* FIPS-dependent against the pinned
-# datastreams — see docs/audit-story/<distro>-fips-candidates.txt and the
-# classification in tests/test_fips_dependent_rules.py.
-_FIPS_ONLY_COMMON = [
-    f"{_PREFIX}enable_fips_mode",
+# ssg-almalinux9 0.1.81 dropped enable_fips_mode and enable_dracut_fips_module
+# from the stig profile, so both left this list — disabling an unselected rule
+# is inert, which is the #61 bug (#90).
+#
+# alma10 imports this list and extends it. alma8's set is genuinely different
+# and lives in its own module. Every ID is confirmed selected *and*
+# FIPS-dependent against the shipped datastreams — see
+# docs/audit-story/<distro>-fips-candidates.txt and the classification in
+# tests/test_fips_dependent_rules.py.
+_TAILORED_WHEN_NOT_STIG = [
+    f"{_PREFIX}fips_crypto_subpolicy",
     f"{_PREFIX}harden_sshd_ciphers_openssh_conf_crypto_policy",
     f"{_PREFIX}harden_sshd_ciphers_opensshserver_conf_crypto_policy",
     f"{_PREFIX}harden_sshd_macs_openssh_conf_crypto_policy",
@@ -35,27 +41,15 @@ _FIPS_ONLY_COMMON = [
     f"{_PREFIX}sysctl_crypto_fips_enabled",
 ]
 
-# AL9-only additions (#67). enable_dracut_fips_module reads
-# /etc/dracut.conf.d/40-fips.conf, which only a FIPS install writes, and
-# ssg-almalinux9 0.1.80 ships no remediation for it — a permanent fail.
-# fips_crypto_subpolicy requires /etc/crypto-policies/config to match
-# ^FIPS$|^FIPS:(OSPP|NO-SHA1|NO-CAMELLIA|ECDHE-ONLY|STIG)$, which DEFAULT and
-# FUTURE cannot.
-_TAILORED_WHEN_NOT_STIG = [
-    *_FIPS_ONLY_COMMON,
-    f"{_PREFIX}enable_dracut_fips_module",
-    f"{_PREFIX}fips_crypto_subpolicy",
-]
-
 # What `update-crypto-policies --set` must be given for each ks-gen policy.
-# STIG is per-distro (#66): the AL9 stig profile refines
-# var_system_crypto_policy to FIPS:STIG and separately checks the STIG
-# sub-policy, while AL8 and AL10 refine it to plain FIPS. Setting FIPS on AL9
-# leaves configure_crypto_policy failing forever with no expected-failure
-# entry; setting FIPS:STIG on AL8/AL10 would create that same bug there.
-# Values are pinned against the datastreams by
+# STIG is per-distro (#66): a distro whose stig profile refines
+# var_system_crypto_policy to FIPS:STIG must be given FIPS:STIG, or
+# configure_crypto_policy fails forever with no expected-failure entry — and
+# vice versa. Upstream owns these values and moves them: AL8 was plain FIPS
+# through ssg 0.1.74 and switched to FIPS:STIG in 0.1.81, which is #90.
+# Each value is checked against the shipped datastream by
 # tests/test_stig_crypto_policy_value.py.
-_STIG_POLICY_BY_DISTRO = {"alma8": "FIPS", "alma9": "FIPS:STIG", "alma10": "FIPS"}
+_STIG_POLICY_BY_DISTRO = {"alma8": "FIPS:STIG", "alma9": "FIPS:STIG", "alma10": "FIPS"}
 _NON_STIG_POLICY = {"MODERN": "DEFAULT", "FUTURE": "FUTURE"}
 
 
@@ -154,11 +148,9 @@ def _exception_entry(cfg: HostConfig, disabled: list[str]) -> ExceptionEntry | N
 def _emit_post(cfg: HostConfig) -> str:
     """Render the %post body for the crypto policy.
 
-    Module-level so the alma8 sibling can reuse it (the post body is
-    identical on AL8 and AL9 — `update-crypto-policies` shipped in
-    RHEL 8.0). alma8's emit_tailoring diverges (extra cipher rules in
-    ssg-almalinux8 that ssg-almalinux9 doesn't have) but emit_post is
-    byte-for-byte the same.
+    Module-level so the alma8 and alma10 siblings can reuse it — the shell is
+    the same on all three (`update-crypto-policies` shipped in RHEL 8.0); only
+    the policy target and the disabled-rule list differ per distro.
     """
     policy = cfg.crypto.policy.value
     target = _policy_target(cfg)

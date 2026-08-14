@@ -8,13 +8,15 @@ drifted: `%post` set `FIPS` while the AL9 profile expects `FIPS:STIG`, so
 expected-failure entry to explain it.
 
 The expected side is read from `<distro>-stig-refine-values.txt`, extracted
-from the pinned datastreams, so an upstream change to the refinement fails
-this test instead of silently un-fixing the bug. Note the value genuinely
-differs per distro: AL9 expects the STIG sub-policy, AL8 and AL10 plain FIPS.
+from the shipped datastreams, so an upstream change to the refinement fails
+this test instead of silently un-fixing the bug. The value genuinely differs
+per distro, and upstream moves it: AL8 expected plain FIPS through ssg 0.1.74
+and the STIG sub-policy from 0.1.81 (#90). Nothing here pins a literal.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -59,6 +61,12 @@ def _distros_with_crypto_refinement() -> list[str]:
 
 _RHEL_FAMILY = _distros_with_crypto_refinement()
 
+# Distros split by whether their refined value names a sub-policy — derived,
+# not listed, because which side a distro falls on is upstream's to change and
+# has changed (#90).
+_SUB_POLICY = [d for d in _RHEL_FAMILY if ":" in (_refined_crypto_policy(d) or "")]
+_PLAIN_POLICY = [d for d in _RHEL_FAMILY if ":" not in (_refined_crypto_policy(d) or "")]
+
 
 def test_the_derived_distro_list_is_not_empty():
     """A glob that matches nothing would make every parametrized test vanish."""
@@ -86,8 +94,9 @@ def test_stig_post_applies_the_policy_the_profile_expects(distro, minimal_cfg):
     )
 
 
-def test_sub_policy_target_is_guarded_by_its_module_file(minimal_cfg):
-    """FIPS:STIG needs STIG.pmod, which the OS does not ship.
+@pytest.mark.parametrize("distro", _SUB_POLICY)
+def test_sub_policy_target_is_guarded_by_its_module_file(distro, minimal_cfg):
+    """A `FIPS:<sub>` target needs <sub>.pmod, which the OS does not ship.
 
     SSG's own fips_custom_stig_sub_policy remediation writes that module
     earlier in the install. Since this %post block runs under `set -e` with
@@ -95,18 +104,25 @@ def test_sub_policy_target_is_guarded_by_its_module_file(minimal_cfg):
     whenever oscap's remediation didn't run — turning verify noise into a
     failed build.
     """
-    cfg = _cfg_for(minimal_cfg, "alma9", CryptoPolicy.STIG)
-    post = next(r for r in load_rules("alma9") if r.id == "crypto_policy").emit_post(cfg)
+    target = _refined_crypto_policy(distro) or ""
+    base, _, sub = target.partition(":")
+    cfg = _cfg_for(minimal_cfg, distro, CryptoPolicy.STIG)
+    post = next(r for r in load_rules(distro) if r.id == "crypto_policy").emit_post(cfg)
 
     # Both module search paths: SSG writes it under /etc, but the stock
     # modules ship under /usr/share, so testing only /etc would fall back
     # needlessly if a future package shipped this one.
-    assert "/etc/crypto-policies/policies/modules/STIG.pmod" in post
-    assert "/usr/share/crypto-policies/policies/modules/STIG.pmod" in post
+    assert f"/etc/crypto-policies/policies/modules/{sub}.pmod" in post
+    assert f"/usr/share/crypto-policies/policies/modules/{sub}.pmod" in post
     assert post.count("update-crypto-policies --set") == 2, "guarded set + fallback"
-    assert "update-crypto-policies --set FIPS:STIG" in post
-    assert "update-crypto-policies --set FIPS\n" in post  # the fallback
+    assert f"update-crypto-policies --set {target}" in post
+    assert f"update-crypto-policies --set {base}\n" in post  # the fallback
     assert post.isascii(), "generated %post shell must stay ASCII"
+
+
+def test_at_least_one_distro_still_needs_the_sub_policy_guard():
+    """The guard above vanishes silently if the derived list empties out."""
+    assert _SUB_POLICY, "no distro refines to a FIPS:<sub> target — is the extract stale?"
 
 
 @pytest.mark.parametrize("distro", _RHEL_FAMILY)
@@ -134,20 +150,50 @@ def test_non_stig_still_uses_ssh_keygen_A(distro, minimal_cfg):
     assert "ssh-keygen -A" in post
 
 
-@pytest.mark.parametrize("distro", ["alma8", "alma10"])
+@pytest.mark.parametrize("distro", _PLAIN_POLICY)
 def test_plain_policies_need_no_module_guard(distro, minimal_cfg):
+    target = _refined_crypto_policy(distro)
     cfg = _cfg_for(minimal_cfg, distro, CryptoPolicy.STIG)
     post = next(r for r in load_rules(distro) if r.id == "crypto_policy").emit_post(cfg)
     assert ".pmod" not in post
-    assert "update-crypto-policies --set FIPS\n" in post
+    assert f"update-crypto-policies --set {target}\n" in post
 
 
-def test_the_stig_value_genuinely_differs_between_distros():
-    """Guards against 'fix' that hardcodes one value for the whole family.
+_SET = re.compile(r"^\s*update-crypto-policies --set (\S+)$", re.M)
 
-    Applying FIPS:STIG everywhere would recreate #66 on alma8 and alma10;
-    applying FIPS everywhere is the original bug on alma9.
+
+def _applied_stig_target(minimal_cfg, distro: str) -> str:
+    """The policy %post actually applies on a STIG host.
+
+    The guarded sub-policy branch emits the fallback second, so the first
+    match is the intended target.
     """
-    assert _refined_crypto_policy("alma9") == "FIPS:STIG"
-    assert _refined_crypto_policy("alma8") == "FIPS"
-    assert _refined_crypto_policy("alma10") == "FIPS"
+    cfg = _cfg_for(minimal_cfg, distro, CryptoPolicy.STIG)
+    post = next(r for r in load_rules(distro) if r.id == "crypto_policy").emit_post(cfg)
+    match = _SET.search(post)
+    assert match, f"{distro}: %post applies no crypto policy at all"
+    return match.group(1)
+
+
+def test_the_stig_value_is_resolved_per_distro_not_family_wide(minimal_cfg):
+    """Guards against a 'fix' that hardcodes one crypto target for the family.
+
+    Deliberately asserts no literal. Upstream owns these values and has moved
+    them — AL8's stig profile switched from FIPS to FIPS:STIG in ssg 0.1.81 and
+    the literals pinned here went stale, which is #90. Instead: ks-gen must
+    apply as many distinct targets across the family as the profiles refine to,
+    so collapsing them onto one value fails here.
+
+    Which target each distro gets is checked separately by
+    test_stig_post_applies_the_policy_the_profile_expects. If upstream ever
+    converges on a single value this test stops discriminating, and correctly
+    so — a single value would then not be a hardcode.
+    """
+    upstream = {_refined_crypto_policy(d) for d in _RHEL_FAMILY}
+    applied = {_applied_stig_target(minimal_cfg, d) for d in _RHEL_FAMILY}
+    assert len(applied) == len(upstream), (
+        f"the stig profiles refine var_system_crypto_policy to {len(upstream)} "
+        f"distinct values across {_RHEL_FAMILY}, but %post applies {len(applied)}. "
+        f"The crypto target must be resolved per distro — one value for the whole "
+        f"family leaves configure_crypto_policy failing wherever it is wrong (#66)."
+    )
