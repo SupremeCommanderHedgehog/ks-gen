@@ -1,4 +1,9 @@
-from ks_gen.config import Crypto, CryptoPolicy
+from __future__ import annotations
+
+import pytest
+
+from ks_gen.config import Crypto, CryptoPolicy, HostConfig
+from ks_gen.registry import load_rules
 from ks_gen.rules.alma9.crypto_policy import RULE
 
 
@@ -69,3 +74,53 @@ def test_exception_entry_named_for_non_stig(minimal_cfg):
 def test_no_exception_for_stig(minimal_cfg):
     cfg = minimal_cfg.model_copy(update={"crypto": Crypto(policy=CryptoPolicy.STIG)})
     assert RULE.exception_entry(cfg) is None
+
+
+# ---- #84: STIG must put the kernel in FIPS mode, not just the crypto policy ----
+
+_ALMA = ["alma8", "alma9", "alma10"]
+
+
+def _post(minimal_cfg, distro: str, policy: str) -> str:
+    base = minimal_cfg.model_dump(exclude={"meta", "install"})
+    cfg = HostConfig.model_validate({**base, "distro": distro, "crypto": {"policy": policy}})
+    rule = next(r for r in load_rules(distro) if r.id == "crypto_policy")
+    return rule.emit_post(cfg)
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_stig_enables_kernel_fips(minimal_cfg, distro):
+    body = _post(minimal_cfg, distro, "STIG")
+    assert "fips-mode-setup --enable" in body
+    assert "dracut -f --regenerate-all" in body
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_fips_enablement_precedes_the_policy_set(minimal_cfg, distro):
+    """fips-mode-setup resets the policy to plain FIPS, so it must run first (#66)."""
+    body = _post(minimal_cfg, distro, "STIG")
+    assert body.index("fips-mode-setup --enable") < body.index("update-crypto-policies --set")
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_fips_enablement_failure_aborts_the_install(minimal_cfg, distro):
+    """A silent fallback would re-create #84: a host claiming FIPS without it."""
+    body = _post(minimal_cfg, distro, "STIG")
+    assert "fips-mode-setup --enable || true" not in body
+    assert "exit 1" in body
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+@pytest.mark.parametrize("policy", ["MODERN", "FUTURE"])
+def test_non_stig_never_touches_fips(minimal_cfg, distro, policy):
+    body = _post(minimal_cfg, distro, policy)
+    assert "fips-mode-setup" not in body
+    assert "dracut" not in body
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+@pytest.mark.parametrize("policy", ["STIG", "MODERN", "FUTURE"])
+def test_policy_header_line_stays_first(minimal_cfg, distro, policy):
+    """run.sh parses this line to learn the expected policy — keep it line 1."""
+    body = _post(minimal_cfg, distro, policy)
+    assert body.splitlines()[0].startswith("# Apply system-wide crypto policy:")

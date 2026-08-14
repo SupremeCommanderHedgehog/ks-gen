@@ -126,6 +126,22 @@ def _emit_post(cfg: HostConfig) -> str:
     target = _policy_target(cfg)
     lines = [f"# Apply system-wide crypto policy: {policy} ({target})"]
 
+    if policy == "STIG":
+        # fips-mode-setup resets the policy to plain FIPS, so it must run
+        # before the update-crypto-policies call below (#66). Its own
+        # `dracut -f` targets `uname -r` — the *installer's* kernel inside
+        # anaconda's chroot — so regenerate every installed initramfs after.
+        # No `|| true`: a host that claims FIPS without being in FIPS is #84.
+        lines += [
+            "# Kernel FIPS mode: dracut module + fips=1; takes effect at first boot",
+            "fips-mode-setup --enable || {",
+            "  echo 'ks-gen: fips-mode-setup --enable failed; refusing to ship a host"
+            " that claims FIPS but is not in FIPS mode (#84)' >&2",
+            "  exit 1",
+            "}",
+            "dracut -f --regenerate-all",
+        ]
+
     base, _, submodule = target.partition(":")
     if submodule:
         # A sub-policy needs its .pmod module present. The OS does not ship

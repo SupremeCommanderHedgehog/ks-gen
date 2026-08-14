@@ -225,6 +225,12 @@
   
   # ===== crypto_policy =====
   # Apply system-wide crypto policy: STIG (FIPS:STIG)
+  # Kernel FIPS mode: dracut module + fips=1; takes effect at first boot
+  fips-mode-setup --enable || {
+    echo 'ks-gen: fips-mode-setup --enable failed; refusing to ship a host that claims FIPS but is not in FIPS mode (#84)' >&2
+    exit 1
+  }
+  dracut -f --regenerate-all
   if [ -f /etc/crypto-policies/policies/modules/STIG.pmod ] || [ -f /usr/share/crypto-policies/policies/modules/STIG.pmod ]; then
     update-crypto-policies --set FIPS:STIG
   else
