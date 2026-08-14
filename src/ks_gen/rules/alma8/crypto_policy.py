@@ -5,17 +5,16 @@ from #121 phase 2's spec: when a rule's SSG mapping differs between alma8
 and alma9, its alma8 file becomes a real implementation. Other ks-gen
 rules stay as re-exports until/unless their SSG mappings diverge similarly.
 
-What diverges (re-derived from the shipped datastreams for #90):
-  ssg-almalinux8 0.1.81 moved the stig profile onto the STIG sub-policy —
-  `var_system_crypto_policy` refines to `FIPS:STIG`, not the plain `FIPS`
-  0.1.74 used — and it stopped selecting almost every FIPS-only rule AL9 and
-  AL10 still select: `enable_fips_mode`, `enable_dracut_fips_module`,
-  `sysctl_crypto_fips_enabled`, all four `harden_sshd_*_crypto_policy` and
-  `sshd_use_approved_kex_ordered_stig` are all unselected here now. Only
-  `fips_crypto_subpolicy` is left, so AL8's disable set is a single ID
-  against AL9's six and AL10's eight.
+What no longer diverges (#90):
+  ssg-almalinux8 moved a long way between the 8.10 DVD's 0.1.72 and the repos'
+  0.1.81 — the stig profile switched `var_system_crypto_policy` from `FIPS` to
+  `FIPS:STIG` and dropped most FIPS-only rules. Taken one release at a time
+  those look like real divergences from AL9, and pinning to either one alone
+  leaves the other kind of install unprotected. Taken as the union over both,
+  AL8's disable set is *identical* to AL9's, so this module re-exports it.
 
-  Disabling any of the departed IDs would be inert, which is the #61 bug.
+  The crypto target is no longer stated here at all: oscap applies whatever the
+  installed content refines the value to.
 
 What stays shared:
   - emit_post, emit_tailoring, exception_entry: reuse the alma9 helpers —
@@ -36,6 +35,7 @@ from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 # identical on AL8 and AL9. The alma9 rule module exposes them at module
 # level specifically so the siblings can import rather than duplicate.
 from ks_gen.rules.alma9.crypto_policy import (
+    _TAILORED_WHEN_NOT_STIG,
     _emit_post,
     _emit_tailoring,
     _exception_entry,
@@ -43,17 +43,6 @@ from ks_gen.rules.alma9.crypto_policy import (
 
 if TYPE_CHECKING:
     from ks_gen.config import HostConfig
-
-_PREFIX = "xccdf_org.ssgproject.content_rule_"
-
-# Stated in full rather than extending alma9's list: as of ssg-almalinux8
-# 0.1.81 the two sets no longer overlap beyond this one ID (#90).
-# fips_crypto_subpolicy requires /etc/crypto-policies/config to match
-# ^FIPS$|^FIPS:(OSPP|NO-SHA1|NO-CAMELLIA|ECDHE-ONLY|STIG)$, which DEFAULT and
-# FUTURE cannot.
-_TAILORED_WHEN_NOT_STIG = [
-    f"{_PREFIX}fips_crypto_subpolicy",
-]
 
 
 @dataclass(frozen=True)

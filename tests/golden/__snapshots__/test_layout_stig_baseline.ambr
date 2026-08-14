@@ -86,6 +86,17 @@
   test -s /root/tailoring.xml
   head -c 5 /root/tailoring.xml | grep -q '<?xml'
   
+  # Pull SCAP content up to what the repos ship before remediating (#90).
+  # Install media can be many SSG releases behind: the AlmaLinux 8.10 DVD carries
+  # 0.1.72 while the repos ship 0.1.81, and the two disagree about which crypto
+  # policy the stig profile expects. Without this, oscap remediates against media
+  # content and ks-gen's own dnf-automatic timer upgrades it minutes later, so
+  # every later scan judges the host against rules that never ran.
+  # Best-effort by design: an offline install keeps the media's content and stays
+  # self-consistent, which is the other correct outcome.
+  dnf -y upgrade scap-security-guide || \
+    echo "ks-gen: could not upgrade scap-security-guide; remediating against media content" >&2
+  
   # --profile below names a profile that exists ONLY in this tailoring file, so
   # a mismatched tailoring makes oscap abort — and the `|| true` would swallow
   # it, leaving a green install with zero remediation. Fail closed instead: this

@@ -15,24 +15,30 @@ _PREFIX = "xccdf_org.ssgproject.content_rule_"
 # which beats disabling it (#61).
 _VAR_CRYPTO_POLICY = "xccdf_org.ssgproject.content_value_var_system_crypto_policy"
 
-# Stig-selected on AL9 and unsatisfiable off FIPS. The four harden_sshd_* rules
-# each assert a FIPS-only algorithm list in the crypto-policies back-end files
-# that update-crypto-policies rewrites under MODERN/FUTURE;
-# sysctl_crypto_fips_enabled wants crypto.fips_enabled=1, which only a fips=1
-# boot provides; fips_crypto_subpolicy requires /etc/crypto-policies/config to
-# match ^FIPS$|^FIPS:(OSPP|NO-SHA1|NO-CAMELLIA|ECDHE-ONLY|STIG)$, which DEFAULT
-# and FUTURE cannot (#67).
+# Rules that force FIPS on, disabled when the operator did not ask for FIPS.
 #
-# ssg-almalinux9 0.1.81 dropped enable_fips_mode and enable_dracut_fips_module
-# from the stig profile, so both left this list — disabling an unselected rule
-# is inert, which is the #61 bug (#90).
+# The four harden_sshd_* rules each assert a FIPS-only algorithm list in the
+# crypto-policies back-end files that update-crypto-policies rewrites under
+# MODERN/FUTURE; sysctl_crypto_fips_enabled wants crypto.fips_enabled=1, which
+# only a fips=1 boot provides; fips_crypto_subpolicy requires
+# /etc/crypto-policies/config to match
+# ^FIPS$|^FIPS:(OSPP|NO-SHA1|NO-CAMELLIA|ECDHE-ONLY|STIG)$, which DEFAULT and
+# FUTURE cannot; enable_fips_mode and enable_dracut_fips_module remediate via
+# `fips-mode-setup --enable`, and fips_custom_stig_sub_policy's remediation runs
+# `update-crypto-policies --set FIPS:STIG` outright (#67).
 #
-# alma10 imports this list and extends it. alma8's set is genuinely different
-# and lives in its own module. Every ID is confirmed selected *and*
-# FIPS-dependent against the shipped datastreams — see
-# docs/audit-story/<distro>-fips-candidates.txt and the classification in
-# tests/test_fips_dependent_rules.py.
-_TAILORED_WHEN_NOT_STIG = [
+# This is the UNION over every SSG release a supported install can present, not
+# the set one pinned release selects (#90). oscap remediates against whatever
+# content the host has: media if the install is offline, repo content if the
+# %post upgrade succeeded. Pinning to one release left AL8 media installs
+# unprotected, because ssg-almalinux8 0.1.72 — what the 8.10 DVD ships — selects
+# rules 0.1.81 dropped. An ID the running content does not select is inert;
+# one it does select and cannot pass off FIPS is a live regression, so the union
+# is the safe direction. docs/audit-story/SSG-VERSIONS.md records the floors.
+# Present on all three alma targets and selected by at least one supported
+# release of each.
+_FIPS_ONLY_COMMON = [
+    f"{_PREFIX}enable_fips_mode",
     f"{_PREFIX}fips_crypto_subpolicy",
     f"{_PREFIX}harden_sshd_ciphers_openssh_conf_crypto_policy",
     f"{_PREFIX}harden_sshd_ciphers_opensshserver_conf_crypto_policy",
@@ -41,29 +47,35 @@ _TAILORED_WHEN_NOT_STIG = [
     f"{_PREFIX}sysctl_crypto_fips_enabled",
 ]
 
-# What `update-crypto-policies --set` must be given for each ks-gen policy.
-# STIG is per-distro (#66): a distro whose stig profile refines
-# var_system_crypto_policy to FIPS:STIG must be given FIPS:STIG, or
-# configure_crypto_policy fails forever with no expected-failure entry — and
-# vice versa. Upstream owns these values and moves them: AL8 was plain FIPS
-# through ssg 0.1.74 and switched to FIPS:STIG in 0.1.81, which is #90.
-# Each value is checked against the shipped datastream by
-# tests/test_stig_crypto_policy_value.py.
-_STIG_POLICY_BY_DISTRO = {"alma8": "FIPS:STIG", "alma9": "FIPS:STIG", "alma10": "FIPS"}
+# AL8 and AL9 add this one; the AL10 datastream does not define it, so alma10
+# composes its own list from _FIPS_ONLY_COMMON instead of extending this.
+#
+# fips_custom_stig_sub_policy is deliberately NOT here despite being
+# stig-selected on both and remediating to FIPS:STIG: it checks the STIG.pmod
+# its own remediation writes, so it passes under any policy, and the non-STIG
+# branch below re-applies DEFAULT/FUTURE afterwards. Disabling it would be
+# inert. See _PASSES_ANYWAY in tests/test_fips_dependent_rules.py.
+_TAILORED_WHEN_NOT_STIG = [
+    *_FIPS_ONLY_COMMON,
+    f"{_PREFIX}enable_dracut_fips_module",
+]
+
+# Only the non-STIG policies are named here. Under STIG the target is not
+# ks-gen's to choose: oscap's own configure_crypto_policy remediation applies
+# whatever the installed content's stig profile refines
+# var_system_crypto_policy to, so it is right for that content by construction.
+# A hardcoded per-distro map was #66 and then #90 — upstream moved AL8 from
+# FIPS to FIPS:STIG and every AL8 STIG host failed until a real install found it.
 _NON_STIG_POLICY = {"MODERN": "DEFAULT", "FUTURE": "FUTURE"}
 
 
 def _policy_target(cfg: HostConfig) -> str:
-    """The crypto-policies name for this host's chosen policy.
+    """The crypto-policies name ks-gen applies for a non-STIG policy.
 
-    Indexed, not `.get(..., "FIPS")`: a new RHEL-family distro whose profile
-    refines to `FIPS:<sub>` would silently inherit plain FIPS and reproduce
-    #66. A KeyError at generation time is the correct failure.
+    Indexed, not `.get(...)`: a new policy added to the enum without a target
+    here must fail at generation time rather than silently pick one.
     """
-    policy = cfg.crypto.policy.value
-    if policy == "STIG":
-        return _STIG_POLICY_BY_DISTRO[cfg.distro]
-    return _NON_STIG_POLICY[policy]
+    return _NON_STIG_POLICY[cfg.crypto.policy.value]
 
 
 # The long lines of the kernel-FIPS %post block, named rather than split inside
@@ -102,6 +114,18 @@ _C_FSTAB_FIRST = (
 _FINDMNT_LIVE_FALLBACK = (
     '[ -n "$ks_boot_uuid" ] || ks_boot_uuid="$(findmnt -f -t noautofs -no UUID '
     '--mountpoint /boot || true)"'
+)
+
+_C_POLICY_FROM_OSCAP = (
+    "# Crypto policy comes from oscap's configure_crypto_policy remediation, "
+    "which uses the installed content's own refine-value (#90)"
+)
+# A printf format, not an echo string: the policy has to be interpolated, and a
+# double-quoted echo carrying this much prose would end the quoted span at the
+# first inner quote and run the rest of the sentence as a command.
+_ERR_POLICY_NOT_FIPS = (
+    "ks-gen: crypto policy is %s, not a FIPS policy. oscap did not apply one, "
+    "so this host would not be FIPS (#90)\\n"
 )
 
 _EXCEPTION_REASON = (
@@ -150,11 +174,17 @@ def _emit_post(cfg: HostConfig) -> str:
 
     Module-level so the alma8 and alma10 siblings can reuse it — the shell is
     the same on all three (`update-crypto-policies` shipped in RHEL 8.0); only
-    the policy target and the disabled-rule list differ per distro.
+    the disabled-rule list differs per distro.
     """
     policy = cfg.crypto.policy.value
-    target = _policy_target(cfg)
-    lines = [f"# Apply system-wide crypto policy: {policy} ({target})"]
+    if policy == "STIG":
+        # Same shape as the non-STIG header because tests/install-regression
+        # parses the parenthesised value out of it. A glob, not a literal:
+        # which FIPS target lands here belongs to the installed content (#90).
+        lines = [f"# Apply system-wide crypto policy: {policy} (FIPS*)"]
+    else:
+        target = _policy_target(cfg)
+        lines = [f"# Apply system-wide crypto policy: {policy} ({target})"]
 
     if cfg.kernel_fips:
         # Same predicate as the fips=1 bootloader arg, so the two cannot disagree.
@@ -187,27 +217,20 @@ def _emit_post(cfg: HostConfig) -> str:
             f" '{_ERR_NO_BOOT_KARG}' >&2; exit 1; }}",
         ]
 
-    base, _, submodule = target.partition(":")
-    if submodule:
-        # A sub-policy needs its .pmod module present. The OS does not ship
-        # one — SSG's own fips_custom_stig_sub_policy remediation writes it
-        # earlier in this install. This block runs under `set -e` with
-        # --erroronfail, so an absent module would abort the install; degrade
-        # to the base policy and say so instead (#66).
-        # Both search paths: SSG's remediation writes the module under /etc,
-        # but update-crypto-policies also resolves the stock modules shipped
-        # under /usr/share, so testing only /etc would fall back needlessly if
-        # a future crypto-policies package ships this one.
-        etc_pmod = f"/etc/crypto-policies/policies/modules/{submodule}.pmod"
-        usr_pmod = f"/usr/share/crypto-policies/policies/modules/{submodule}.pmod"
+    if policy == "STIG":
+        # Deliberately not `update-crypto-policies --set <hardcoded>`. This
+        # block runs after the oscap %post, so anything set here overrides the
+        # remediation — which is how a stale hardcoded value silently won and
+        # left configure_crypto_policy failing forever (#66, #90). Verify
+        # instead: FIPS or any FIPS:<sub> is correct, whichever the installed
+        # content asked for.
         lines += [
-            f"if [ -f {etc_pmod} ] || [ -f {usr_pmod} ]; then",
-            f"  update-crypto-policies --set {target}",
-            "else",
-            f"  echo 'ks-gen: {submodule}.pmod not found in /etc or /usr/share;"
-            f" oscap did not apply the sub-policy, falling back to {base}' >&2",
-            f"  update-crypto-policies --set {base}",
-            "fi",
+            _C_POLICY_FROM_OSCAP,
+            'ks_policy="$(update-crypto-policies --show)"',
+            # %%:* strips any sub-policy, so FIPS and FIPS:STIG both pass and
+            # ks-gen never has to know which one this content asked for.
+            f"[ \"${{ks_policy%%:*}}\" = FIPS ] || {{ printf '{_ERR_POLICY_NOT_FIPS}'"
+            ' "$ks_policy" >&2; exit 1; }',
         ]
     else:
         lines.append(f"update-crypto-policies --set {target}")
