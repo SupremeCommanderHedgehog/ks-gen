@@ -42,8 +42,10 @@ STAGNATION_BUDGET=3600 \
 ## Two traps when driving this from an automated session
 
 1. **Never background the launch** (a detached shell SIGHUPs QEMU) and
-   **never pipe the run through `tail`** — a pipeline's exit status is the
-   last command's, so a failed run reports success.
+   **never pipe the run through anything** — a pipeline's exit status is the
+   last command's, so a failed run reports success. `tail` is the obvious
+   offender, but `tr -d '\0'` to strip the NULs `wsl.exe` emits does it just
+   as silently (hit 2026-08-13). Redirect to a log and read it separately.
 2. **`qemu-img info $BUILD/disk.qcow2` showing `disk size: ~196 KiB` means
    nothing was installed**, whatever the output says. `run.sh` now deletes
    `serial.log` at start so a dead run can no longer print the *previous*
@@ -76,24 +78,23 @@ STAGNATION_BUDGET=3600 \
 
 ## Last green run
 
-2026-06-12. All 14 smoke-check assertions pass:
+2026-08-13, **AlmaLinux 8.10 with `crypto.policy: MODERN`** (the #67 path,
+`FIXTURE_TEMPLATE=fixtures/al8-omit-dnf-automatic.host.yaml.tmpl`). All 39
+smoke-check assertions pass, `disk size: 7.22 GiB`. The #67 block:
 
 ```
-ok:   sshd active
-ok:   chronyd active
-ok:   firewalld active
-ok:   auditd active
-ok:   rsyslog active
-ok:   dnf-automatic.timer active          ← #53 regression check
-ok:   ks-gen-reboot-if-needed.timer enabled
-ok:   ks-gen-dnf-automatic-full.timer enabled
-ok:   faillock.conf has deny=3
-ok:   /root/oscap-remediation-results.xml present
-ok:   /root/oscap-remediation-report.html present
-ok:   root password locked
-ok:   aide installed
-ok:   ks-post.log present and traced
+ok:   live crypto policy is DEFAULT (as the kickstart intended)
+ok:   configure_crypto_policy result <result>pass</result> matches policy DEFAULT
+ok:   kernel command line carries no fips=1
+ok:   /proc/sys/crypto/fips_enabled is 0
+ok:   no /etc/dracut.conf.d/40-fips.conf
+ok:   enable_dracut_fips_module: <result>notselected</result>
+ok:   sysctl_crypto_fips_enabled: <result>notselected</result>
+ok:   fips_crypto_subpolicy: absent from this datastream
+ok:   system_booted_in_fips_mode: absent from this datastream
 ```
+
+Prior green run: 2026-06-12 on the AL9 default fixture, 14 assertions.
 
 ## Six traps documented for future maintainers
 
@@ -117,3 +118,8 @@ ok:   ks-post.log present and traced
 6. **WSL backgrounding kills xorriso.** `nohup ... &` inside
    `wsl -- bash -c '...'` dies on SIGHUP when the parent wsl.exe
    exits. Run interactively or keep the WSL session alive.
+7. **`smoke-check.sh` runs under `set -euo pipefail`.** An ARF grep for a
+   rule the distro does not ship exits non-zero, and `x=$(...)` from a
+   failing pipeline aborts the whole script — silently truncating the run
+   after the assertions that already printed. End such substitutions with
+   `|| true` and treat an empty result as "absent", not as failure.
