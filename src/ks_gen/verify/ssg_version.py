@@ -35,6 +35,11 @@ EXPECTED_SSG_VERSIONS: dict[str, ExpectedSsg] = {
     "alma8": ExpectedSsg("scap-security-guide", "0.1.81-1.el8_10.alma.1", "rpm"),
     "alma9": ExpectedSsg("scap-security-guide", "0.1.81-1.el9_8.alma.1", "rpm"),
     "alma10": ExpectedSsg("scap-security-guide", "0.1.81-1.el10_2.alma.1", "rpm"),
+    # Where the extracts came from, NOT something a stock noble host can have:
+    # noble ships ssg-debderived 0.1.71-1 in every pocket, and that version
+    # carries datastreams for 16.04-22.04 only. A real 24.04 host therefore
+    # reports drift here, correctly — it has no ssg-ubuntu2404-ds.xml at all
+    # for oscap to evaluate (#86).
     "ubuntu2404": ExpectedSsg("ssg-debderived", "0.1.80-1", "dpkg"),
 }
 
@@ -144,6 +149,32 @@ def build_ssg_version_report(
 
 _INFORMATIONAL = "  Reported only — this does not affect the exit code.\n"
 
+# Shared by the text and HTML renderers. `older` and `newer` are one word apart
+# and mean opposite things to an operator, so neither report may paraphrase.
+DIRECTION_LABELS: dict[SsgVersionStatus, str] = {
+    "match": "same content release",
+    "unknown": "not determined",
+    "older": "host is older",
+    "newer": "host is newer",
+    "differs": "versions are not comparable",
+}
+
+_DIRECTION_DETAIL: dict[str, str] = {
+    "older": (
+        "Older is the dangerous direction: ks-gen may be disabling rules this "
+        "version still selects, or naming rules it does not ship."
+    ),
+    "newer": (
+        "ks-gen's checked-in SSG extracts predate this host's content, so its "
+        "rule decisions may be stale."
+    ),
+}
+
+
+def direction_detail(status: SsgVersionStatus) -> str:
+    """Why this direction of drift matters, or "" when it needs no gloss."""
+    return _DIRECTION_DETAIL.get(status, "")
+
 
 def render_ssg_version_section(report: SsgVersionReport) -> str:
     """Human-readable section for the verify text report.
@@ -162,24 +193,12 @@ def render_ssg_version_section(report: SsgVersionReport) -> str:
             f"the check was skipped.\n" + _INFORMATIONAL
         )
 
-    direction = {
-        "older": "host is older",
-        "newer": "host is newer",
-        "differs": "versions are not comparable",
-    }[report.status]
     lines = [
         f"SSG content drift: this {report.distro} host runs {report.package} "
-        f"{report.installed}; ks-gen expects {report.expected} ({direction}).\n"
+        f"{report.installed}; ks-gen expects {report.expected} "
+        f"({DIRECTION_LABELS[report.status]}).\n"
     ]
-    if report.status == "older":
-        lines.append(
-            "  Older is the dangerous direction: ks-gen may be disabling rules this "
-            "version still selects, or naming rules it does not ship.\n"
-        )
-    elif report.status == "newer":
-        lines.append(
-            "  ks-gen's checked-in SSG extracts predate this host's content, so its "
-            "rule decisions may be stale.\n"
-        )
+    if detail := direction_detail(report.status):
+        lines.append(f"  {detail}\n")
     lines.append(_INFORMATIONAL)
     return "".join(lines)

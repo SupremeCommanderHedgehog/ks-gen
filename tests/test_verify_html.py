@@ -159,6 +159,34 @@ def test_ssg_content_note_renders_on_drift_and_stays_out_of_the_verdict() -> Non
     assert_well_formed(doc)
 
 
+def test_html_carries_the_same_drift_direction_the_text_report_does() -> None:
+    """An operator reading the HTML must learn the same thing, not less.
+
+    The HTML used to emit the bare status token: `older` and `newer` are one
+    word apart and mean opposite things, and the sentence saying *why* older is
+    the dangerous direction appeared only in the text report.
+    """
+    from ks_gen.verify.ssg_version import (
+        DIRECTION_LABELS,
+        build_ssg_version_report,
+        render_ssg_version_section,
+    )
+
+    for installed, status in (("0.1.74-1.el8.alma.1", "older"), ("0.1.99-1.el8.alma.1", "newer")):
+        ssg = build_ssg_version_report(distro="alma8", installed=installed)
+        assert ssg is not None and ssg.status == status
+        doc = render_html(_report((CLEAN_ROW,), ssg_version=ssg))
+        text = render_ssg_version_section(ssg)
+
+        assert DIRECTION_LABELS[status] in doc, f"{status}: HTML omits the direction"
+        assert DIRECTION_LABELS[status] in text
+        # The explanatory clause, not just the label.
+        key = "still selects" if status == "older" else "may be stale"
+        assert key in doc, f"{status}: HTML omits why the direction matters"
+        assert key in text
+        assert_well_formed(doc)
+
+
 def test_no_ssg_content_note_when_versions_match() -> None:
     from ks_gen.verify.ssg_version import EXPECTED_SSG_VERSIONS, build_ssg_version_report
 

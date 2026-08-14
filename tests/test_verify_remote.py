@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -207,6 +208,30 @@ def test_collect_arfs_raises_when_oscap_exit_not_in_0_or_2(tmp_path: Path) -> No
     with (
         patch("ks_gen.verify.ssh.ssh_exec", side_effect=fake_ssh),
         pytest.raises(OscapInvocationError, match="127"),
+    ):
+        collect_arfs(cfg=cfg, transport=transport, workdir=tmp_path, no_drift=False, timeout=600)
+
+
+def test_oscap_failure_names_the_content_drift_that_may_explain_it(tmp_path: Path) -> None:
+    """#90: the version query has to run *before* the scan, not after.
+
+    Content drift is a leading cause of oscap exiting non-zero — a profile can
+    move out of the host's content entirely — so collecting the version after
+    the eval left it missing from exactly the failure it exists to explain.
+    """
+    cfg = _build_cfg()
+    transport = SshTransport(host="h", user="u", ssh_extra_opts=[], sudo_auth=SudoAuth())
+
+    def fake_ssh(host: str, user: str, cmd: str, **kw: object) -> SshResult:
+        if "rpm -q" in cmd:
+            return SshResult("0.1.74-1.el8_10.alma.1\n", "", 0)
+        if "oscap xccdf eval" in cmd:
+            return SshResult("", "profile not found", 1)
+        return SshResult("", "", 0)
+
+    with (
+        patch("ks_gen.verify.ssh.ssh_exec", side_effect=fake_ssh),
+        pytest.raises(OscapInvocationError, match=re.escape("0.1.74-1.el8_10.alma.1")),
     ):
         collect_arfs(cfg=cfg, transport=transport, workdir=tmp_path, no_drift=False, timeout=600)
 

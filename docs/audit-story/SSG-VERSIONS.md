@@ -23,6 +23,37 @@ specific downstream `scap-security-guide` / `ssg-debderived` package versions.
 | AlmaLinux 10 (latest) | `alma10` | `scap-security-guide` | `0.1.81-1.el10_2.alma.1` | https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el10_2.alma.1.noarch.rpm |
 | Ubuntu 24.04 (noble) | `ubuntu2404` | `ssg-debderived` | `0.1.80-1` | http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.80-1_all.deb |
 
+> **AlmaLinux install media is far behind these.** The versions above are what
+> the *repos* ship. The AlmaLinux 8.10 DVD carries `scap-security-guide`
+> **0.1.72**, nine releases back, and `install.source` defaults to `MEDIA`. So
+> oscap remediates against media content unless the `%post` upgrade reaches the
+> network — which is why the kickstart upgrades the package before remediating,
+> and why the FIPS disable set is a union rather than one pin (#90).
+
+> **Ubuntu 24.04 cannot supply its own content.** `noble` ships `ssg-debderived`
+> **0.1.71-1** (and nothing newer in `-updates` or `-security`), which contains
+> datastreams for 16.04–22.04 **only** — no `ssg-ubuntu2404-ds.xml`. The 24.04
+> datastream first appears in 0.1.76, which only later Ubuntu releases carry.
+> The version in the table is therefore where ks-gen's extracts came from, not
+> something a stock 24.04 host can have. See #86.
+
+## Media floors
+
+`floors/<distro>-<version>-stig-selected.txt` records what the *oldest supported
+install media* selects, alongside the current pins above. Guards read the union
+of the two: a rule the running content does not select is inert, but one it does
+select and that cannot pass off FIPS is a live regression (#67, #81).
+
+| Distro | Floor | Where it came from |
+|---|---|---|
+| `alma8` | `0.1.72-2.el8_9.alma.1` | the AlmaLinux 8.10 DVD's AppStream payload |
+| `alma9` | `0.1.76-1.el9_5.alma.1` | vault.almalinux.org 9.5 GA snapshot |
+| `alma10` | `0.1.78-1.el10_0.alma.1` | vault.almalinux.org 10.0 GA snapshot |
+
+Add a floor when a new install medium is supported: extract its datastream, run
+the extractor against it, and keep only the `*-stig-selected.txt` and
+`*-stig-refine-values.txt` outputs under `floors/`.
+
 `ks-gen verify` reads these same pins from `src/ks_gen/verify/ssg_version.py`
 and tells the operator when the host it is checking runs different content.
 The two copies are kept honest by `tests/test_verify_ssg_version.py`, which

@@ -65,11 +65,20 @@ def collect_arfs(
             f"— host may not have been provisioned by ks-gen"
         )
 
+    # Before the scan, not after: content drift is a leading explanation for
+    # oscap failing outright (a profile that moved out of the host's content
+    # exits non-zero), and a report collected after the eval would be missing
+    # from exactly the failure it exists to explain (#90).
+    ssg_version = collect_ssg_version(distro=cfg.distro, transport=transport, timeout=timeout)
+
     try:
         oscap_result = transport.run(_oscap_command(cfg), timeout=timeout)
         if oscap_result.exit_code not in (0, 2):
             stderr_first = _first_stderr_line(oscap_result.stderr)
-            raise OscapInvocationError(f"oscap exit {oscap_result.exit_code}: {stderr_first}")
+            raise OscapInvocationError(
+                f"oscap exit {oscap_result.exit_code}: {stderr_first}"
+                f"{_ssg_version_hint(ssg_version)}"
+            )
 
         local_current = workdir / "current.arf.xml"
         local_current.write_bytes(transport.read_root_file(REMOTE_CURRENT_ARF))
@@ -89,7 +98,7 @@ def collect_arfs(
         return CollectedArfs(
             current_text=current_text,
             install_text=install_text,
-            ssg_version=collect_ssg_version(distro=cfg.distro, transport=transport),
+            ssg_version=ssg_version,
         )
     finally:
         try:
@@ -99,10 +108,21 @@ def collect_arfs(
             pass
 
 
+def _ssg_version_hint(report: SsgVersionReport | None) -> str:
+    """Name the content mismatch inline when oscap fails, if there is one."""
+    if report is None or report.status in ("match", "unknown"):
+        return ""
+    return (
+        f" (host runs {report.package} {report.installed}; "
+        f"ks-gen expects {report.expected} — content drift can move a profile ID)"
+    )
+
+
 def collect_ssg_version(
     *,
     distro: str,
     transport: Transport,
+    timeout: int | None = None,
 ) -> SsgVersionReport | None:
     """Ask the host which SSG package it has and compare against ks-gen's pin.
 
@@ -117,7 +137,10 @@ def collect_ssg_version(
         return None
 
     try:
-        result = transport.run(cmd)
+        # Capped like every other remote call: an rpmdb lock or a stalled
+        # channel would otherwise hang the run indefinitely, and this one is
+        # informational — never worth blocking results for.
+        result = transport.run(cmd, timeout=timeout) if timeout else transport.run(cmd)
     except (VerifyError, OSError) as e:
         return build_ssg_version_report(distro=distro, installed=None, error=str(e))
 

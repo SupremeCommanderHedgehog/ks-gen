@@ -84,27 +84,52 @@ fetch_alma() {
 	note_version "$label" "${href##*/}"
 }
 
-# Ubuntu ships SSG as ssg-debderived in noble's universe pool; take the highest
-# version the pool index lists.
+# Ubuntu ships SSG as ssg-debderived. Resolve it from noble's *suite indexes*,
+# never from the pool directory listing: pool/universe/s/scap-security-guide/ is
+# shared by every Ubuntu release, so picking the highest .deb there returns a
+# version noble cannot install. That is how ks-gen came to validate its Ubuntu
+# rules against 0.1.80 content when noble ships 0.1.71 (#90).
+#
+# All three pockets, because a fixed package arrives in -updates or -security
+# and only the suite index says which version the release actually resolves to.
 fetch_ubuntu() {
 	local label=ubuntu2404 ds=ssg-ubuntu2404-ds.xml
-	local pool="http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide"
+	local archive="http://archive.ubuntu.com/ubuntu"
+	local suite pkgs found="" best=""
 
-	curl -fsSL -o "$WORK/$label-pool.html" "$pool/" ||
-		die "$label: could not list $pool/"
+	for suite in noble noble-updates noble-security; do
+		curl -fsSL -o "$WORK/$label-$suite.gz" \
+			"$archive/dists/$suite/universe/binary-amd64/Packages.gz" ||
+			die "$label: could not download the $suite package index"
+		# Architecture: all lands in the amd64 index on Ubuntu. Emit
+		# "<version> <pool/path.deb>" for the one stanza we want.
+		pkgs=$(gunzip -c "$WORK/$label-$suite.gz" |
+			awk '/^Package: ssg-debderived$/{f=1} f&&/^Version:/{v=$2}
+			     f&&/^Filename:/{print v" "$2; f=0}') ||
+			die "$label: could not read the $suite package index"
+		found+="$pkgs"$'\n'
+	done
 
-	local deb
-	deb=$(grep -o 'ssg-debderived_[0-9.]*-[0-9]*_all\.deb' "$WORK/$label-pool.html" |
-		sort -u -V | tail -1) || true
-	[ -n "$deb" ] || die "$label: no ssg-debderived deb listed at $pool/"
+	best=$(printf '%s' "$found" | grep -v '^[[:space:]]*$' | sort -V | tail -1) || true
+	[ -n "$best" ] || die "$label: ssg-debderived is in no noble suite index"
 
-	curl -fsSL -o "$WORK/$label.deb" "$pool/$deb" ||
-		die "$label: download failed for $pool/$deb"
+	local path="${best#* }" deb
+	deb="${path##*/}"
+
+	curl -fsSL -o "$WORK/$label.deb" "$archive/$path" ||
+		die "$label: download failed for $archive/$path"
 
 	mkdir -p "$WORK/$label-ex"
 	dpkg-deb -x "$WORK/$label.deb" "$WORK/$label-ex" ||
 		die "$label: could not unpack $deb"
-	[ -s "$WORK/$label-ex/$CONTENT_DIR/$ds" ] || die "$label: $ds missing or empty in $deb"
+	# Not a fetch glitch when this fires: as of 0.1.71-1, the version noble
+	# ships, ssg-debderived carries datastreams for 16.04-22.04 only. 24.04
+	# content first appears in 0.1.76, which no noble pocket offers — so a
+	# stock 24.04 host has nothing for `oscap` to evaluate.
+	[ -s "$WORK/$label-ex/$CONTENT_DIR/$ds" ] || die \
+		"$label: $deb ships no $ds (has: $(
+			dpkg-deb -c "$WORK/$label.deb" | grep -o 'ssg-[a-z0-9]*-ds\.xml' | sort -u | tr '\n' ' '
+		))"
 
 	cp "$WORK/$label-ex/$CONTENT_DIR/$ds" "$OUT_DIR/$ds"
 	note_version "$label" "$deb"

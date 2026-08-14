@@ -17,6 +17,7 @@ from ks_gen.loader import ExitCode
 from ks_gen.verify.fleet import FleetReport, HostOutcome
 from ks_gen.verify.reconcile import VerifyReport, VerifyRow
 from ks_gen.verify.report import _outcome_summary, _summary
+from ks_gen.verify.ssg_version import DIRECTION_LABELS, direction_detail
 from ks_gen.verify.suggest import Suggestion, render_yaml
 
 _esc = html.escape
@@ -152,11 +153,15 @@ def _ssg_version_section(report: VerifyReport) -> str:
             f"{_esc(s.distro)} host{reason} — ks-gen expects {_esc(s.expected)}"
         )
     else:
+        # The same wording the text report uses, from one source: `older` and
+        # `newer` differ by a word and mean opposite things to an operator.
         body = (
             f"this {_esc(s.distro)} host runs {_esc(s.package)} "
             f"{_esc(s.installed or '')}; ks-gen expects {_esc(s.expected)} "
-            f"({_esc(s.status)})"
+            f"({_esc(DIRECTION_LABELS[s.status])})"
         )
+        if detail := direction_detail(s.status):
+            body += f" — {_esc(detail)}"
     return f'<p class="note">SSG content: {body}</p>'
 
 
