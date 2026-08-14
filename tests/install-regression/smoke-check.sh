@@ -78,22 +78,32 @@ if [[ -n "${EXPECTED_CRYPTO_POLICY:-}" ]]; then
   ok "live crypto policy is $live_policy (as the kickstart intended)"
 fi
 
-# configure_crypto_policy's ARF result is policy-dependent:
-#   MODERN/FUTURE -> `pass`  : the set_value retune (#61) means the rule
-#                              already agrees with the host, nothing to fix.
-#   FIPS-based    -> `fixed` : no tailoring is emitted for STIG, so oscap
-#                              finds the stock policy and remediates it.
-# Accepting `fixed` unconditionally would let a #61 regression pass on a
-# MODERN host, so the expectation is derived from the policy in force.
-crypto_result=$(grep -aA 5 'rule-result idref="xccdf_org.ssgproject.content_rule_configure_crypto_policy"' \
-  /root/oscap-remediation-results.xml | grep -ao '<result>[a-z]*</result>' | head -1)
-case "${EXPECTED_CRYPTO_POLICY:-}" in
-  FIPS*) accepted="<result>fixed</result> <result>pass</result>" ;;
-  *)     accepted="<result>pass</result>" ;;
-esac
-[[ " $accepted " == *" $crypto_result "* ]] \
-  || fail "configure_crypto_policy result is ${crypto_result:-missing}; expected one of [$accepted] for policy ${EXPECTED_CRYPTO_POLICY:-unknown} (#61/#66)"
-ok "configure_crypto_policy result ${crypto_result} matches policy ${EXPECTED_CRYPTO_POLICY:-unknown}"
+# configure_crypto_policy, re-scanned live rather than read from the ARF.
+#
+# The ARF records what oscap saw mid-install, before ks-gen's rule %post ran,
+# and on AL10 that is transiently wrong: the rule has a third criterion that
+# /etc/crypto-policies/state/current be *newer* than .../config, so when the
+# remediation sets the policy and re-verifies inside the same second, oscap
+# records `error` ("Failed to verify applied fix"). The installed host is
+# correct — a live scan returns `pass` — so asserting on the ARF made AL10
+# STIG a permanent false alarm (observed 2026-08-14).
+#
+# A live re-scan is also the stronger assertion: it is what `ks-gen verify`
+# and an auditor would run, and the expectation is the same under every
+# policy. MODERN/FUTURE pass via the set_value retune (#61); STIG passes
+# because %post applied the per-distro FIPS target (#66).
+CRYPTO_RULE=xccdf_org.ssgproject.content_rule_configure_crypto_policy
+ds=$(find /usr/share/xml/scap/ssg/content -name 'ssg-*-ds.xml' 2>/dev/null | head -1)
+[[ -n "$ds" ]] || fail "no SSG datastream installed — cannot re-scan $CRYPTO_RULE"
+[[ -r /root/tailoring.xml ]] || fail "/root/tailoring.xml missing — the bundle did not land"
+# `|| true`: oscap exits 2 when any rule fails, which pipefail would turn
+# into a script abort before this assertion could report anything.
+crypto_live=$(oscap xccdf eval --profile xccdf_ks-gen_profile_tailored \
+  --tailoring-file /root/tailoring.xml --rule "$CRYPTO_RULE" "$ds" 2>/dev/null \
+  | awk '/^Result/{print $2; exit}' || true)
+[[ "$crypto_live" == "pass" ]] \
+  || fail "live scan of configure_crypto_policy is '${crypto_live:-no result}', expected pass for policy ${EXPECTED_CRYPTO_POLICY:-unknown} (#61/#66)"
+ok "configure_crypto_policy passes a live re-scan under policy ${EXPECTED_CRYPTO_POLICY:-unknown}"
 
 # --- #67: a host that opted out of FIPS must not be remediated INTO it.
 # AL8's enable_dracut_fips_module fix runs `fips-mode-setup --enable`, which
