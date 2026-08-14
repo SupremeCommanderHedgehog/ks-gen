@@ -125,6 +125,12 @@ def test_at_least_one_distro_still_needs_the_sub_policy_guard():
     assert _SUB_POLICY, "no distro refines to a FIPS:<sub> target — is the extract stale?"
 
 
+def test_at_least_one_distro_still_uses_a_plain_target():
+    """Twin of the above: AL8 moved onto a sub-policy in SSG 0.1.81 (#90), so
+    the same drift could empty _PLAIN_POLICY and take its guard with it."""
+    assert _PLAIN_POLICY, "every distro now refines to FIPS:<sub> — the plain-target guard is dead"
+
+
 @pytest.mark.parametrize("distro", _RHEL_FAMILY)
 def test_stig_generates_fips_approved_host_keys(distro, minimal_cfg):
     """#72: without a host key, ssh_config_apply's `sshd -t` aborts the install.
