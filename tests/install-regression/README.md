@@ -57,7 +57,9 @@ STAGNATION_BUDGET=3600 \
   fixture with the public key inlined, runs `ks-gen gen`, runs
   `ks-gen iso` twice (locks in PR #55's idempotency fix), boots
   QEMU, polls SSH, runs the smoke check.
-- `smoke-check.sh` — 14 assertions over SSH on the installed VM.
+- `smoke-check.sh` — the assertions run over SSH on the installed VM.
+  Rule outcomes are re-scanned live with `oscap`; the ARF is only read for
+  tailoring facts (see trap 7).
 - `build-debug-iso.py` — wrapper around `ks_gen.iso.builder.build_iso`
   that monkey-patches the menu-entry constants in
   `ks_gen.iso.bootloader` to inject `inst.text inst.notmux
@@ -68,7 +70,12 @@ STAGNATION_BUDGET=3600 \
   #53 regression scenario every run — the load-bearing
   `dnf-automatic.timer active` assertion proves PR #56's
   `Rule.emit_packages` still works on real hardware.
-- `keys/` — generated ed25519 keypair (runtime; on WSL ext4 because
+- `fixtures/al{8,9,10}-*.host.yaml.tmpl` — per-distro variants. The two
+  `*-stig-crypto` ones cover the #66 split: AL9's stig profile refines the
+  crypto policy to `FIPS:STIG`, AL10's to plain `FIPS`. `run.sh` reads
+  `policy: STIG` out of the fixture and switches to an RSA key by itself,
+  since ed25519 cannot authenticate to a FIPS host (#73).
+- `keys/` — generated keypair (runtime; on WSL ext4 because
   OpenSSH refuses the 0777 perms that /mnt/c forces).
 - `build/` — symlink to `~/.cache/ks-gen-install-regression/` (on
   WSL ext4 for I/O performance and Unix-socket support).
@@ -94,9 +101,29 @@ ok:   fips_crypto_subpolicy: absent from this datastream
 ok:   system_booted_in_fips_mode: absent from this datastream
 ```
 
-Prior green run: 2026-06-12 on the AL9 default fixture, 14 assertions.
+Note the `configure_crypto_policy` line above predates the live-re-scan change
+(trap 7) and now reads `passes a live re-scan under policy DEFAULT`.
 
-## Six traps documented for future maintainers
+## Other runs
+
+- **2026-08-14, AlmaLinux 10.2 / `MODERN`** (`al10-omit-dnf-automatic`,
+  network install) — green end-to-end, `disk size: 4.24 GiB`. First AL10
+  install this project has completed. The #67 block shows the per-distro
+  split doing real work: `enable_dracut_fips_module` absent from the AL10
+  datastream, while `fips_crypto_subpolicy` and `system_booted_in_fips_mode`
+  — neither selected on AL8 — are `notselected`.
+- **2026-08-14, AlmaLinux 10.2 / `STIG`** (`al10-stig-crypto`) — install
+  green, `disk size: 4.26 GiB`, `%post` applied plain `FIPS` as AL10's
+  profile expects. The smoke check initially failed on the ARF result for
+  `configure_crypto_policy`; that assertion is what trap 7 replaced, and the
+  updated script passes against the installed host. Not yet re-run
+  end-to-end from a fresh install.
+  This run also produced issue #84: a STIG host is not in FIPS *kernel*
+  mode, so `sysctl_crypto_fips_enabled`, `system_booted_in_fips_mode` and
+  `enable_fips_mode` fail on it permanently.
+- **2026-06-12, AlmaLinux 9 default fixture** — 14 assertions.
+
+## Eight traps documented for future maintainers
 
 (Full detail in issue #57's closing comment — see `issue-57-comment.md`.)
 
@@ -118,7 +145,15 @@ Prior green run: 2026-06-12 on the AL9 default fixture, 14 assertions.
 6. **WSL backgrounding kills xorriso.** `nohup ... &` inside
    `wsl -- bash -c '...'` dies on SIGHUP when the parent wsl.exe
    exits. Run interactively or keep the WSL session alive.
-7. **`smoke-check.sh` runs under `set -euo pipefail`.** An ARF grep for a
+7. **The install-time ARF is not the installed host.** It is written by the
+   oscap `%post`, which runs *before* ks-gen's rule `%post`. AL10's
+   `configure_crypto_policy` additionally requires
+   `/etc/crypto-policies/state/current` to be newer than `.../config`, so
+   remediating and re-verifying inside the same second records `error`
+   even though the finished host passes. Assert rule *outcomes* with a live
+   `oscap` re-scan; the ARF is only good for tailoring facts like
+   `notselected` (observed 2026-08-14, issue #84 came out of the same run).
+8. **`smoke-check.sh` runs under `set -euo pipefail`.** An ARF grep for a
    rule the distro does not ship exits non-zero, and `x=$(...)` from a
    failing pipeline aborts the whole script — silently truncating the run
    after the assertions that already printed. End such substitutions with

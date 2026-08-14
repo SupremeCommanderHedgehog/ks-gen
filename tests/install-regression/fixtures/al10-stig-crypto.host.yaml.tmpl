@@ -1,0 +1,51 @@
+# AlmaLinux 10 with crypto.policy: STIG — the AL10 half of the #66 split.
+#
+# The AL10 stig profile refines var_system_crypto_policy to plain FIPS (AL9
+# refines it to FIPS:STIG) and does not select fips_custom_stig_sub_policy, so
+# no STIG.pmod is involved. This fixture proves %post applies FIPS on AL10
+# rather than the AL9 sub-policy — the mirror image of al9-stig-crypto.
+#
+# It also exercises the STIG side of #67: none of the FIPS-only rules are
+# tailored away under STIG, so their ARF results reflect the host as it really
+# is rather than being suppressed.
+#
+# AL10 boot media carries no package payload, so install.source must be
+# network — the per-distro mirror defaults from #62 fill in the AL10 URLs.
+#
+# MUST be run with KEY_TYPE=rsa. A FIPS/STIG host drops ssh-ed25519 from
+# PubkeyAcceptedAlgorithms, so the harness's default ed25519 key cannot log in
+# and the run times out at the SSH wait even when the install is perfect (#73).
+# run.sh detects `policy: STIG` here and switches the key type itself.
+system:
+  hostname: regression.local
+distro: alma10
+install:
+  source: network
+crypto:
+  policy: STIG
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "__SSH_PUBKEY__"
+    sudo: nopasswd_yes
+disk:
+  target: vda
+packages:
+  required:
+    - scap-security-guide
+    - openscap-scanner
+    - aide
+    - audit
+    - rsyslog
+    - chrony
+    - firewalld
+    - sudo
+    - policycoreutils-python-utils
+# smoke-check.sh asserts the container-host state unconditionally, so every
+# fixture enables it.
+containers:
+  enabled: true
+  users: []
+  volume:
+    size: "5G"
