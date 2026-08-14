@@ -95,6 +95,44 @@ esac
   || fail "configure_crypto_policy result is ${crypto_result:-missing}; expected one of [$accepted] for policy ${EXPECTED_CRYPTO_POLICY:-unknown} (#61/#66)"
 ok "configure_crypto_policy result ${crypto_result} matches policy ${EXPECTED_CRYPTO_POLICY:-unknown}"
 
+# --- #67: a host that opted out of FIPS must not be remediated INTO it.
+# AL8's enable_dracut_fips_module fix runs `fips-mode-setup --enable`, which
+# writes 40-fips.conf and puts fips=1 on the kernel command line. ks-gen's
+# %post only corrects the crypto policy, never the kernel args, so nothing
+# else here would notice. The ARF check is the converse: the FIPS-only rules
+# must read notselected, proving the tailoring reached them.
+case "${EXPECTED_CRYPTO_POLICY:-}" in
+  FIPS* | "") ;;
+  *)
+    if grep -qw 'fips=1' /proc/cmdline; then
+      fail "kernel booted with fips=1 on a ${EXPECTED_CRYPTO_POLICY} host — oscap remediated it into FIPS (#67)"
+    fi
+    ok "kernel command line carries no fips=1"
+
+    fips_enabled=$(cat /proc/sys/crypto/fips_enabled 2>/dev/null || echo 0)
+    [[ "$fips_enabled" == "0" ]] \
+      || fail "/proc/sys/crypto/fips_enabled is ${fips_enabled} on a ${EXPECTED_CRYPTO_POLICY} host (#67)"
+    ok "/proc/sys/crypto/fips_enabled is 0"
+
+    [[ ! -e /etc/dracut.conf.d/40-fips.conf ]] \
+      || fail "/etc/dracut.conf.d/40-fips.conf exists — enable_dracut_fips_module remediated a non-FIPS host (#67)"
+    ok "no /etc/dracut.conf.d/40-fips.conf"
+
+    # Absent is legitimate: each distro's stig profile selects a different
+    # subset, and a rule its datastream doesn't ship has no rule-result.
+    for rid in enable_dracut_fips_module sysctl_crypto_fips_enabled \
+               fips_crypto_subpolicy system_booted_in_fips_mode; do
+      # `|| true`: absent rules make the pipeline exit non-zero, and under
+      # `set -euo pipefail` that assignment would kill the script.
+      fips_result=$(grep -aA 5 "rule-result idref=\"xccdf_org.ssgproject.content_rule_${rid}\"" \
+        /root/oscap-remediation-results.xml | grep -ao '<result>[a-z]*</result>' | head -1 || true)
+      [[ -z "$fips_result" || "$fips_result" == "<result>notselected</result>" ]] \
+        || fail "${rid} result is ${fips_result}, expected notselected on a ${EXPECTED_CRYPTO_POLICY} host (#67)"
+      ok "${rid}: ${fips_result:-absent from this datastream}"
+    done
+    ;;
+esac
+
 # --- root + console login locked, per kickstart contract
 # AlmaLinux 9 / shadow-utils prints "LK" in the status field, not " L ".
 passwd -S root | awk '{print $2}' | grep -qE '^LK?$' \
