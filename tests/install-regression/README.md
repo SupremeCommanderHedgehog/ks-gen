@@ -118,9 +118,12 @@ Note the `configure_crypto_policy` line above predates the live-re-scan change
   `configure_crypto_policy`; that assertion is what trap 7 replaced, and the
   updated script passes against the installed host. Not yet re-run
   end-to-end from a fresh install.
-  This run also produced issue #84: a STIG host is not in FIPS *kernel*
+  This run also produced issue #84: a STIG host was not in FIPS *kernel*
   mode, so `sysctl_crypto_fips_enabled`, `system_booted_in_fips_mode` and
-  `enable_fips_mode` fail on it permanently.
+  `enable_fips_mode` failed on it on every scan. Fixed on
+  `feat/84-stig-kernel-fips` — `%post` now runs `fips-mode-setup --enable`,
+  and the `FIPS*` arm of `smoke-check.sh` asserts the installed host really
+  boots in FIPS mode. That arm has never been exercised against a real VM.
 - **2026-06-12, AlmaLinux 9 default fixture** — 14 assertions.
 
 ## Eight traps documented for future maintainers

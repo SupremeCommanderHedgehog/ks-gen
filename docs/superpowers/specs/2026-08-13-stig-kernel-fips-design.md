@@ -132,10 +132,12 @@ update-crypto-policies --set FIPS:STIG    # existing; MUST come after
   aborts the install after echoing a ks-gen diagnostic. A failed install is
   recoverable; a host that falsely claims FIPS is the defect being fixed.
 
-**Packages.** AL8 needs `dracut-fips` (dropped in RHEL 9, where the module
-ships inside `dracut`), so `alma8`'s `emit_packages` returns `["dracut-fips"]`
-under STIG. The implementation verifies this against the repodata in
-`AlmaLinux-8.10-x86_64-dvd.iso` in the repo root before relying on it.
+**Packages.** None. This design assumed AL8 needed `dracut-fips`; the
+verification step it mandated refuted that before any code was written.
+AlmaLinux 8's `dracut` ships `/usr/lib/dracut/modules.d/01fips/` itself and
+carries only a virtual `Provides: dracut-fips` — there is no installable
+package by that name in any AL8 repo. `emit_packages` stays `[]` on every
+distro.
 
 ### Tailoring and exceptions
 

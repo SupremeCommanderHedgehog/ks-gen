@@ -1,4 +1,5 @@
 import re
+from typing import get_args
 
 import pytest
 from pydantic import ValidationError
@@ -1848,3 +1849,23 @@ def test_fips_mode_true_rejected_on_ubuntu_stig(minimal_cfg):
     """Kernel FIPS on Ubuntu needs a Pro entitlement ks-gen does not manage."""
     with pytest.raises(ValidationError, match="fips-updates"):
         _fips_cfg(minimal_cfg, "ubuntu2404", CryptoPolicy.STIG, fips_mode=True)
+
+
+# Distros that deliberately cannot reach kernel FIPS, with the reason.
+_CANNOT_KERNEL_FIPS = {"ubuntu2404": "needs an Ubuntu Pro fips-updates entitlement"}
+
+
+def test_every_distro_is_classified_for_kernel_fips(minimal_cfg):
+    """A new distro must be a decision, not a silent False (#84).
+
+    kernel_fips reads False for any distro missing from _KERNEL_FIPS_DISTROS,
+    which is the shape of the bug this whole change fixes. Pinning the split
+    against the `distro` Literal means adding one without classifying it fails
+    here rather than shipping a STIG host that is quietly not in FIPS mode.
+    """
+    declared = set(get_args(HostConfig.model_fields["distro"].annotation))
+    capable = {d for d in declared if _fips_cfg(minimal_cfg, d, CryptoPolicy.STIG).kernel_fips}
+    assert capable == declared - set(_CANNOT_KERNEL_FIPS), (
+        "every distro must be either kernel-FIPS capable or listed in "
+        "_CANNOT_KERNEL_FIPS with the reason it cannot be"
+    )

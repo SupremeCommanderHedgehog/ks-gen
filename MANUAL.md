@@ -233,9 +233,13 @@ it to a value that contradicts `crypto.policy` is rejected at config load
 **Hard constraint:** `crypto.policy: STIG` requires at least one
 `ssh-rsa`/`rsa-sha2-*` or `ecdsa-sha2-nistp{256,384,521}` key in
 `user.admin.authorized_keys` — and in every `containers.users[]` entry
-when `containers.enabled` is true. FIPS strips `ssh-ed25519` from
-sshd's `PubkeyAcceptedAlgorithms`, so an Ed25519-only key list means
-no key can authenticate. With the admin account `passwd -l`'d and
+when `containers.enabled` is true. `ssh-ed25519` is absent from sshd's
+`PubkeyAcceptedAlgorithms` under STIG on **every** distro, so an
+Ed25519-only key list means no key can authenticate. On AlmaLinux that is
+FIPS kernel mode doing it; on Ubuntu, which never enters FIPS kernel mode,
+ks-gen writes the same restriction itself in the sshd drop-in — so the
+constraint applies there too, for a different reason. With the admin
+account `passwd -l`'d and
 `PasswordAuthentication no`, that is an unrecoverable lockout, so it
 is rejected at config load. A password on the admin is *not* on its
 own an exemption — see the login-path invariant in §4.5. (#73, #76)
