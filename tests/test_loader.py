@@ -102,3 +102,22 @@ def test_ubuntu_stig_with_fips_mode_true_is_a_rule_conflict(tmp_path):
     with pytest.raises(ConfigError) as e:
         load_host_config(p, sets=[])
     assert e.value.exit_code == ExitCode.RULE_CONFLICT
+
+
+def test_two_malformed_fields_is_not_a_rule_conflict(tmp_path):
+    """Two unrelated field errors can jointly contain both substrings; that's not a conflict."""
+    p = tmp_path / "host.yaml"
+    p.write_text(
+        "system: {hostname: h.example.com}\n"
+        "crypto: {policy: BOGUS}\n"
+        "overrides: {fips_mode: [1, 2, 3]}\n"
+        "user:\n"
+        "  admin:\n"
+        "    name: ops\n"
+        '    authorized_keys: ["ssh-rsa AAAA a@b"]\n'
+        "    sudo: nopasswd_yes\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError) as e:
+        load_host_config(p, sets=[])
+    assert e.value.exit_code == ExitCode.CONFIG_INVALID

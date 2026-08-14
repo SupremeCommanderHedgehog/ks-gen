@@ -81,10 +81,11 @@ def load_host_config(path: Path, sets: list[str]) -> HostConfig:
         return HostConfig.model_validate(data)
     except ValidationError as e:
         msg = str(e)
-        # Every crypto.policy/fips_mode validator message names both terms.
-        code = (
-            ExitCode.RULE_CONFLICT
-            if ("crypto.policy" in msg and "fips_mode" in msg)
-            else ExitCode.CONFIG_INVALID
+        # Both terms must co-occur in one validator's message, not just anywhere
+        # in the concatenated errors — else two unrelated bad fields misroute here.
+        is_conflict = any(
+            "crypto.policy" in err.get("msg", "") and "fips_mode" in err.get("msg", "")
+            for err in e.errors()
         )
+        code = ExitCode.RULE_CONFLICT if is_conflict else ExitCode.CONFIG_INVALID
         raise ConfigError(msg, code) from e
