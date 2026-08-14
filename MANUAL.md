@@ -1036,7 +1036,7 @@ exact XCCDF IDs.
 | `admin_user_and_keys` | Creates the wheel admin in `%post`, drops `authorized_keys`, writes `/etc/sudoers.d/00-ks-gen-admin`. **Runs first.** |
 | `ssh_keep_open` | If `ssh.port != 22`: `semanage port -a -t ssh_port_t -p tcp <port>`. Always (when enabled): `firewall-offline-cmd --add-port=<port>/tcp`. **Runs before firewalld is enabled.** |
 | `faillock_safety` | Tailors `unlock_time` and `deny` variables; when `even_deny_root=false`, disables the matching XCCDF rule; re-asserts `/etc/security/faillock.conf` in `%post`. |
-| `crypto_policy` | `update-crypto-policies --set {FIPS[:STIG]\|DEFAULT\|FUTURE}` — the STIG target is per-distro (AL9 expects `FIPS:STIG`, AL8/AL10 plain `FIPS`). When not STIG: tailoring retunes `var_system_crypto_policy` to the chosen policy and disables the FIPS-only rules that host can never pass — the exact set differs per distro, so read `exceptions.md` or run `ks-gen rules` for the live list. `%post` runs `ssh-keygen -A` to generate Ed25519 host keys (which `sshd-keygen` won't make in FIPS mode). Under STIG on AlmaLinux, `%post` also runs `fips-mode-setup --enable` and `dracut -f --regenerate-all`, so the installed host boots with `fips=1` and the FIPS-only rules pass instead of failing forever (#84). |
+| `crypto_policy` | `update-crypto-policies --set {FIPS[:STIG]\|DEFAULT\|FUTURE}` — the STIG target is per-distro (AL9 expects `FIPS:STIG`, AL8/AL10 plain `FIPS`). When not STIG: tailoring retunes `var_system_crypto_policy` to the chosen policy and disables the FIPS-only rules that host can never pass — the exact set differs per distro, so read `exceptions.md` or run `ks-gen rules` for the live list. `%post` runs `ssh-keygen -A` to generate Ed25519 host keys (which `sshd-keygen` won't make in FIPS mode). Under STIG on AlmaLinux, `%post` also writes `/etc/system-fips` and `/etc/dracut.conf.d/40-fips.conf`, runs `dracut -f --regenerate-all`, and asserts `fips=1 boot=UUID=…` on every installed kernel entry, so the host boots in FIPS mode and the FIPS-only rules pass instead of failing forever (#84). It does this natively rather than by calling `fips-mode-setup`, which AlmaLinux 10 does not ship. |
 | `ssh_config_apply` | Writes `/etc/ssh/sshd_config.d/00-ks-gen.conf` with `Port`, `PermitRootLogin`, `PasswordAuthentication`, `ClientAlive*`, `MaxAuthTries`, `UsePAM`; runs `sshd -t` to validate. Hard depends on `admin_user_and_keys` and `ssh_keep_open`. |
 
 ### DoD-content neutralization
@@ -2044,16 +2044,19 @@ any upstream proxy configuration.
 ### "the install reboots to a black screen"
 
 `fips=1` on the bootloader requires the dracut FIPS module in the
-initramfs. Under `crypto.policy: STIG` the `crypto_policy` rule runs
-`fips-mode-setup --enable` followed by `dracut -f --regenerate-all` in
-`%post`, so this should not happen — `--regenerate-all` is used because
-`uname -r` inside anaconda's chroot is the *installer's* kernel, not the
-installed one.
+initramfs. Under `crypto.policy: STIG` the `crypto_policy` rule writes
+`/etc/system-fips` and `/etc/dracut.conf.d/40-fips.conf`, then runs
+`dracut -f --regenerate-all` in `%post`, so this should not happen —
+`--regenerate-all` is used because `uname -r` inside anaconda's chroot
+is the *installer's* kernel, not the installed one. It does that
+natively rather than by calling `fips-mode-setup`, which AlmaLinux 10
+does not ship (#84).
 
 If it does happen, check `/mnt/sysimage/root/ks-post.log` for the
-`fips-mode-setup` line. A failure there aborts the install rather than
-shipping a host that claims FIPS without being in FIPS mode, so a
-black screen points at the initramfs rather than at ks-gen's `%post`.
+`dracut -f --regenerate-all` line and the `grubby` assertions after it.
+A failure there aborts the install rather than shipping a host that
+claims FIPS without being in FIPS mode, so a black screen points at the
+initramfs rather than at ks-gen's `%post`.
 
 ### "I added a rule but it's not running"
 

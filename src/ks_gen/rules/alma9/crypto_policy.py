@@ -128,31 +128,37 @@ def _emit_post(cfg: HostConfig) -> str:
 
     if cfg.kernel_fips:
         # Same predicate as the fips=1 bootloader arg, so the two cannot disagree.
-        # fips-mode-setup resets the policy to plain FIPS, so it must run
-        # before the update-crypto-policies call below (#66). Its exit code is
-        # not evidence: its inner `dracut -f` targets `uname -r` — the
-        # *installer's* kernel inside anaconda's chroot, absent on a network
-        # install — so assert the outcome and abort only on that (#84).
+        # Done natively instead of via fips-mode-setup, which AlmaLinux 10 does
+        # not ship at all — that aborted a real AL10 install (#84). These are
+        # the steps fips-finish-install/fips-mode-setup take, using only
+        # commands all three alma targets have. It must all precede the
+        # update-crypto-policies call below, which re-applies the policy (#66).
         lines += [
             "# Kernel FIPS mode: dracut module + fips=1; takes effect at first boot",
-            "# Its exit code is not evidence: the inner dracut -f targets the"
-            " installer's kernel, so assert the outcome instead (#84)",
-            "fips-mode-setup --enable || echo 'ks-gen: fips-mode-setup --enable returned"
-            " non-zero; verifying the outcome below (#84)' >&2",
+            "# Native equivalent of fips-mode-setup, which AL10 does not ship (#84)",
+            "mkdir -p /etc/dracut.conf.d",
+            "# dracut's fips module installs this file into the initramfs; no package ships it",
+            "echo '# FIPS module installation complete' > /etc/system-fips",
+            "echo 'add_dracutmodules+=\" fips \"' > /etc/dracut.conf.d/40-fips.conf",
+            "# AL10's fips-crypto-policies module is pulled in by its own dracut"
+            " dependency; naming it here would break AL8, which has no such module",
             "[ -f /etc/dracut.conf.d/40-fips.conf ] || { echo 'ks-gen:"
             " /etc/dracut.conf.d/40-fips.conf is missing, so no initramfs would carry the"
             " FIPS module (#84)' >&2; exit 1; }",
+            "# --regenerate-all: `dracut -f` alone targets uname -r, which inside"
+            " anaconda's chroot is the installer's kernel",
             "dracut -f --regenerate-all",
-            'ks_kargs="$(grubby --info=ALL)"',
             "# /boot is always separate here, and fips=1 without a matching boot= leaves"
             " dracut unable to find /boot/.vmlinuz-*.hmac",
-            'if [[ "$ks_kargs" != *boot=UUID=[0-9a-fA-F]* ]]; then',
-            '  ks_boot_uuid="$(findmnt -no UUID /boot || true)"',
-            '  [ -n "$ks_boot_uuid" ] || { echo \'ks-gen: cannot read the /boot UUID;'
+            "# --fstab first: in the chroot the live mount table keys /boot as"
+            " /mnt/sysimage/boot, so only the fstab lookup resolves",
+            'ks_boot_uuid="$(findmnt -f -t noautofs -no UUID --fstab --mountpoint /boot || true)"',
+            '[ -n "$ks_boot_uuid" ] || ks_boot_uuid="$(findmnt -f -t noautofs -no UUID'
+            ' --mountpoint /boot || true)"',
+            '[ -n "$ks_boot_uuid" ] || { echo \'ks-gen: cannot read the /boot UUID;'
             " refusing to ship fips=1 with no boot=UUID= (#84)' >&2; exit 1; }",
-            '  grubby --update-kernel=ALL --args="boot=UUID=$ks_boot_uuid"',
-            '  ks_kargs="$(grubby --info=ALL)"',
-            "fi",
+            'grubby --update-kernel=ALL --args="fips=1 boot=UUID=$ks_boot_uuid"',
+            'ks_kargs="$(grubby --info=ALL)"',
             '[[ "$ks_kargs" == *fips=1* ]] || { echo \'ks-gen: no fips=1 in the installed'
             " kernel args; the host would boot without FIPS (#84)' >&2; exit 1; }",
             '[[ "$ks_kargs" == *boot=UUID=[0-9a-fA-F]* ]] || { echo \'ks-gen: no boot=UUID='

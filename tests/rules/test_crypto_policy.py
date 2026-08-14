@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 
@@ -94,36 +95,60 @@ def _post(minimal_cfg, distro: str, policy: str) -> str:
     return _rule(distro).emit_post(cfg)
 
 
+def _code_lines(body: str) -> list[str]:
+    """The body's executable lines — comments explain the distro facts and
+    would otherwise trip the command and module assertions below."""
+    return [ln.strip() for ln in body.splitlines() if ln.strip() and not ln.strip().startswith("#")]
+
+
 @pytest.mark.parametrize("distro", _ALMA)
 def test_stig_enables_kernel_fips(minimal_cfg, distro):
+    """The two steps fips-finish-install takes, done natively (#84)."""
     body = _post(minimal_cfg, distro, "STIG")
-    assert "fips-mode-setup --enable" in body
+    assert "echo 'add_dracutmodules+=\" fips \"' > /etc/dracut.conf.d/40-fips.conf" in body
     assert "dracut -f --regenerate-all" in body
 
 
 @pytest.mark.parametrize("distro", _ALMA)
-def test_fips_enablement_precedes_the_policy_set(minimal_cfg, distro):
-    """fips-mode-setup resets the policy to plain FIPS, so it must run first (#66)."""
+def test_dracut_fips_conf_is_written_before_the_initramfs_is_rebuilt(minimal_cfg, distro):
+    """Writing it after `dracut` would leave every initramfs without the module."""
     body = _post(minimal_cfg, distro, "STIG")
-    assert body.index("fips-mode-setup --enable") < body.index("update-crypto-policies --set")
+    assert body.index("> /etc/dracut.conf.d/40-fips.conf") < body.index("dracut -f")
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_stig_creates_the_system_fips_marker(minimal_cfg, distro):
+    """dracut's 01fips module `inst_simple`s this file; no package ships it (#84)."""
+    body = _post(minimal_cfg, distro, "STIG")
+    assert body.index("> /etc/system-fips") < body.index("dracut -f")
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_the_dracut_conf_names_only_the_module_every_target_has(minimal_cfg, distro):
+    """AL8's dracut has no 01fips-crypto-policies; naming it would fail there.
+
+    On AL10 that module enables itself and depends on `fips`, so it is pulled
+    in without being named.
+    """
+    assert not [ln for ln in _code_lines(_post(minimal_cfg, distro, "STIG")) if "fips-cry" in ln]
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_fips_enablement_precedes_the_policy_set(minimal_cfg, distro):
+    """`update-crypto-policies --set` stays the last word on the policy (#66).
+
+    AL9 needs FIPS:STIG re-applied after anything that could reset it, so the
+    FIPS work goes first and nothing is appended after the set.
+    """
+    body = _post(minimal_cfg, distro, "STIG")
+    assert body.index("dracut -f") < body.index("update-crypto-policies --set")
 
 
 @pytest.mark.parametrize("distro", _ALMA)
 def test_fips_enablement_failure_aborts_the_install(minimal_cfg, distro):
     """A silent fallback would re-create #84: a host claiming FIPS without it."""
     body = _post(minimal_cfg, distro, "STIG")
-    assert "fips-mode-setup --enable || true" not in body
     assert "exit 1" in body
-
-
-@pytest.mark.parametrize("distro", _ALMA)
-def test_fips_mode_setup_exit_code_alone_is_not_fatal(minimal_cfg, distro):
-    """Its inner `dracut -f` targets the installer's kernel and fails on a
-    network install; the outcome is what matters, not the exit code (#84)."""
-    body = _post(minimal_cfg, distro, "STIG")
-    stmt = next(ln for ln in body.splitlines() if ln.startswith("fips-mode-setup --enable"))
-    assert "exit 1" not in stmt
-    assert not stmt.rstrip().endswith("{")
 
 
 @pytest.mark.parametrize("distro", _ALMA)
@@ -140,7 +165,8 @@ def test_stig_asserts_fips_reached_the_installed_kernel_args(minimal_cfg, distro
 def test_stig_requires_the_dracut_fips_conf(minimal_cfg, distro):
     """No 40-fips.conf means the regenerated initramfs has no FIPS module (#84)."""
     body = _post(minimal_cfg, distro, "STIG")
-    check = next(ln for ln in body.splitlines() if "/etc/dracut.conf.d/40-fips.conf" in ln)
+    check = next(ln for ln in body.splitlines() if ln.startswith("[ -f /etc/dracut.conf.d/"))
+    assert "40-fips.conf" in check
     assert "exit 1" in check
     assert "ks-gen:" in check
 
@@ -149,18 +175,29 @@ def test_stig_requires_the_dracut_fips_conf(minimal_cfg, distro):
 def test_stig_establishes_a_non_empty_boot_uuid(minimal_cfg, distro):
     """/boot is always separate; fips=1 without boot= drops to the dracut shell."""
     body = _post(minimal_cfg, distro, "STIG")
-    assert "findmnt -no UUID /boot" in body
+    assert "findmnt" in body
     assert "grubby --update-kernel=ALL --args=" in body
     assert "boot=UUID=$" in body or "boot=UUID=${" in body
     assert 'boot=UUID="' not in body  # never a bare, empty value
 
 
 @pytest.mark.parametrize("distro", _ALMA)
+def test_boot_uuid_is_looked_up_in_fstab_as_well_as_the_mount_table(minimal_cfg, distro):
+    """In anaconda's chroot the live table keys /boot as /mnt/sysimage/boot."""
+    body = _post(minimal_cfg, distro, "STIG")
+    lookups = [ln for ln in body.splitlines() if "findmnt" in ln]
+    assert len(lookups) == 2
+    assert "--fstab" in lookups[0]
+    assert "--fstab" not in lookups[1]
+
+
+@pytest.mark.parametrize("distro", _ALMA)
 def test_stig_aborts_when_boot_uuid_cannot_be_resolved(minimal_cfg, distro):
     body = _post(minimal_cfg, distro, "STIG")
-    guard = next(ln for ln in body.splitlines() if "findmnt" not in ln and "boot_uuid" in ln)
+    guard = next(ln for ln in body.splitlines() if "cannot read the /boot UUID" in ln)
     assert "exit 1" in guard
     assert "ks-gen:" in guard
+    assert body.index("cannot read the /boot UUID") < body.index("grubby --update-kernel")
 
 
 @pytest.mark.parametrize("distro", _ALMA)
@@ -182,10 +219,76 @@ def test_fips_verification_precedes_the_policy_set(minimal_cfg, distro):
 @pytest.mark.parametrize("policy", ["MODERN", "FUTURE"])
 def test_non_stig_never_touches_fips(minimal_cfg, distro, policy):
     body = _post(minimal_cfg, distro, policy)
-    assert "fips-mode-setup" not in body
     assert "dracut" not in body
     assert "grubby" not in body
     assert "findmnt" not in body
+    assert "system-fips" not in body
+
+
+# Every external command the block may call, and what ships it on AL8, AL9 AND
+# AL10 (checked against the three BaseOS filelists, 2026-08-14):
+#   dracut                 -> dracut
+#   grubby                 -> grubby
+#   findmnt                -> util-linux (AL8) / util-linux-core (AL9, AL10)
+#   mkdir                  -> coreutils
+#   update-crypto-policies -> crypto-policies-scripts
+#   ssh-keygen             -> openssh
+_COMMANDS_ON_EVERY_ALMA = {
+    "dracut",
+    "findmnt",
+    "grubby",
+    "mkdir",
+    "ssh-keygen",
+    "update-crypto-policies",
+}
+
+# Shipped by crypto-policies-scripts on AL8 and AL9 but by nothing on AL10 —
+# calling it aborted a real AL10 install, which is #84's second bug.
+_ABSENT_FROM_SOME_ALMA = ("fips-mode-setup", "fips-finish-install")
+
+_SHELL_WORDS = frozenset(
+    "[ [[ echo exit test true false if then else elif fi for do done while set printf".split()
+)
+# Single-quoted spans are blanked first so the prose inside a diagnostic cannot
+# look like a command; what is left splits on shell separators, and the first
+# bare word of each fragment is the command position.
+_QUOTED = re.compile(r"'[^']*'")
+_SEPARATOR = re.compile(r"\$\(|[;&|{}()]|\bthen\b|\bdo\b|\belse\b")
+_ENV_PREFIX = re.compile(r"^\w+=\S*\s+")
+_BARE_WORD = re.compile(r"[A-Za-z_][\w.+-]*$")
+
+
+def _external_commands(body: str) -> set[str]:
+    found: set[str] = set()
+    for line in _code_lines(body):
+        for fragment in _SEPARATOR.split(_QUOTED.sub("''", line)):
+            fragment = _ENV_PREFIX.sub("", fragment.strip())
+            word = fragment.split(maxsplit=1)[0] if fragment else ""
+            if _BARE_WORD.match(word):
+                found.add(word)
+    return found - _SHELL_WORDS
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+@pytest.mark.parametrize("policy", ["STIG", "MODERN", "FUTURE"])
+def test_emits_no_command_a_target_distro_lacks(minimal_cfg, distro, policy):
+    """#84: the block must only call commands all three alma targets ship.
+
+    A command the extractor cannot see would slip through, which is what the
+    next test guards; any new *visible* one has to be verified against the
+    three BaseOS filelists and added to the set above deliberately.
+    """
+    code = "\n".join(_code_lines(_post(minimal_cfg, distro, policy)))
+    assert _external_commands(code) <= _COMMANDS_ON_EVERY_ALMA
+    for absent in _ABSENT_FROM_SOME_ALMA:
+        assert absent not in code
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_the_command_extractor_sees_the_commands_that_are_there(minimal_cfg, distro):
+    """Guards the test above: a silently blind extractor would assert nothing."""
+    found = _external_commands(_post(minimal_cfg, distro, "STIG"))
+    assert found == _COMMANDS_ON_EVERY_ALMA
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
@@ -207,7 +310,7 @@ def test_post_fips_block_matches_the_bootloader_predicate(minimal_cfg, distro, p
     base = minimal_cfg.model_dump(exclude={"meta", "install"})
     cfg = HostConfig.model_validate({**base, "distro": distro, "crypto": {"policy": policy}})
     rule = next(r for r in load_rules(distro) if r.id == "crypto_policy")
-    assert ("fips-mode-setup --enable" in rule.emit_post(cfg)) is cfg.kernel_fips
+    assert ("/etc/dracut.conf.d/40-fips.conf" in rule.emit_post(cfg)) is cfg.kernel_fips
 
 
 @pytest.mark.parametrize("distro", _ALMA)

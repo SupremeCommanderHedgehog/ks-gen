@@ -69,7 +69,7 @@ assumed:
 |---|---|
 | What does `crypto.policy: STIG` mean? | Kernel FIPS on alma8/9/10. No opt-out. |
 | `overrides.fips_mode`? | Becomes derived; the field survives only as a checked assertion. |
-| Mechanism? | `fips-mode-setup --enable` in `%post`, not an installer boot arg. |
+| Mechanism? | `%post`, not an installer boot arg. (Originally `fips-mode-setup --enable`; superseded 2026-08-14 — see "`%post` mechanism, as shipped".) |
 | Ubuntu? | In scope — declared as an exception, since it structurally cannot pass. |
 | Merge gate? | AL9 + AL10 STIG install-regression runs. |
 
@@ -111,6 +111,16 @@ Rejected alternatives, and why:
 
 ### `%post` mechanism
 
+> **Superseded 2026-08-14.** The design below called `fips-mode-setup
+> --enable`. A real AL10 STIG install aborted in `%post` with
+> `fips-mode-setup: command not found` — **AlmaLinux 10 ships no such
+> command anywhere.** `crypto-policies-scripts` on AL10 provides only
+> `/usr/bin/update-crypto-policies`; AL8 and AL9 provide `fips-mode-setup`
+> and `fips-finish-install` as well. The outcome guard did its job and
+> refused to ship a host falsely claiming FIPS. The replacement, described
+> after the original, does natively what those two scripts do, uniformly on
+> all three alma distros.
+
 `_emit_post` in `alma9/crypto_policy.py` (shared by the alma8 and alma10
 siblings) gains a STIG-only block, in this order:
 
@@ -132,6 +142,47 @@ update-crypto-policies --set FIPS:STIG    # existing; MUST come after
   aborts the install after echoing a ks-gen diagnostic. A failed install is
   recoverable; a host that falsely claims FIPS is the defect being fixed.
 
+#### `%post` mechanism, as shipped
+
+One mechanism on AL8, AL9 and AL10 — not a per-distro branch. Every step is
+chroot-safe and uses only commands all three ship, which is the property the
+first attempt lacked:
+
+```sh
+echo '# FIPS module installation complete' > /etc/system-fips
+echo 'add_dracutmodules+=" fips "' > /etc/dracut.conf.d/40-fips.conf
+dracut -f --regenerate-all
+grubby --update-kernel=ALL --args="fips=1 boot=UUID=$ks_boot_uuid"
+update-crypto-policies --set FIPS:STIG    # existing; still MUST come after
+```
+
+These are exactly the steps `fips-finish-install --complete` and
+`fips-mode-setup --enable` take on AL9, read out of
+`crypto-policies-scripts-20260224`.
+
+- **`/etc/system-fips` is required, and no package ships it.** All three
+  dracut versions' `01fips/module-setup.sh` calls `inst_simple
+  /etc/system-fips`, so without the file the module's install is incomplete.
+  `fips-finish-install` creates it; so does ks-gen now.
+- **`add_dracutmodules+=" fips "` and nothing else.** AL10 has a second
+  module, `01fips-crypto-policies`, whose own `check()` enables it whenever
+  `/usr/share/crypto-policies/default-fips-config` is present (it is, from
+  `crypto-policies`) and whose `depends()` is `fips` — so it comes in without
+  being named. AL8's dracut has no such module, so naming it there would fail.
+  The conservative single directive is correct on all three.
+- **`boot=UUID=` is looked up in `/etc/fstab` first.** In anaconda's chroot the
+  live mount table keys `/boot` as `/mnt/sysimage/boot`, so `findmnt
+  --mountpoint /boot` alone can come back empty. `fips-mode-setup` has the same
+  `--fstab`-then-live fallback for the same reason. An unresolvable UUID aborts:
+  `fips=1` without `boot=` leaves dracut unable to find `/boot/.vmlinuz-*.hmac`,
+  and the host is unrecoverable with root and admin both `passwd -l`'d.
+- **Commands used:** `dracut` (dracut), `grubby` (grubby), `findmnt`
+  (util-linux on AL8, util-linux-core on AL9/AL10), `mkdir` (coreutils) —
+  each verified present in all three BaseOS filelists.
+- **The outcome, not the exit code, is still what is asserted.** The block ends
+  by re-reading `grubby --info=ALL` and aborting with a `ks-gen:` diagnostic if
+  `fips=1` or a non-empty `boot=UUID=` is missing.
+
 **Packages.** None. This design assumed AL8 needed `dracut-fips`; the
 verification step it mandated refuted that before any code was written.
 AlmaLinux 8's `dracut` ships `/usr/lib/dracut/modules.d/01fips/` itself and
@@ -145,7 +196,7 @@ distro.
 and `exception_entry` already returns `None`. Both stay, and for the first time
 are true — the rules pass rather than failing unexplained.
 
-AL9's `enable_dracut_fips_module` should pass once `fips-mode-setup` writes
+AL9's `enable_dracut_fips_module` should pass once `%post` writes
 `/etc/dracut.conf.d/40-fips.conf`. This is the one claim the AL9 regression run
 must confirm; if it does not hold, that rule gets declared as an exception
 rather than left failing.

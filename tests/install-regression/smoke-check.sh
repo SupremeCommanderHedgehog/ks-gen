@@ -134,7 +134,7 @@ case "${EXPECTED_CRYPTO_POLICY:-}" in
     ok "/proc/sys/crypto/fips_enabled is 1"
 
     [[ -e /etc/dracut.conf.d/40-fips.conf ]] \
-      || fail "/etc/dracut.conf.d/40-fips.conf missing — fips-mode-setup did not run (#84)"
+      || fail "/etc/dracut.conf.d/40-fips.conf missing — %post did not enable the dracut FIPS module (#84)"
     ok "/etc/dracut.conf.d/40-fips.conf present"
 
     # Live re-scan, not the ARF: the ARF is written pre-reboot, when
