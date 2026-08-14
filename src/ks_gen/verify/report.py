@@ -5,6 +5,7 @@ from collections import Counter
 
 from ks_gen.verify.fleet import FleetReport, HostOutcome
 from ks_gen.verify.reconcile import VerifyReport
+from ks_gen.verify.ssg_version import render_ssg_version_section
 from ks_gen.verify.suggest import Suggestion, render_yaml
 from ks_gen.verify.tailoring_drift import render_drift_section
 
@@ -28,7 +29,9 @@ def render_table(report: VerifyReport, *, suggestions: list[Suggestion] | None =
     didn't ask for suggestions" and that section is omitted.
 
     When `report.tailoring_drift` is populated and non-empty, appends a
-    drift section between the table and any suggestions block.
+    drift section between the table and any suggestions block. An SSG
+    content-version section precedes it whenever the host's content is not
+    the one ks-gen was validated against (or could not be determined).
     """
     lines: list[str] = []
     lines.append(f"verify host={report.host} user={report.user} at={report.timestamp_utc}")
@@ -79,6 +82,11 @@ def render_table(report: VerifyReport, *, suggestions: list[Suggestion] | None =
             base + f"  NOTE: {n} {plural} in baseline not present in current ARF "
             "— baseline may be stale (SSG upgraded?)\n"
         )
+
+    if report.ssg_version is not None:
+        ssg_section = render_ssg_version_section(report.ssg_version)
+        if ssg_section:
+            base = base + "\n" + ssg_section
 
     if report.tailoring_drift is not None:
         drift_section = render_drift_section(report.tailoring_drift)
@@ -135,6 +143,18 @@ def _report_payload(report: VerifyReport) -> dict[str, object]:
                 }
                 for c in drift.changed
             ],
+        }
+    ssg = report.ssg_version
+    if ssg is not None:
+        # Emitted even on a match — a status field is data, not noise, and a
+        # consumer charting fleet content versions needs the matching hosts too.
+        payload["ssg_version"] = {
+            "distro": ssg.distro,
+            "package": ssg.package,
+            "expected": ssg.expected,
+            "installed": ssg.installed,
+            "status": ssg.status,
+            "detail": ssg.detail,
         }
     baseline = report.baseline
     if baseline is not None:

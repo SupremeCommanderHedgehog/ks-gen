@@ -5,6 +5,7 @@ from typing import Literal
 
 from ks_gen.verify.arf import RuleResult
 from ks_gen.verify.baseline import BaselineReport
+from ks_gen.verify.ssg_version import SsgVersionReport
 from ks_gen.verify.tailoring_drift import TailoringDriftReport
 
 Category = Literal["clean", "expected_fail", "new_fail", "regression", "incomplete"]
@@ -51,6 +52,8 @@ class VerifyReport:
     install_baseline_available: bool
     tailoring_drift: TailoringDriftReport | None = None
     baseline: BaselineReport | None = None
+    # Explanation, not a verdict: never consulted by is_clean or any exit code.
+    ssg_version: SsgVersionReport | None = None
 
     @property
     def is_clean(self) -> bool:

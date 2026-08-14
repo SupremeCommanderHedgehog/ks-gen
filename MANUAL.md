@@ -1454,6 +1454,42 @@ top-level `tailoring_drift` key. The key is omitted (not present) when
 the flag isn't set, so consumers can use `key in payload` to detect
 whether the check ran.
 
+#### SSG content-version reporting
+
+Every `verify` run asks the host which SCAP content it has
+(`rpm -q scap-security-guide`, or `dpkg-query` for `ssg-debderived` on
+Ubuntu) and compares it against the release ks-gen's rule decisions were
+built from — the table in `docs/audit-story/SSG-VERSIONS.md`. No flag, no
+`%post` change: the query works on hosts deployed long before this feature
+existed.
+
+A match prints nothing. A difference prints:
+
+````
+SSG content drift: this alma8 host runs scap-security-guide 0.1.74-1.el8.alma.1; ks-gen expects 0.1.81-1.el8_10.alma.1 (host is older).
+  Older is the dangerous direction: ks-gen may be disabling rules this version still selects, or naming rules it does not ship.
+  Reported only — this does not affect the exit code.
+````
+
+**What counts as a match.** The upstream release (`0.1.81`), not the whole
+downstream string: `0.1.81-2.el8_10.alma.2` is a rebuild of the same rule
+content and is not worth reporting. Older content is called out more
+strongly than newer — ks-gen may be disabling rules an older datastream
+still selects, which is how #90 broke every AlmaLinux 8 STIG install.
+
+**This never changes the exit code.** It explains failures; it isn't one.
+A host installed six months ago legitimately ships newer content.
+
+**When the query fails** — package manager missing, package absent, SSH
+hiccup — verify says so explicitly and carries on. An undetermined version
+is never reported as a mismatch.
+
+**JSON output.** `verify --format json` carries a top-level `ssg_version`
+object (`distro`, `package`, `expected`, `installed`, `status`, `detail`)
+whenever the check ran, including on a match. `status` is one of `match`,
+`older`, `newer`, `differs`, `unknown`; `installed` is `null` when the
+status is `unknown`.
+
 #### Capturing and using a workstation baseline
 
 `ks-gen verify --capture-baseline <path>` runs oscap on the host as

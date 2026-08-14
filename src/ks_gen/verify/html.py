@@ -138,6 +138,28 @@ def _baseline_section(report: VerifyReport) -> str:
     return "\n".join(parts)
 
 
+def _ssg_version_section(report: VerifyReport) -> str:
+    """Note when the host's SSG content isn't the one ks-gen was validated
+    against. Same text as the CLI section, minus the exit-code disclaimer —
+    nothing in this document implies a verdict."""
+    s = report.ssg_version
+    if s is None or not s.is_reportable:
+        return ""
+    if s.status == "unknown":
+        reason = f" ({_esc(s.detail)})" if s.detail else ""
+        body = (
+            f"could not determine the installed {_esc(s.package)} on this "
+            f"{_esc(s.distro)} host{reason} — ks-gen expects {_esc(s.expected)}"
+        )
+    else:
+        body = (
+            f"this {_esc(s.distro)} host runs {_esc(s.package)} "
+            f"{_esc(s.installed or '')}; ks-gen expects {_esc(s.expected)} "
+            f"({_esc(s.status)})"
+        )
+    return f'<p class="note">SSG content: {body}</p>'
+
+
 def _drift_section(report: VerifyReport) -> str:
     d = report.tailoring_drift
     # `d is None` also narrows d for the type-checker; has_tailoring_drift is
@@ -179,7 +201,7 @@ def _report_body(report: VerifyReport) -> str:
 
     Deliberately omits the host heading so single-host (`<h1>`) and fleet
     (`<h2>`) callers can supply their own. Optional sections (baseline,
-    install note, drift) are appended after the rows table.
+    install note, SSG content version, drift) are appended after the rows table.
     """
     counts = _summary(report)
     summary_txt = " ".join(f"{k}={v}" for k, v in counts.items())
@@ -189,12 +211,13 @@ def _report_body(report: VerifyReport) -> str:
         _verdict_line(css_class, label, summary_txt),
     ]
     # Section order mirrors the text renderer (baseline, install-note, table,
-    # drift). The orphan note is grouped inside _baseline_section for cohesion,
+    # ssg version, drift). The orphan note is grouped inside _baseline_section,
     # which places it before the table rather than after it as the text does.
     for section in (
         _baseline_section(report),
         _install_note_section(report),
         _rows_table(report.rows),
+        _ssg_version_section(report),
         _drift_section(report),
     ):
         if section:

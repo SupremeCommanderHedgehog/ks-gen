@@ -38,6 +38,7 @@ def _report(rows: tuple[VerifyRow, ...], **kw: object) -> VerifyReport:
         install_baseline_available=bool(kw.get("install_baseline_available", True)),
         tailoring_drift=kw.get("tailoring_drift"),  # type: ignore[arg-type]
         baseline=kw.get("baseline"),  # type: ignore[arg-type]
+        ssg_version=kw.get("ssg_version"),  # type: ignore[arg-type]
     )
 
 
@@ -143,6 +144,27 @@ def test_no_drift_section_when_drift_report_empty() -> None:
     )
     doc = render_html(_report((CLEAN_ROW,), tailoring_drift=empty))
     assert "Tailoring drift" not in doc
+
+
+def test_ssg_content_note_renders_on_drift_and_stays_out_of_the_verdict() -> None:
+    from ks_gen.verify.ssg_version import build_ssg_version_report
+
+    ssg = build_ssg_version_report(distro="alma8", installed="0.1.74-1.el8.alma.1")
+    doc = render_html(_report((CLEAN_ROW,), ssg_version=ssg))
+    assert "SSG content" in doc
+    assert "0.1.74-1.el8.alma.1" in doc
+    assert "0.1.81-1.el8_10.alma.1" in doc
+    # Content drift is an explanation, not a failure: the badge stays CLEAN.
+    assert ">CLEAN<" in doc
+    assert_well_formed(doc)
+
+
+def test_no_ssg_content_note_when_versions_match() -> None:
+    from ks_gen.verify.ssg_version import EXPECTED_SSG_VERSIONS, build_ssg_version_report
+
+    ssg = build_ssg_version_report(distro="alma8", installed=EXPECTED_SSG_VERSIONS["alma8"].version)
+    doc = render_html(_report((CLEAN_ROW,), ssg_version=ssg))
+    assert "SSG content" not in doc
 
 
 def test_suggestions_block_present_only_when_passed() -> None:

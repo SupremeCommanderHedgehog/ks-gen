@@ -16,12 +16,17 @@ specific downstream `scap-security-guide` / `ssg-debderived` package versions.
 > stop matching shipping content; re-extract per the recipe below when it
 > does.
 
-| Distro | Package | Version | Source URL |
-|---|---|---|---|
-| AlmaLinux 8.10 | `scap-security-guide` | `0.1.81-1.el8_10.alma.1` | https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el8_10.alma.1.noarch.rpm |
-| AlmaLinux 9 (latest) | `scap-security-guide` | `0.1.81-1.el9_8.alma.1` | https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el9_8.alma.1.noarch.rpm |
-| AlmaLinux 10 (latest) | `scap-security-guide` | `0.1.81-1.el10_2.alma.1` | https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el10_2.alma.1.noarch.rpm |
-| Ubuntu 24.04 (noble) | `ssg-debderived` | `0.1.80-1` | http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.80-1_all.deb |
+| Distro | distro key | Package | Version | Source URL |
+|---|---|---|---|---|
+| AlmaLinux 8.10 | `alma8` | `scap-security-guide` | `0.1.81-1.el8_10.alma.1` | https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el8_10.alma.1.noarch.rpm |
+| AlmaLinux 9 (latest) | `alma9` | `scap-security-guide` | `0.1.81-1.el9_8.alma.1` | https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el9_8.alma.1.noarch.rpm |
+| AlmaLinux 10 (latest) | `alma10` | `scap-security-guide` | `0.1.81-1.el10_2.alma.1` | https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el10_2.alma.1.noarch.rpm |
+| Ubuntu 24.04 (noble) | `ubuntu2404` | `ssg-debderived` | `0.1.80-1` | http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.80-1_all.deb |
+
+`ks-gen verify` reads these same pins from `src/ks_gen/verify/ssg_version.py`
+and tells the operator when the host it is checking runs different content.
+The two copies are kept honest by `tests/test_verify_ssg_version.py`, which
+fails if this table and that module disagree — so update **both** on a bump.
 
 ## Re-extraction recipe (reproducibility for SSG version bumps)
 
@@ -50,7 +55,8 @@ python3 scripts/audit_story/extract_ssg_rule_ids.py \
   --out-dir docs/audit-story/
 ```
 
-Then update the version table above from the printed `package:` lines.
+Then update the version table above from the printed `package:` lines, and the
+matching pins in `src/ks_gen/verify/ssg_version.py`.
 
 Re-running on a bump rewrites `*-rule-ids.txt`, `*-stig-selected.txt`, and
 `cross-distro-rule-id-diff.md` in-place — `git diff` shows what SSG changed.

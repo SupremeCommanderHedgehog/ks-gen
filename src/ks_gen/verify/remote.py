@@ -5,7 +5,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ks_gen.config import HostConfig
-from ks_gen.verify.errors import ArfMissingError, OscapInvocationError
+from ks_gen.verify.errors import ArfMissingError, OscapInvocationError, VerifyError
+from ks_gen.verify.ssg_version import (
+    SsgVersionReport,
+    build_ssg_version_report,
+    parse_version_output,
+    ssg_version_command,
+)
 from ks_gen.verify.ssh import _first_stderr_line
 
 if TYPE_CHECKING:
@@ -20,6 +26,7 @@ REMOTE_TAILORING = "/root/tailoring.xml"
 class CollectedArfs:
     current_text: str
     install_text: str | None
+    ssg_version: SsgVersionReport | None = None
 
 
 def _oscap_command(cfg: HostConfig) -> str:
@@ -79,13 +86,56 @@ def collect_arfs(
                 if local_install.exists() and local_install.stat().st_size > 0:
                     install_text = local_install.read_text(encoding="utf-8")
 
-        return CollectedArfs(current_text=current_text, install_text=install_text)
+        return CollectedArfs(
+            current_text=current_text,
+            install_text=install_text,
+            ssg_version=collect_ssg_version(distro=cfg.distro, transport=transport),
+        )
     finally:
         try:
             transport.run(f"rm -f {REMOTE_CURRENT_ARF}")
         except Exception:
             # Best-effort cleanup; never mask the primary error.
             pass
+
+
+def collect_ssg_version(
+    *,
+    distro: str,
+    transport: Transport,
+) -> SsgVersionReport | None:
+    """Ask the host which SSG package it has and compare against ks-gen's pin.
+
+    Never raises: a failed query yields an `unknown` report, so it can't take
+    down a verify run that has already produced results. Returns None when
+    `distro` has no pinned expectation.
+
+    Assumes the caller already ran `transport.preflight()`.
+    """
+    cmd = ssg_version_command(distro)
+    if cmd is None:
+        return None
+
+    try:
+        result = transport.run(cmd)
+    except (VerifyError, OSError) as e:
+        return build_ssg_version_report(distro=distro, installed=None, error=str(e))
+
+    if result.exit_code != 0:
+        detail = _first_stderr_line(result.stderr) or _first_stderr_line(result.stdout)
+        reason = f"query exited {result.exit_code}"
+        return build_ssg_version_report(
+            distro=distro,
+            installed=None,
+            error=f"{reason}: {detail}" if detail else reason,
+        )
+
+    installed = parse_version_output(result.stdout)
+    if installed is None:
+        return build_ssg_version_report(
+            distro=distro, installed=None, error="query returned no version"
+        )
+    return build_ssg_version_report(distro=distro, installed=installed)
 
 
 def collect_deployed_tailoring(

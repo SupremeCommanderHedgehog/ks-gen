@@ -61,6 +61,38 @@ def test_run_verify_end_to_end_drives_real_arf_through_reconcile(tmp_path: Path)
     assert report.is_clean is False
 
 
+def test_run_verify_attaches_ssg_version_from_collection(tmp_path: Path) -> None:
+    from ks_gen.verify.ssg_version import build_ssg_version_report
+
+    current = (FIXTURES / "arf-clean.xml").read_text(encoding="utf-8")
+    ssg = build_ssg_version_report(distro="alma9", installed="0.1.74-1.el9.alma.1")
+
+    with patch(
+        "ks_gen.verify.collect_arfs",
+        return_value=CollectedArfs(current_text=current, install_text=None, ssg_version=ssg),
+    ):
+        report = run_verify(
+            cfg=_cfg(), host="h", user="ops", workdir=tmp_path, no_drift=True, timeout=600
+        )
+
+    assert report.ssg_version is not None
+    assert report.ssg_version.status == "older"
+    # Content drift is an explanation, not a verdict.
+    assert report.is_clean is True
+
+
+def test_run_verify_leaves_ssg_version_none_when_uncollected(tmp_path: Path) -> None:
+    current = (FIXTURES / "arf-clean.xml").read_text(encoding="utf-8")
+    with patch(
+        "ks_gen.verify.collect_arfs",
+        return_value=CollectedArfs(current_text=current, install_text=None),
+    ):
+        report = run_verify(
+            cfg=_cfg(), host="h", user="ops", workdir=tmp_path, no_drift=True, timeout=600
+        )
+    assert report.ssg_version is None
+
+
 def test_run_verify_install_text_none_degrades_gracefully(tmp_path: Path) -> None:
     current = (FIXTURES / "arf-clean.xml").read_text(encoding="utf-8")
     with patch(
