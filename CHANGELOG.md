@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.35.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.35.0...v0.35.1) (2026-08-14)
+
+
+### Bug Fixes
+
+* **crypto:** disable the FIPS-only rules a MODERN/FUTURE host cannot pass ([#81](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/81)) ([cbadf57](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/cbadf57021e25a091637c001351521e10158a562))
+
 ## [0.35.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.34.3...v0.35.0) (2026-08-13)
 
 
