@@ -495,7 +495,21 @@ git -c user.email="github.v5f9w@bitbucket.onl" -c user.signingkey=BE707B220C9954
 
 ---
 
-## Task 5: `dracut-fips` package on AlmaLinux 8
+## Task 5: `dracut-fips` package on AlmaLinux 8 — NOT APPLICABLE, SKIPPED
+
+**Outcome (2026-08-13): the premise was false; Step 1's gate caught it and no
+code was written.** AlmaLinux 8's `dracut` package has absorbed the FIPS module
+— it ships `/usr/lib/dracut/modules.d/01fips/` directly and carries only a
+virtual `Provides: dracut-fips` for backward compatibility. No installable
+package by that name exists in BaseOS, AppStream, PowerTools/CRB, extras,
+HighAvailability, ResilientStorage or devel. Verified twice, independently,
+against the live repodata.
+
+So AL8 needs no `%packages` change: the module is present unconditionally,
+`emit_packages` stays `[]`, and listing `dracut-fips` would have been a no-op
+resolved by the virtual provide rather than the fix it looked like.
+
+The original (now-refuted) reasoning is kept below for the record.
 
 RHEL 9 folded the dracut FIPS module into `dracut` itself; RHEL 8 keeps it in a
 separate `dracut-fips` package that `fips-mode-setup --enable` needs.
