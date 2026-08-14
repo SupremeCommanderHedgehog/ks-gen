@@ -112,7 +112,51 @@ ok "configure_crypto_policy passes a live re-scan under policy ${EXPECTED_CRYPTO
 # else here would notice. The ARF check is the converse: the FIPS-only rules
 # must read notselected, proving the tailoring reached them.
 case "${EXPECTED_CRYPTO_POLICY:-}" in
-  FIPS* | "") ;;
+  "") ;;
+  FIPS*)
+    # --- #84: a STIG host must really be in FIPS mode, not merely running the
+    # FIPS crypto policy. Everything here needs the post-install reboot, so it
+    # cannot be read from the ARF (written mid-install, pre-reboot).
+    grep -qw 'fips=1' /proc/cmdline \
+      || fail "kernel command line has no fips=1 on a ${EXPECTED_CRYPTO_POLICY} host (#84): $(cat /proc/cmdline)"
+    ok "kernel booted with fips=1"
+
+    # ks-gen always creates a separate /boot, so dracut needs boot= to find it.
+    # -E not -w: `boot=UUID=[^ ]*` matches an EMPTY uuid, so -w would pass a
+    # bare `boot=UUID=`. `[^ ]+` between word boundaries is the real assertion.
+    grep -qE '(^| )boot=UUID=[^ ]+( |$)' /proc/cmdline \
+      || fail "kernel command line has fips=1 but no boot=UUID= — separate /boot will not be found (#84)"
+    ok "kernel command line carries boot=UUID="
+
+    fips_enabled=$(cat /proc/sys/crypto/fips_enabled 2>/dev/null || echo 0)
+    [[ "$fips_enabled" == "1" ]] \
+      || fail "/proc/sys/crypto/fips_enabled is ${fips_enabled} on a ${EXPECTED_CRYPTO_POLICY} host (#84)"
+    ok "/proc/sys/crypto/fips_enabled is 1"
+
+    [[ -e /etc/dracut.conf.d/40-fips.conf ]] \
+      || fail "/etc/dracut.conf.d/40-fips.conf missing — fips-mode-setup did not run (#84)"
+    ok "/etc/dracut.conf.d/40-fips.conf present"
+
+    # Live re-scan, not the ARF: the ARF is written pre-reboot, when
+    # fips_enabled is still 0 and every one of these legitimately fails.
+    # $ds / /root/tailoring.xml were discovered and checked above.
+    # Absent is legitimate — each distro's stig profile selects a different
+    # subset, and a rule its datastream does not ship has no result.
+    for rid in enable_fips_mode sysctl_crypto_fips_enabled fips_crypto_subpolicy \
+               system_booted_in_fips_mode enable_dracut_fips_module; do
+      # `|| true`: oscap exits 2 on any failing rule; pipefail would abort here.
+      live=$(oscap xccdf eval --profile xccdf_ks-gen_profile_tailored \
+        --tailoring-file /root/tailoring.xml \
+        --rule "xccdf_org.ssgproject.content_rule_${rid}" "$ds" 2>/dev/null \
+        | awk '/^Result/{print $2; exit}' || true)
+      case "$live" in
+        pass | "" | notselected | notapplicable | notchecked)
+          ok "${rid}: ${live:-absent from this datastream}" ;;
+        *)
+          fail "${rid} is '${live}' on a ${EXPECTED_CRYPTO_POLICY} host — the kernel is not in FIPS mode (#84)" ;;
+      esac
+    done
+    ;;
   *)
     if grep -qw 'fips=1' /proc/cmdline; then
       fail "kernel booted with fips=1 on a ${EXPECTED_CRYPTO_POLICY} host — oscap remediated it into FIPS (#67)"
