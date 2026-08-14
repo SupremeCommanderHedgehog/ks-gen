@@ -4,12 +4,14 @@ from pathlib import Path
 
 import pytest
 
+from ks_gen.config import HostConfig
 from ks_gen.iso.bootloader import (
     BootloaderRewriteError,
     _inst_repo_arg,
     rewrite_grub,
     rewrite_isolinux,
 )
+from ks_gen.writer import build_bundle
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "alma9-bootloader"
 FIXTURE_DIR_AL8 = Path(__file__).parent / "fixtures" / "alma8-bootloader"
@@ -206,3 +208,33 @@ def test_rewrite_grub_bios_network_install_omits_repo():
     assert "inst.stage2=hd:LABEL=DEV0" in result
     assert "inst.ks=hd:LABEL=DEV0:/ks.cfg" in result
     assert "inst.repo=" not in result
+
+
+# ---------------- #84 — STIG implies kernel_fips on the rendered bootloader line ----------------
+
+
+def test_stig_puts_fips_1_on_the_bootloader_without_an_explicit_override(minimal_cfg):
+    """#84: STIG alone implies fips=1; no overrides.fips_mode needed."""
+    base = minimal_cfg.model_dump(exclude={"meta", "install"})
+    cfg = HostConfig.model_validate({**base, "crypto": {"policy": "STIG"}})
+    line = next(ln for ln in build_bundle(cfg).ks_cfg.splitlines() if ln.startswith("bootloader"))
+    assert "fips=1" in line
+
+
+@pytest.mark.parametrize("policy", ["MODERN", "FUTURE"])
+def test_non_stig_bootloader_has_no_fips_arg(minimal_cfg, policy):
+    base = minimal_cfg.model_dump(exclude={"meta", "install"})
+    cfg = HostConfig.model_validate({**base, "crypto": {"policy": policy}})
+    line = next(ln for ln in build_bundle(cfg).ks_cfg.splitlines() if ln.startswith("bootloader"))
+    assert "fips=1" not in line
+
+
+def test_stig_with_bootloader_password_still_gets_fips_1(minimal_cfg):
+    """Both bootloader lines in the template (with/without --password) must
+    honor kernel_fips — a fix applied to only one would ship undetected."""
+    base = minimal_cfg.model_dump(exclude={"meta", "install"})
+    base["disk"]["bootloader_password"] = "GRUB2Passw0rd!"
+    cfg = HostConfig.model_validate({**base, "crypto": {"policy": "STIG"}})
+    line = next(ln for ln in build_bundle(cfg).ks_cfg.splitlines() if ln.startswith("bootloader"))
+    assert "fips=1" in line
+    assert "--password=" in line

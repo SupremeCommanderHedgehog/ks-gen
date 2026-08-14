@@ -28,9 +28,9 @@ ignoredisk --only-use={{ _wipe_targets | join(',') }}
 {% endif -%}
 {% set BOOT_DRIVE = (' --boot-drive=' ~ cfg.disk.target) if cfg.disk.target else '' -%}
 {% if cfg.disk.bootloader_password -%}
-bootloader --location=mbr{{ BOOT_DRIVE }} --append="audit=1 audit_backlog_limit=8192{% if cfg.overrides.fips_mode %} fips=1{% endif %}" --password="{{ cfg.disk.bootloader_password }}"
+bootloader --location=mbr{{ BOOT_DRIVE }} --append="audit=1 audit_backlog_limit=8192{% if cfg.kernel_fips %} fips=1{% endif %}" --password="{{ cfg.disk.bootloader_password }}"
 {% else -%}
-bootloader --location=mbr{{ BOOT_DRIVE }} --append="audit=1 audit_backlog_limit=8192{% if cfg.overrides.fips_mode %} fips=1{% endif %}"
+bootloader --location=mbr{{ BOOT_DRIVE }} --append="audit=1 audit_backlog_limit=8192{% if cfg.kernel_fips %} fips=1{% endif %}"
 {% endif %}
 
 {% if cfg.disk.wipe -%}
