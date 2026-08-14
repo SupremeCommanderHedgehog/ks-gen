@@ -70,6 +70,41 @@
   }
   '''
 # ---
+# name: test_render_json_ssg_version_on_drift
+  '''
+  {
+    "host": "h1",
+    "user": "ops",
+    "timestamp_utc": "2026-06-09T12:00:00Z",
+    "install_baseline_available": true,
+    "is_clean": false,
+    "summary": {
+      "clean": 0,
+      "expected_fail": 0,
+      "new_fail": 0,
+      "regression": 1,
+      "incomplete": 0
+    },
+    "rows": [
+      {
+        "rule_id": "rule_b",
+        "current": "fail",
+        "install": "pass",
+        "expected": false,
+        "category": "regression"
+      }
+    ],
+    "ssg_version": {
+      "distro": "alma8",
+      "package": "scap-security-guide",
+      "expected": "0.1.81-1.el8_10.alma.1",
+      "installed": "0.1.74-1.el8.alma.1",
+      "status": "older",
+      "detail": null
+    }
+  }
+  '''
+# ---
 # name: test_render_table_appends_drift_section_when_present
   '''
   verify host=h1 user=ops at=2026-06-09T12:00:00Z
@@ -85,6 +120,20 @@
     - select rule_y
     ~ rule_z: 5 → 24
     (profile changed: profile_b → profile_a)
+  
+  '''
+# ---
+# name: test_render_table_appends_ssg_drift_section
+  '''
+  verify host=h1 user=ops at=2026-06-09T12:00:00Z
+    summary: clean=0 expected_fail=0 new_fail=0 regression=1 incomplete=0 — FAILURES
+  
+    CATEGORY    CURRENT  INSTALL  EXP  RULE
+    regression  fail     pass     no   rule_b
+  
+  SSG content drift: this alma8 host runs scap-security-guide 0.1.74-1.el8.alma.1; ks-gen expects 0.1.81-1.el8_10.alma.1 (host is older).
+    Older is the dangerous direction: ks-gen may be disabling rules this version still selects, or naming rules it does not ship.
+    Reported only — this does not affect the exit code.
   
   '''
 # ---
@@ -138,6 +187,20 @@
     regression     fail     pass     no   xccdf_org.ssgproject.content_rule_c
     expected_fail  fail     pass     yes  xccdf_org.ssgproject.content_rule_d
     incomplete     error    pass     no   xccdf_org.ssgproject.content_rule_e
+  
+  '''
+# ---
+# name: test_render_table_ssg_unknown_section_reads_as_a_skipped_check
+  '''
+  verify host=h1 user=ops at=2026-06-09T12:00:00Z
+    summary: clean=0 expected_fail=0 new_fail=0 regression=1 incomplete=0 — FAILURES
+  
+    CATEGORY    CURRENT  INSTALL  EXP  RULE
+    regression  fail     pass     no   rule_b
+  
+  SSG content version: could not determine the installed scap-security-guide on this alma8 host (query exited 1: not installed).
+    ks-gen's rule decisions were validated against 0.1.81-1.el8_10.alma.1; the check was skipped.
+    Reported only — this does not affect the exit code.
   
   '''
 # ---

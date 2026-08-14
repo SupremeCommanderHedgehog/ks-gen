@@ -3,9 +3,9 @@
 `container_host` diverges because podman-plugins is not packaged for AL10
 (podman 5.x uses netavark), and a missing name in %packages aborts the install.
 
-`crypto_policy` diverges again as of #67: the AL10 stig profile selects
-`system_booted_in_fips_mode` and does not select `enable_dracut_fips_module`,
-so its FIPS-only disable set is neither alma9's nor alma8's.
+`crypto_policy` diverges as of #67, re-derived for #90: the AL10 stig profile
+selects `enable_fips_mode` and `system_booted_in_fips_mode` on top of every
+FIPS-only rule AL9 selects, so its disable set is neither alma9's nor alma8's.
 
 `banner_text` *was* divergent, because alma9 referenced SSG rule IDs that AL10
 no longer ships. #61 showed the AL9 stig profile never selected those IDs

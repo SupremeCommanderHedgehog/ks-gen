@@ -3,30 +3,27 @@
 ## Totals per distro
 
 - `alma10`: 1061 rules
-- `alma8`: 1630 rules
-- `alma9`: 1530 rules
-- `ubuntu2404`: 639 rules
+- `alma8`: 1699 rules
+- `alma9`: 1532 rules
+- `ubuntu2404`: 642 rules
 
 ## In all 4 distros
 
-- 409 rules shared across `alma10`, `alma8`, `alma9`, `ubuntu2404`
+- 427 rules shared across `alma10`, `alma8`, `alma9`, `ubuntu2404`
 
 ## Pairwise intersections
 
-- `alma10` ∩ `alma8`: 915 rules
-- `alma10` ∩ `alma9`: 991 rules
-- `alma10` ∩ `ubuntu2404`: 444 rules
-- `alma8` ∩ `alma9`: 1435 rules
-- `alma8` ∩ `ubuntu2404`: 458 rules
-- `alma9` ∩ `ubuntu2404`: 472 rules
+- `alma10` ∩ `alma8`: 971 rules
+- `alma10` ∩ `alma9`: 992 rules
+- `alma10` ∩ `ubuntu2404`: 447 rules
+- `alma8` ∩ `alma9`: 1468 rules
+- `alma8` ∩ `ubuntu2404`: 491 rules
+- `alma9` ∩ `ubuntu2404`: 475 rules
 
 ## Distro-only sets
 
-### `alma10` only (42 rules)
+### `alma10` only (27 rules)
 
-- `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_even_deny_root_or_root_unlock_time`
-- `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_unlock_time_with_zero`
-- `xccdf_org.ssgproject.content_rule_audit_rules_continue_loading`
 - `xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_fchmodat2`
 - `xccdf_org.ssgproject.content_rule_audit_rules_file_deletion_events_renameat2`
 - `xccdf_org.ssgproject.content_rule_audit_rules_mac_modification_etc_selinux`
@@ -42,33 +39,22 @@
 - `xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_rmmod`
 - `xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_unix2_chkpwd`
 - `xccdf_org.ssgproject.content_rule_chrony_set_nts`
-- `xccdf_org.ssgproject.content_rule_disable_weak_deps`
 - `xccdf_org.ssgproject.content_rule_ensure_journald_and_rsyslog_not_active_together`
 - `xccdf_org.ssgproject.content_rule_file_groupowner_boot_grub2`
-- `xccdf_org.ssgproject.content_rule_file_groupowner_cron_yearly`
 - `xccdf_org.ssgproject.content_rule_file_owner_boot_grub2`
-- `xccdf_org.ssgproject.content_rule_file_owner_cron_yearly`
 - `xccdf_org.ssgproject.content_rule_file_permissions_boot_grub2`
-- `xccdf_org.ssgproject.content_rule_file_permissions_cron_yearly`
-- `xccdf_org.ssgproject.content_rule_no_files_or_dirs_ungroupowned`
-- `xccdf_org.ssgproject.content_rule_no_files_or_dirs_unowned_by_user`
-- `xccdf_org.ssgproject.content_rule_no_rhost_files`
 - `xccdf_org.ssgproject.content_rule_package_kea_removed`
 - `xccdf_org.ssgproject.content_rule_package_libdnf-plugin-subscription-manager_installed`
 - `xccdf_org.ssgproject.content_rule_package_pcsc-lite-ccid_installed`
 - `xccdf_org.ssgproject.content_rule_package_sequoia-sq_installed`
 - `xccdf_org.ssgproject.content_rule_package_unbound_removed`
-- `xccdf_org.ssgproject.content_rule_package_xorg-x11-server-Xwayland_removed`
 - `xccdf_org.ssgproject.content_rule_secure_boot_enabled`
 - `xccdf_org.ssgproject.content_rule_set_password_hashing_yescrypt_cost_factor_logindefs`
-- `xccdf_org.ssgproject.content_rule_sysctl_net_ipv4_conf_default_forwarding`
-- `xccdf_org.ssgproject.content_rule_sysctl_net_ipv6_conf_default_forwarding`
 - `xccdf_org.ssgproject.content_rule_system_booted_in_fips_mode`
-- `xccdf_org.ssgproject.content_rule_tftp_uses_secure_mode_systemd`
-- `xccdf_org.ssgproject.content_rule_xwayland_disabled`
 
-### `alma8` only (178 rules)
+### `alma8` only (185 rules)
 
+- `xccdf_org.ssgproject.content_rule_accounts_user_interactive_home_directory_on_separate_partition`
 - `xccdf_org.ssgproject.content_rule_accounts_users_netrc_file_permissions`
 - `xccdf_org.ssgproject.content_rule_audit_rules_immutable_login_uids`
 - `xccdf_org.ssgproject.content_rule_avahi_check_ttl`
@@ -95,6 +81,10 @@
 - `xccdf_org.ssgproject.content_rule_dovecot_configure_ssl_key`
 - `xccdf_org.ssgproject.content_rule_dovecot_disable_plaintext_auth`
 - `xccdf_org.ssgproject.content_rule_dovecot_enable_ssl`
+- `xccdf_org.ssgproject.content_rule_enable_gpgcheck_for_all_repositories`
+- `xccdf_org.ssgproject.content_rule_file_groupowner_etc_sysconfig_sshd`
+- `xccdf_org.ssgproject.content_rule_file_owner_etc_sysconfig_sshd`
+- `xccdf_org.ssgproject.content_rule_file_permissions_etc_sysconfig_sshd`
 - `xccdf_org.ssgproject.content_rule_firewalld_sshd_disabled`
 - `xccdf_org.ssgproject.content_rule_ftp_disable_uploads`
 - `xccdf_org.ssgproject.content_rule_ftp_home_partition`
@@ -187,6 +177,7 @@
 - `xccdf_org.ssgproject.content_rule_package_abrt-plugin-rhtsupport_removed`
 - `xccdf_org.ssgproject.content_rule_package_abrt-plugin-sosreport_removed`
 - `xccdf_org.ssgproject.content_rule_package_abrt_removed`
+- `xccdf_org.ssgproject.content_rule_package_authselect_installed`
 - `xccdf_org.ssgproject.content_rule_package_binutils_installed`
 - `xccdf_org.ssgproject.content_rule_package_dnf-plugin-subscription-manager_installed`
 - `xccdf_org.ssgproject.content_rule_package_iptables-services_installed`
@@ -195,6 +186,7 @@
 - `xccdf_org.ssgproject.content_rule_package_libreport-plugin-logger_removed`
 - `xccdf_org.ssgproject.content_rule_package_libreport-plugin-rhtsupport_removed`
 - `xccdf_org.ssgproject.content_rule_package_mailx_installed`
+- `xccdf_org.ssgproject.content_rule_package_pam_installed`
 - `xccdf_org.ssgproject.content_rule_package_pigz_removed`
 - `xccdf_org.ssgproject.content_rule_package_psacct_installed`
 - `xccdf_org.ssgproject.content_rule_package_python3-abrt-addon_removed`
@@ -248,14 +240,9 @@
 - `xccdf_org.ssgproject.content_rule_umask_for_daemons`
 - `xccdf_org.ssgproject.content_rule_use_root_squashing_all_exports`
 
-### `alma9` only (6 rules)
+### `alma9` only (1 rules)
 
-- `xccdf_org.ssgproject.content_rule_audit_rules_etc_cron_d`
-- `xccdf_org.ssgproject.content_rule_audit_rules_var_spool_cron`
-- `xccdf_org.ssgproject.content_rule_ensure_epel_repos_disabled`
-- `xccdf_org.ssgproject.content_rule_fips_custom_stig_sub_policy`
 - `xccdf_org.ssgproject.content_rule_ssh_private_keys_have_passcode`
-- `xccdf_org.ssgproject.content_rule_sysctl_user_max_user_namespaces_no_remediation`
 
 ### `ubuntu2404` only (144 rules)
 

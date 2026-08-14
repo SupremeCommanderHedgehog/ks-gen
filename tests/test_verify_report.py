@@ -240,6 +240,81 @@ def test_render_json_no_tailoring_drift_key_when_field_is_none() -> None:
     assert "tailoring_drift" not in payload
 
 
+# --- ssg content-version rendering tests -------------------------------------
+
+
+def _report_with_ssg(installed: str | None, error: str | None = None) -> VerifyReport:
+    from ks_gen.verify.ssg_version import build_ssg_version_report
+
+    return VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(VerifyRow("rule_b", "fail", "pass", False, "regression"),),
+        install_baseline_available=True,
+        ssg_version=build_ssg_version_report(distro="alma8", installed=installed, error=error),
+    )
+
+
+def test_render_table_appends_ssg_drift_section(snapshot: SnapshotAssertion) -> None:
+    assert render_table(_report_with_ssg("0.1.74-1.el8.alma.1")) == snapshot
+
+
+def test_render_table_ssg_unknown_section_reads_as_a_skipped_check(
+    snapshot: SnapshotAssertion,
+) -> None:
+    out = render_table(_report_with_ssg(None, error="query exited 1: not installed"))
+    assert out == snapshot
+
+
+def test_render_table_quiet_when_ssg_version_matches() -> None:
+    from ks_gen.verify.ssg_version import EXPECTED_SSG_VERSIONS
+
+    out = render_table(_report_with_ssg(EXPECTED_SSG_VERSIONS["alma8"].version))
+    assert "SSG content" not in out
+
+
+def test_render_table_quiet_when_ssg_version_absent() -> None:
+    report = VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+    )
+    assert "SSG content" not in render_table(report)
+
+
+def test_render_json_includes_ssg_version_even_on_a_match() -> None:
+    from ks_gen.verify.ssg_version import EXPECTED_SSG_VERSIONS
+
+    pin = EXPECTED_SSG_VERSIONS["alma8"].version
+    payload = json.loads(render_json(_report_with_ssg(pin)))
+    assert payload["ssg_version"] == {
+        "distro": "alma8",
+        "package": "scap-security-guide",
+        "expected": pin,
+        "installed": pin,
+        "status": "match",
+        "detail": None,
+    }
+
+
+def test_render_json_ssg_version_on_drift(snapshot: SnapshotAssertion) -> None:
+    assert render_json(_report_with_ssg("0.1.74-1.el8.alma.1")) == snapshot
+
+
+def test_render_json_no_ssg_version_key_when_field_is_none() -> None:
+    report = VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(),
+        install_baseline_available=True,
+    )
+    assert "ssg_version" not in json.loads(render_json(report))
+
+
 # --- baseline rendering tests ------------------------------------------------
 
 

@@ -5,15 +5,16 @@ from #121 phase 2's spec: when a rule's SSG mapping differs between alma8
 and alma9, its alma8 file becomes a real implementation. Other ks-gen
 rules stay as re-exports until/unless their SSG mappings diverge similarly.
 
-What diverges (re-derived from the datastreams for #61 and #67):
-  ssg-almalinux8-ds.xml (0.1.74) still selects
-  `sshd_use_approved_kex_ordered_stig`, which ssg-almalinux9-ds.xml (0.1.80)
-  dropped entirely, and it does not select `fips_crypto_subpolicy` at all.
-  Both distros end up disabling 8 rules, but not the same 8.
+What no longer diverges (#90):
+  ssg-almalinux8 moved a long way between the 8.10 DVD's 0.1.72 and the repos'
+  0.1.81 — the stig profile switched `var_system_crypto_policy` from `FIPS` to
+  `FIPS:STIG` and dropped most FIPS-only rules. Taken one release at a time
+  those look like real divergences from AL9, and pinning to either one alone
+  leaves the other kind of install unprotected. Taken as the union over both,
+  AL8's disable set is *identical* to AL9's, so this module re-exports it.
 
-  The earlier alma8 set also carried `sshd_use_approved_ciphers` and
-  `sshd_use_approved_macs`. Both exist in the AL8 datastream but the stig
-  profile selects neither, so disabling them was inert (#61).
+  The crypto target is no longer stated here at all: oscap applies whatever the
+  installed content refines the value to.
 
 What stays shared:
   - emit_post, emit_tailoring, exception_entry: reuse the alma9 helpers —
@@ -34,7 +35,7 @@ from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 # identical on AL8 and AL9. The alma9 rule module exposes them at module
 # level specifically so the siblings can import rather than duplicate.
 from ks_gen.rules.alma9.crypto_policy import (
-    _FIPS_ONLY_COMMON,
+    _TAILORED_WHEN_NOT_STIG,
     _emit_post,
     _emit_tailoring,
     _exception_entry,
@@ -42,17 +43,6 @@ from ks_gen.rules.alma9.crypto_policy import (
 
 if TYPE_CHECKING:
     from ks_gen.config import HostConfig
-
-_PREFIX = "xccdf_org.ssgproject.content_rule_"
-_TAILORED_WHEN_NOT_STIG = [
-    *_FIPS_ONLY_COMMON,
-    # AL8-only — gone from ssg-almalinux9 in 0.1.80, still stig-selected here:
-    f"{_PREFIX}sshd_use_approved_kex_ordered_stig",
-    # AL8's remediation for this one runs `fips-mode-setup --enable`, which
-    # would add fips=1 to the kernel args of a host that opted out (#67).
-    # AL10 does not select it; AL9 selects it without a remediation.
-    f"{_PREFIX}enable_dracut_fips_module",
-]
 
 
 @dataclass(frozen=True)

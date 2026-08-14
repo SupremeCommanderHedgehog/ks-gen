@@ -71,9 +71,14 @@ ok "ks-gen-disabled rule banner_etc_issue is notselected in the ARF"
 # written by the oscap %post, which runs BEFORE ks-gen's rule %post, so it
 # records what oscap remediated to and looks identical whether %post then
 # applies FIPS:STIG or downgrades the host to FIPS.
+# The RHS is deliberately unquoted: under STIG the kickstart carries the glob
+# `FIPS*`, because which FIPS target applies belongs to the SSG content the host
+# ended up with, not to ks-gen (#90). MODERN/FUTURE still carry exact literals,
+# which match themselves.
 if [[ -n "${EXPECTED_CRYPTO_POLICY:-}" ]]; then
   live_policy=$(update-crypto-policies --show 2>/dev/null || cat /etc/crypto-policies/config)
-  [[ "$live_policy" == "$EXPECTED_CRYPTO_POLICY" ]] \
+  # shellcheck disable=SC2053
+  [[ "$live_policy" == $EXPECTED_CRYPTO_POLICY ]] \
     || fail "live crypto policy is '$live_policy', kickstart intended '$EXPECTED_CRYPTO_POLICY' (#66)"
   ok "live crypto policy is $live_policy (as the kickstart intended)"
 fi

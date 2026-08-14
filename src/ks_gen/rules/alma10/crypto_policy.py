@@ -1,12 +1,14 @@
 """alma10 crypto_policy — diverges from alma9 in its disabled set only.
 
 Was a re-export until #67, when the FIPS-only sweep showed the AL10 stig
-profile selects a different tail than AL9: it drops
-`enable_dracut_fips_module` (no dracut FIPS module rule at all in
-ssg-almalinux10 0.1.81) and adds `system_booted_in_fips_mode`.
+profile selects a different set of FIPS-only rules. It adds
+`system_booted_in_fips_mode`, which reads /proc/sys/crypto/fips_enabled, and
+its datastream defines neither `enable_dracut_fips_module` nor
+`fips_custom_stig_sub_policy` — so it composes from `_FIPS_ONLY_COMMON` rather
+than extending AL8/AL9's list, which names both (#90).
 
-What stays shared: emit_post, emit_tailoring, exception_entry and the
-`_FIPS_ONLY_COMMON` head of the disabled set, all from the alma9 module.
+What stays shared: emit_post, emit_tailoring, exception_entry and the common
+FIPS-only set, all from the alma9 module.
 """
 
 from __future__ import annotations
@@ -29,8 +31,6 @@ if TYPE_CHECKING:
 _PREFIX = "xccdf_org.ssgproject.content_rule_"
 _TAILORED_WHEN_NOT_STIG = [
     *_FIPS_ONLY_COMMON,
-    # Same FIPS-only pattern on /etc/crypto-policies/config as AL9 (#67).
-    f"{_PREFIX}fips_crypto_subpolicy",
     # AL10-only: reads /proc/sys/crypto/fips_enabled, so it needs a fips=1 boot.
     f"{_PREFIX}system_booted_in_fips_mode",
 ]

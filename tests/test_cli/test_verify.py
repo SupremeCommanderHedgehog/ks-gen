@@ -67,6 +67,33 @@ def test_verify_exits_0_on_clean_report(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
 
 
+def _clean_with_ssg_content_drift() -> VerifyReport:
+    """Clean compliance, but the host's SSG content isn't ks-gen's (#90)."""
+    from ks_gen.verify.ssg_version import build_ssg_version_report
+
+    return VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-07T12:00:00Z",
+        rows=(VerifyRow("rule_a", "pass", "pass", False, "clean"),),
+        install_baseline_available=True,
+        ssg_version=build_ssg_version_report(distro="alma9", installed="0.1.74-1.el9.alma.1"),
+    )
+
+
+def test_verify_ssg_content_drift_is_reported_but_exits_0(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path)
+    runner = CliRunner()
+    with (
+        patch("ks_gen.cli.run_verify", return_value=_clean_with_ssg_content_drift()),
+        patch("ks_gen.cli.check_tools"),
+    ):
+        result = runner.invoke(app, ["verify", "--host", "h1", "--config", str(cfg)])
+    assert result.exit_code == 0, result.output
+    assert "SSG content drift" in result.output
+    assert "0.1.74-1.el9.alma.1" in result.output
+
+
 def test_verify_exits_6_on_failing_report(tmp_path: Path) -> None:
     cfg = _write_cfg(tmp_path)
     runner = CliRunner()

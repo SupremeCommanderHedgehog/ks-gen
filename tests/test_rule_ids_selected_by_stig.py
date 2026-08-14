@@ -10,8 +10,20 @@ That is issue #61: on alma9/alma8 the MODERN/FUTURE crypto exception disabled
 `sshd_use_approved_ciphers` (not selected) and left the two stig-selected
 `harden_sshd_ciphers_*` rules enabled.
 
-The `<distro>-stig-selected.txt` lists are extracted from the same pinned
-datastreams as the rule-ID lists — see docs/audit-story/SSG-VERSIONS.md.
+Selected by *which* content, though, is the subtlety #90 turned up. oscap
+remediates against whatever `scap-security-guide` the host has, and that is not
+one version: an offline install keeps what the media shipped (the AlmaLinux 8.10
+DVD carries 0.1.72) while an online one is upgraded to what the repos ship
+(0.1.81). Those two disagree about which rules the stig profile selects, so
+requiring selection by the current pin alone would force ks-gen to stop
+disabling rules that older media still selects — and `enable_dracut_fips_module`
+remediates a non-FIPS host into FIPS (#67, #81).
+
+So the guard is a union: an ID must be selected by *at least one* supported
+release. `docs/audit-story/<distro>-stig-selected.txt` is the current pin;
+`docs/audit-story/floors/<distro>-<version>-stig-selected.txt` are the media
+floors. Inert-on-one-version is the acceptable cost; enabled-and-unsatisfiable
+is not.
 """
 
 from __future__ import annotations
@@ -29,6 +41,18 @@ _RHEL_FAMILY = ["alma8", "alma9", "alma10"]
 _RULE_PREFIX = "xccdf_org.ssgproject.content_rule_"
 
 
+def _floor_selected(distro: str) -> set[str]:
+    """Rules selected by the media floors — older content a host can still run.
+
+    No assertion that a floor exists: ubuntu2404 has none, and a distro whose
+    only supported install source is the network legitimately has none either.
+    """
+    ids: set[str] = set()
+    for path in sorted((_DOCS / "floors").glob(f"{distro}-*-stig-selected.txt")):
+        ids |= set(path.read_text(encoding="utf-8").split())
+    return ids
+
+
 def _stig_selected(distro: str) -> set[str]:
     path = _DOCS / f"{distro}-stig-selected.txt"
     # Deliberately NOT pytest.skip: a missing list is the failure mode this
@@ -41,7 +65,7 @@ def _stig_selected(distro: str) -> set[str]:
     )
     ids = set(path.read_text(encoding="utf-8").split())
     assert ids, f"{path.name} is empty"
-    return ids
+    return ids | _floor_selected(distro)
 
 
 @pytest.mark.parametrize("distro", _DISTROS)

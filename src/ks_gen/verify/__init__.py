@@ -54,6 +54,11 @@ def run_verify(
     the returned report. The pull happens before the compliance run so a
     missing tailoring fails fast.
 
+    Always asks the host which `scap-security-guide` / `ssg-debderived` it has
+    and attaches an `SsgVersionReport` naming any difference from the content
+    ks-gen was validated against (#90). Reported, never gated: it explains
+    otherwise-inexplicable failures and leaves every exit code alone.
+
     When `baseline_path` is set, the captured ARF at that path replaces the
     install-time ARF for reconcile (the install pull is skipped entirely),
     and a `BaselineReport` is attached to the returned report. When
@@ -194,6 +199,9 @@ def run_verify(
 
     if tailoring_drift is not None:
         report = replace(report, tailoring_drift=tailoring_drift)
+
+    if arfs.ssg_version is not None:
+        report = replace(report, ssg_version=arfs.ssg_version)
 
     if baseline_loaded is not None:
         baseline_report = BaselineReport(

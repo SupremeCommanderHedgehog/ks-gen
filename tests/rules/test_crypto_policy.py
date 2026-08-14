@@ -11,10 +11,16 @@ from ks_gen.registry import load_rules
 from ks_gen.rules.alma9.crypto_policy import RULE
 
 
-def test_stig_emits_fips(minimal_cfg):
+def test_stig_verifies_fips_rather_than_setting_it(minimal_cfg):
+    """#90: the target belongs to the installed content, so ks-gen checks it.
+
+    Setting one here would override oscap's remediation, which runs earlier.
+    """
     cfg = minimal_cfg.model_copy(update={"crypto": Crypto(policy=CryptoPolicy.STIG)})
     out = RULE.emit_post(cfg)
-    assert "update-crypto-policies --set FIPS" in out
+    assert "update-crypto-policies --set" not in out
+    assert "update-crypto-policies --show" in out
+    assert '"${ks_policy%%:*}" = FIPS' in out
 
 
 def test_modern_emits_default_and_ed25519(minimal_cfg):
@@ -25,21 +31,25 @@ def test_modern_emits_default_and_ed25519(minimal_cfg):
 
 def test_modern_tailoring_disables_fips_and_the_crypto_policy_backend_rules(minimal_cfg):
     # Per #61: the set is derived from what the AL9 stig profile actually
-    # selects. sshd_use_approved_ciphers exists in the datastream but is never
-    # selected, so disabling it was inert; the four harden_sshd_* rules are
-    # the ones that fire, and each asserts a FIPS-only algorithm list in the
-    # crypto-policies back-end files that MODERN/FUTURE rewrites.
-    # Per #67: the three FIPS-only rules below can never pass off FIPS either.
+    # selects. The four harden_sshd_* rules are the ones that fire, and each
+    # asserts a FIPS-only algorithm list in the crypto-policies back-end files
+    # that MODERN/FUTURE rewrites; sysctl_crypto_fips_enabled and
+    # fips_crypto_subpolicy can never pass off FIPS either (#67).
+    # Per #90: enable_fips_mode and enable_dracut_fips_module are back. ssg
+    # 0.1.81 stopped selecting them, but the AlmaLinux 8.10 DVD still ships
+    # 0.1.72, which selects both and remediates via `fips-mode-setup --enable`.
+    # The set is the union over supported content, so an offline install off
+    # older media is not remediated into FIPS against the operator's choice.
     ops = RULE.emit_tailoring(minimal_cfg)
     disabled = {o.rule_id for o in ops if o.action == "disable"}
     assert disabled == {
         "xccdf_org.ssgproject.content_rule_enable_fips_mode",
+        "xccdf_org.ssgproject.content_rule_enable_dracut_fips_module",
         "xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy",
         "xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy",
         "xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy",
         "xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy",
         "xccdf_org.ssgproject.content_rule_sysctl_crypto_fips_enabled",
-        "xccdf_org.ssgproject.content_rule_enable_dracut_fips_module",
         "xccdf_org.ssgproject.content_rule_fips_crypto_subpolicy",
     }
 
@@ -134,14 +144,14 @@ def test_the_dracut_conf_names_only_the_module_every_target_has(minimal_cfg, dis
 
 
 @pytest.mark.parametrize("distro", _ALMA)
-def test_fips_enablement_precedes_the_policy_set(minimal_cfg, distro):
-    """`update-crypto-policies --set` stays the last word on the policy (#66).
+def test_fips_enablement_precedes_the_policy_check(minimal_cfg, distro):
+    """The policy check is the last word on the crypto policy (#66, #90).
 
-    AL9 needs FIPS:STIG re-applied after anything that could reset it, so the
-    FIPS work goes first and nothing is appended after the set.
+    Kernel FIPS work first, then the verification, so a failure to reach FIPS
+    is reported after everything that could have caused it has run.
     """
     body = _post(minimal_cfg, distro, "STIG")
-    assert body.index("dracut -f") < body.index("update-crypto-policies --set")
+    assert body.index("dracut -f") < body.index("update-crypto-policies --show")
 
 
 @pytest.mark.parametrize("distro", _ALMA)
@@ -208,11 +218,11 @@ def test_initramfs_is_regenerated_for_every_installed_kernel(minimal_cfg, distro
 
 
 @pytest.mark.parametrize("distro", _ALMA)
-def test_fips_verification_precedes_the_policy_set(minimal_cfg, distro):
-    """All of it must land before update-crypto-policies re-applies the policy (#66)."""
+def test_fips_verification_precedes_the_policy_check(minimal_cfg, distro):
+    """All of it must land before the crypto policy is verified (#66, #90)."""
     body = _post(minimal_cfg, distro, "STIG")
-    assert body.index("40-fips.conf") < body.index("update-crypto-policies --set")
-    assert body.index("grubby") < body.index("update-crypto-policies --set")
+    assert body.index("40-fips.conf") < body.index("update-crypto-policies --show")
+    assert body.index("grubby") < body.index("update-crypto-policies --show")
 
 
 @pytest.mark.parametrize("distro", _ALMA)

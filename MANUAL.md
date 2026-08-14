@@ -215,9 +215,15 @@ bootloader kernel cmdline:
 
 | `crypto.policy` | System crypto-policy | FIPS kernel mode | Ed25519 / X25519 / ChaCha20 |
 |---|---|---|---|
-| `STIG`   | `FIPS` (AL8/AL10), `FIPS:STIG` (AL9) | `fips=1` | blocked at kernel layer |
+| `STIG`   | `FIPS:STIG` (AL8/AL9), `FIPS` (AL10) | `fips=1` | blocked at kernel layer |
 | `MODERN` | `DEFAULT` | off       | allowed |
 | `FUTURE` | `FUTURE`  | off       | allowed (and SHA-1 banned everywhere) |
+
+The per-distro STIG target is **owned by upstream SSG, not by ks-gen** — it is
+whatever that distro's stig profile refines `var_system_crypto_policy` to, and
+it moves. AlmaLinux 8 was plain `FIPS` until SSG 0.1.81 switched it to
+`FIPS:STIG` (#90). `ks-gen rules` and `exceptions.md` report the live value for
+your build; treat the table above as illustrative rather than authoritative.
 
 On `distro: ubuntu2404`, `crypto.policy: STIG` pins STIG-aligned algorithms
 but does **not** enable FIPS kernel mode — that needs an Ubuntu Pro
@@ -1036,7 +1042,7 @@ exact XCCDF IDs.
 | `admin_user_and_keys` | Creates the wheel admin in `%post`, drops `authorized_keys`, writes `/etc/sudoers.d/00-ks-gen-admin`. **Runs first.** |
 | `ssh_keep_open` | If `ssh.port != 22`: `semanage port -a -t ssh_port_t -p tcp <port>`. Always (when enabled): `firewall-offline-cmd --add-port=<port>/tcp`. **Runs before firewalld is enabled.** |
 | `faillock_safety` | Tailors `unlock_time` and `deny` variables; when `even_deny_root=false`, disables the matching XCCDF rule; re-asserts `/etc/security/faillock.conf` in `%post`. |
-| `crypto_policy` | `update-crypto-policies --set {FIPS[:STIG]\|DEFAULT\|FUTURE}` — the STIG target is per-distro (AL9 expects `FIPS:STIG`, AL8/AL10 plain `FIPS`). When not STIG: tailoring retunes `var_system_crypto_policy` to the chosen policy and disables the FIPS-only rules that host can never pass — the exact set differs per distro, so read `exceptions.md` or run `ks-gen rules` for the live list. `%post` runs `ssh-keygen -A` to generate Ed25519 host keys (which `sshd-keygen` won't make in FIPS mode). Under STIG on AlmaLinux, `%post` also writes `/etc/system-fips` and `/etc/dracut.conf.d/40-fips.conf`, runs `dracut -f --regenerate-all`, and asserts `fips=1 boot=UUID=…` on every installed kernel entry, so the host boots in FIPS mode and the FIPS-only rules pass instead of failing forever (#84). It does this natively rather than by calling `fips-mode-setup`, which AlmaLinux 10 does not ship. |
+| `crypto_policy` | `update-crypto-policies --set {FIPS[:STIG]\|DEFAULT\|FUTURE}` — the STIG target is per-distro and read from the profile, not hardcoded (AL8/AL9 currently `FIPS:STIG`, AL10 plain `FIPS`; upstream moves these — #90). When not STIG: tailoring retunes `var_system_crypto_policy` to the chosen policy and disables the FIPS-only rules that host can never pass — the exact set differs per distro, so read `exceptions.md` or run `ks-gen rules` for the live list. `%post` runs `ssh-keygen -A` to generate Ed25519 host keys (which `sshd-keygen` won't make in FIPS mode). Under STIG on AlmaLinux, `%post` also writes `/etc/system-fips` and `/etc/dracut.conf.d/40-fips.conf`, runs `dracut -f --regenerate-all`, and asserts `fips=1 boot=UUID=…` on every installed kernel entry, so the host boots in FIPS mode and the FIPS-only rules pass instead of failing forever (#84). It does this natively rather than by calling `fips-mode-setup`, which AlmaLinux 10 does not ship. |
 | `ssh_config_apply` | Writes `/etc/ssh/sshd_config.d/00-ks-gen.conf` with `Port`, `PermitRootLogin`, `PasswordAuthentication`, `ClientAlive*`, `MaxAuthTries`, `UsePAM`; runs `sshd -t` to validate. Hard depends on `admin_user_and_keys` and `ssh_keep_open`. |
 
 ### DoD-content neutralization
@@ -1447,6 +1453,42 @@ redeploying the bundle (re-burn ISO, ship updated `tailoring.xml`, etc.
 top-level `tailoring_drift` key. The key is omitted (not present) when
 the flag isn't set, so consumers can use `key in payload` to detect
 whether the check ran.
+
+#### SSG content-version reporting
+
+Every `verify` run asks the host which SCAP content it has
+(`rpm -q scap-security-guide`, or `dpkg-query` for `ssg-debderived` on
+Ubuntu) and compares it against the release ks-gen's rule decisions were
+built from — the table in `docs/audit-story/SSG-VERSIONS.md`. No flag, no
+`%post` change: the query works on hosts deployed long before this feature
+existed.
+
+A match prints nothing. A difference prints:
+
+````
+SSG content drift: this alma8 host runs scap-security-guide 0.1.74-1.el8.alma.1; ks-gen expects 0.1.81-1.el8_10.alma.1 (host is older).
+  Older is the dangerous direction: ks-gen may be disabling rules this version still selects, or naming rules it does not ship.
+  Reported only — this does not affect the exit code.
+````
+
+**What counts as a match.** The upstream release (`0.1.81`), not the whole
+downstream string: `0.1.81-2.el8_10.alma.2` is a rebuild of the same rule
+content and is not worth reporting. Older content is called out more
+strongly than newer — ks-gen may be disabling rules an older datastream
+still selects, which is how #90 broke every AlmaLinux 8 STIG install.
+
+**This never changes the exit code.** It explains failures; it isn't one.
+A host installed six months ago legitimately ships newer content.
+
+**When the query fails** — package manager missing, package absent, SSH
+hiccup — verify says so explicitly and carries on. An undetermined version
+is never reported as a mismatch.
+
+**JSON output.** `verify --format json` carries a top-level `ssg_version`
+object (`distro`, `package`, `expected`, `installed`, `status`, `detail`)
+whenever the check ran, including on a match. `status` is one of `match`,
+`older`, `newer`, `differs`, `unknown`; `installed` is `null` when the
+status is `unknown`.
 
 #### Capturing and using a workstation baseline
 

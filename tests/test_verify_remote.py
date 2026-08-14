@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,11 +10,18 @@ from ks_gen.verify.auth import SudoAuth
 from ks_gen.verify.errors import (
     ArfMissingError,
     OscapInvocationError,
+    SshConnectError,
     SudoPromptError,
 )
-from ks_gen.verify.remote import CollectedArfs, collect_arfs, collect_deployed_tailoring
+from ks_gen.verify.remote import (
+    CollectedArfs,
+    collect_arfs,
+    collect_deployed_tailoring,
+    collect_ssg_version,
+)
+from ks_gen.verify.ssg_version import EXPECTED_SSG_VERSIONS
 from ks_gen.verify.ssh import SshResult, probe_sudo
-from ks_gen.verify.transport import SshTransport
+from ks_gen.verify.transport import CmdResult, SshTransport
 
 # --- probe_sudo --------------------------------------------------------------
 
@@ -76,6 +84,8 @@ def test_collect_arfs_runs_oscap_pulls_current_and_install(tmp_path: Path) -> No
             return SshResult("", "", 0)
         if cmd.startswith("sudo -n rm"):
             return SshResult("", "", 0)
+        if "rpm -q" in cmd:
+            return SshResult("0.1.81-1.el9_8.alma.1\n", "", 0)
         raise AssertionError(f"unexpected ssh cmd: {cmd}")
 
     def fake_read(host: str, user: str, remote: str, **kw: object) -> bytes:
@@ -95,6 +105,9 @@ def test_collect_arfs_runs_oscap_pulls_current_and_install(tmp_path: Path) -> No
     assert result.install_text == "<TestResult/>"
     assert "/tmp/ksgen-verify-current.arf.xml" in reads
     assert "/root/oscap-remediation-results.xml" in reads
+    # The SSG content-version query rides along with the ARF collection (#90).
+    assert result.ssg_version is not None
+    assert result.ssg_version.status == "match"
 
 
 def test_collect_arfs_skips_install_baseline_when_no_drift(tmp_path: Path) -> None:
@@ -199,6 +212,30 @@ def test_collect_arfs_raises_when_oscap_exit_not_in_0_or_2(tmp_path: Path) -> No
         collect_arfs(cfg=cfg, transport=transport, workdir=tmp_path, no_drift=False, timeout=600)
 
 
+def test_oscap_failure_names_the_content_drift_that_may_explain_it(tmp_path: Path) -> None:
+    """#90: the version query has to run *before* the scan, not after.
+
+    Content drift is a leading cause of oscap exiting non-zero — a profile can
+    move out of the host's content entirely — so collecting the version after
+    the eval left it missing from exactly the failure it exists to explain.
+    """
+    cfg = _build_cfg()
+    transport = SshTransport(host="h", user="u", ssh_extra_opts=[], sudo_auth=SudoAuth())
+
+    def fake_ssh(host: str, user: str, cmd: str, **kw: object) -> SshResult:
+        if "rpm -q" in cmd:
+            return SshResult("0.1.74-1.el8_10.alma.1\n", "", 0)
+        if "oscap xccdf eval" in cmd:
+            return SshResult("", "profile not found", 1)
+        return SshResult("", "", 0)
+
+    with (
+        patch("ks_gen.verify.ssh.ssh_exec", side_effect=fake_ssh),
+        pytest.raises(OscapInvocationError, match=re.escape("0.1.74-1.el8_10.alma.1")),
+    ):
+        collect_arfs(cfg=cfg, transport=transport, workdir=tmp_path, no_drift=False, timeout=600)
+
+
 def test_collect_arfs_raises_when_current_arf_is_empty(tmp_path: Path) -> None:
     cfg = _build_cfg()
     transport = SshTransport(host="h", user="u", ssh_extra_opts=[], sudo_auth=SudoAuth())
@@ -253,6 +290,94 @@ def test_collect_arfs_password_mode_sends_password_to_every_call(tmp_path: Path)
     assert all(s == "pw\n" for s in ssh_stdins)
     assert read_auths  # sanity: read happened
     assert all(a.password == "pw" for a in read_auths)
+
+
+# --- collect_ssg_version -----------------------------------------------------
+
+
+class _StubTransport:
+    """Minimal Transport: canned answer (or exception) for one command."""
+
+    def __init__(self, result: object) -> None:
+        self.result = result
+        self.commands: list[str] = []
+
+    def preflight(self) -> None:
+        pass
+
+    def run(self, cmd: str, *, timeout: float | None = None):
+        self.commands.append(cmd)
+        if isinstance(self.result, BaseException):
+            raise self.result
+        return self.result
+
+    def read_root_file(self, path: str) -> bytes:
+        raise AssertionError("not used")
+
+
+def test_collect_ssg_version_reports_a_match() -> None:
+    pin = EXPECTED_SSG_VERSIONS["alma9"].version
+    transport = _StubTransport(CmdResult(stdout=f"{pin}\n", stderr="", exit_code=0))
+
+    report = collect_ssg_version(distro="alma9", transport=transport)
+
+    assert report is not None
+    assert report.status == "match"
+    assert "rpm -q" in transport.commands[0]
+
+
+def test_collect_ssg_version_reports_drift() -> None:
+    transport = _StubTransport(CmdResult(stdout="0.1.74-1.el8.alma.1\n", stderr="", exit_code=0))
+
+    report = collect_ssg_version(distro="alma8", transport=transport)
+
+    assert report is not None
+    assert report.status == "older"
+    assert report.installed == "0.1.74-1.el8.alma.1"
+
+
+def test_collect_ssg_version_package_absent_is_unknown_not_drift() -> None:
+    transport = _StubTransport(
+        CmdResult(stdout="package scap-security-guide is not installed\n", stderr="", exit_code=1)
+    )
+
+    report = collect_ssg_version(distro="alma9", transport=transport)
+
+    assert report is not None
+    assert report.status == "unknown"
+    assert report.installed is None
+    assert report.detail is not None
+
+
+def test_collect_ssg_version_swallows_transport_failure() -> None:
+    """An SSH hiccup here must never take down a verify run with results."""
+    transport = _StubTransport(SshConnectError("ssh exit 255: broken pipe"))
+
+    report = collect_ssg_version(distro="alma9", transport=transport)
+
+    assert report is not None
+    assert report.status == "unknown"
+    assert "broken pipe" in (report.detail or "")
+
+
+def test_collect_ssg_version_unparseable_output_is_unknown() -> None:
+    transport = _StubTransport(CmdResult(stdout="\n", stderr="", exit_code=0))
+
+    report = collect_ssg_version(distro="alma10", transport=transport)
+
+    assert report is not None
+    assert report.status == "unknown"
+
+
+def test_collect_ssg_version_ubuntu_uses_dpkg_query() -> None:
+    pin = EXPECTED_SSG_VERSIONS["ubuntu2404"].version
+    transport = _StubTransport(CmdResult(stdout=pin, stderr="", exit_code=0))
+
+    report = collect_ssg_version(distro="ubuntu2404", transport=transport)
+
+    assert report is not None
+    assert report.status == "match"
+    assert transport.commands[0].startswith("dpkg-query")
 
 
 # --- collect_deployed_tailoring ----------------------------------------------

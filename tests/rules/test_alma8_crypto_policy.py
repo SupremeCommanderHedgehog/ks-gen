@@ -4,21 +4,24 @@ alma8 is the first rule (per #127 PR B) where the alma8 implementation
 diverges from the alma9 re-export. See
 src/ks_gen/rules/alma8/crypto_policy.py for the rationale.
 
-Re-derived for #61: the divergence was a single ID — AL8's stig profile still
-selects sshd_use_approved_kex_ordered_stig, which ssg-almalinux9 (0.1.80)
-dropped entirely. The other two IDs alma8 used to add
-(sshd_use_approved_ciphers, sshd_use_approved_macs) exist in the AL8
-datastream but the stig profile selects neither, so disabling them was inert.
+Re-derived for #90. Read one SSG release at a time, AL8 looks wildly divergent:
+0.1.72 — what the 8.10 DVD ships — selects `enable_fips_mode`,
+`enable_dracut_fips_module`, `sysctl_crypto_fips_enabled` and the four
+`harden_sshd_*` rules, while 0.1.81 selects almost none of them and adds
+`fips_crypto_subpolicy`. Pinning to either release alone leaves the other kind
+of install unprotected, and an offline DVD install is the default.
 
-#67 made it two-way: alma8 additionally disables enable_dracut_fips_module
-(its AL8 remediation runs `fips-mode-setup --enable`) while alma9 disables
-fips_crypto_subpolicy, which the AL8 profile does not select.
+Taken as the union over supported releases, AL8's disabled set is *identical*
+to AL9's, so the module is a re-export again. What remains genuinely divergent
+is nothing in this rule — which is why these tests now assert sameness.
 """
 
 from __future__ import annotations
 
 from ks_gen.config import Crypto, CryptoPolicy
 from ks_gen.rules.alma8.crypto_policy import RULE
+
+_PREFIX = "xccdf_org.ssgproject.content_rule_"
 
 
 def test_alma8_diverges_from_alma9_re_export():
@@ -30,7 +33,8 @@ def test_alma8_diverges_from_alma9_re_export():
     assert RULE is not ALMA9_RULE
 
 
-def test_alma8_modern_tailoring_diverges_from_alma9_in_both_directions(minimal_cfg):
+def test_alma8_disable_set_matches_alma9s(minimal_cfg):
+    """The union over supported releases collapses the AL8/AL9 divergence (#90)."""
     from ks_gen.rules.alma9.crypto_policy import RULE as ALMA9_RULE
 
     cfg = minimal_cfg.model_copy(update={"distro": "alma8"})
@@ -38,25 +42,30 @@ def test_alma8_modern_tailoring_diverges_from_alma9_in_both_directions(minimal_c
     alma9_disabled = {
         o.rule_id for o in ALMA9_RULE.emit_tailoring(minimal_cfg) if o.action == "disable"
     }
-    # AL8-only: still selected here, gone from the AL9 datastream entirely.
-    assert disabled - alma9_disabled == {
-        "xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig",
-    }
-    # AL9-only: the AL8 stig profile does not select the sub-policy rule.
-    assert alma9_disabled - disabled == {
-        "xccdf_org.ssgproject.content_rule_fips_crypto_subpolicy",
-    }
+    assert disabled == alma9_disabled
 
 
-def test_alma8_disables_the_dracut_rule_whose_fix_would_enable_fips(minimal_cfg):
-    """#67: AL8's remediation runs `fips-mode-setup --enable`.
+def test_alma8_still_disables_what_the_dvd_content_selects(minimal_cfg):
+    """The regression #90 nearly shipped: these left the list when the pin moved.
 
-    Left enabled, oscap would put fips=1 on the kernel command line of a host
-    that explicitly opted out of FIPS.
+    ssg-almalinux8 0.1.81 stopped selecting them, so against that release alone
+    they look inert (#61). But the 8.10 DVD ships 0.1.72, which selects both
+    `enable_*_fips_*` rules with a `fips-mode-setup --enable` remediation — so
+    dropping them puts a MODERN host into FIPS against the operator's choice
+    (#67, #81) on exactly the offline install that is ks-gen's default.
     """
     cfg = minimal_cfg.model_copy(update={"distro": "alma8"})
     disabled = {o.rule_id for o in RULE.emit_tailoring(cfg) if o.action == "disable"}
-    assert "xccdf_org.ssgproject.content_rule_enable_dracut_fips_module" in disabled
+    for short in (
+        "enable_fips_mode",
+        "enable_dracut_fips_module",
+        "sysctl_crypto_fips_enabled",
+        "harden_sshd_ciphers_openssh_conf_crypto_policy",
+        "harden_sshd_ciphers_opensshserver_conf_crypto_policy",
+        "harden_sshd_macs_openssh_conf_crypto_policy",
+        "harden_sshd_macs_opensshserver_conf_crypto_policy",
+    ):
+        assert f"{_PREFIX}{short}" in disabled
 
 
 def test_alma8_stig_policy_emits_no_tailoring(minimal_cfg):

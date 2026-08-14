@@ -10,7 +10,7 @@ stays quietly enabled. That gap left `sysctl_crypto_fips_enabled`,
 — all enabled on non-FIPS installs.
 
 The candidate queue is `docs/audit-story/<distro>-fips-candidates.txt`,
-extracted from the pinned datastreams: every stig-selected rule whose OVAL
+extracted from the shipped datastreams: every stig-selected rule whose OVAL
 check or shell remediation mentions FIPS. It is deliberately over-inclusive.
 A candidate is a rule someone must *classify*, not a rule that must be
 disabled — bulk-disabling anything matching "fips" is how #61 happened.
@@ -31,15 +31,22 @@ _PREFIX = "xccdf_org.ssgproject.content_rule_"
 _NON_STIG = [CryptoPolicy.MODERN, CryptoPolicy.FUTURE]
 
 # Candidates deliberately left enabled, keyed by distro, with the reason each
-# one still evaluates and passes off FIPS. Verified against the pinned
-# datastreams; distro-scoped because a rule can behave differently per distro
-# (#66) — enable_dracut_fips_module has a host-altering remediation on AL8 and
-# none on AL9.
+# one still evaluates and passes off FIPS. Verified against the shipped
+# datastreams; distro-scoped because the same rule is selected on one distro
+# and not another (#66) — ssg 0.1.81 selects enable_fips_mode on AL10 but on
+# neither AL8 nor AL9.
 _PASSES_ANYWAY: dict[str, dict[str, str]] = {
     "alma8": {
         "configure_crypto_policy": (
             "variable-driven: var_system_crypto_policy is retuned to the chosen "
             "policy, so the rule evaluates and passes rather than being suppressed (#61)"
+        ),
+        "fips_custom_stig_sub_policy": (
+            "newly stig-selected on AL8 in ssg 0.1.81 (#90). Checks the contents of "
+            "/etc/crypto-policies/policies/modules/STIG.pmod, which its own remediation "
+            "writes, so it passes under any policy. The remediation also sets FIPS:STIG, "
+            "which the crypto_policy %post block re-points at the chosen policy "
+            "immediately afterwards"
         ),
     },
     "alma9": {

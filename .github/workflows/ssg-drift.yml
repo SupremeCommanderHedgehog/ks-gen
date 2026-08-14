@@ -1,0 +1,173 @@
+name: ssg-drift
+# Re-extracts from the SSG content the distros ship *today* and compares it
+# against the checked-in extracts under docs/audit-story/. Those extracts drove
+# ks-gen decisions for seven SSG releases while AL8 moved to FIPS:STIG and every
+# AL8 STIG install was broken; nothing noticed until a real install (#90).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 6 * * 1'  # Mondays 06:41 UTC — SSG ships ~6-8 releases a year
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ssg-drift
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DS_DIR: ${{ runner.temp }}/ssg-datastreams
+      EXTRACT_DIR: ${{ runner.temp }}/ssg-extract
+    steps:
+      - uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          # audit, not block: this job pulls from distro package mirrors
+          # (repo.almalinux.org, archive.ubuntu.com, the runner's apt mirror),
+          # whose endpoints move. A blocked fetch would surface as a failure
+          # nobody can distinguish from a real outage, and false alarms are how
+          # a drift check gets ignored.
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install extraction prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rpm2cpio cpio
+
+      # Fetch and extract failures exit non-zero with their own message and
+      # stop the job here, so no later step can report them as drift.
+      - name: Fetch shipping SSG datastreams
+        run: |
+          if ! scripts/audit_story/fetch_shipping_datastreams.sh "$DS_DIR"; then
+            echo "::error title=SSG fetch failed::Could not download shipping SSG content. This is a fetch/network failure, NOT content drift — nothing was compared."
+            exit 1
+          fi
+          cat "$DS_DIR/shipping-versions.txt" >> "$GITHUB_STEP_SUMMARY"
+
+      # Never --out-dir docs/audit-story/: the tracked extracts are the
+      # comparison baseline and must stay untouched.
+      - name: Re-extract into a scratch directory
+        run: |
+          mkdir -p "$EXTRACT_DIR"
+          if ! python3 scripts/audit_story/extract_ssg_rule_ids.py \
+            --datastream alma8="$DS_DIR/ssg-almalinux8-ds.xml" \
+            --datastream alma9="$DS_DIR/ssg-almalinux9-ds.xml" \
+            --datastream alma10="$DS_DIR/ssg-almalinux10-ds.xml" \
+            --datastream ubuntu2404="$DS_DIR/ssg-ubuntu2404-ds.xml" \
+            --out-dir "$EXTRACT_DIR"; then
+            echo "::error title=SSG extraction failed::extract_ssg_rule_ids.py failed on the freshly fetched datastreams. This is an extraction failure, NOT content drift."
+            exit 1
+          fi
+
+      - name: Compare against checked-in extracts
+        id: compare
+        run: |
+          report="$RUNNER_TEMP/drift.md"
+          : > "$report"
+          drift=false
+
+          # The crypto policy first: it is the value that broke AL8, and it is
+          # one line buried in a file whose diff is easy to skim past.
+          for generated in "$EXTRACT_DIR"/*-stig-refine-values.txt; do
+            name=$(basename "$generated")
+            tracked="docs/audit-story/$name"
+            new=$(grep -F var_system_crypto_policy "$generated" | cut -f2-) || true
+            old=$(grep -F var_system_crypto_policy "$tracked" | cut -f2-) || true
+            if [ "$new" != "$old" ]; then
+              drift=true
+              {
+                echo "## :rotating_light: crypto policy changed — ${name%-stig-refine-values.txt}"
+                echo
+                echo "\`var_system_crypto_policy\`: \`${old:-<unset>}\` -> \`${new:-<unset>}\`"
+                echo
+                echo "ks-gen applies this string verbatim; a mismatch fails \`configure_crypto_policy\` on every host."
+                echo
+              } >> "$report"
+            fi
+          done
+
+          for generated in "$EXTRACT_DIR"/*; do
+            name=$(basename "$generated")
+            tracked="docs/audit-story/$name"
+            if [ ! -f "$tracked" ]; then
+              drift=true
+              printf '## %s\n\nNot checked in — the extractor produces an output `docs/audit-story/` lacks.\n\n' \
+                "$name" >> "$report"
+              continue
+            fi
+            if ! diff -q "$tracked" "$generated" >/dev/null; then
+              drift=true
+              {
+                echo "## $name"
+                echo
+                echo '```diff'
+                # diff exits 1 on differences; pipefail would kill the step.
+                { diff -u "$tracked" "$generated" || true; } | head -80
+                echo '```'
+                echo
+              } >> "$report"
+            fi
+          done
+
+          echo "drift=$drift" >> "$GITHUB_OUTPUT"
+          echo "report=$report" >> "$GITHUB_OUTPUT"
+          if [ "$drift" = true ]; then
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+            cat "$report"
+          else
+            echo "No drift: checked-in extracts match the shipping SSG content." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Open or reuse the drift issue
+        if: steps.compare.outputs.drift == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT: ${{ steps.compare.outputs.report }}
+        run: |
+          # The label is the dedupe marker, so make sure it exists.
+          gh label create ssg-drift --color B60205 \
+            --description "docs/audit-story/ extracts differ from shipping SSG content" \
+            2>/dev/null || true
+
+          existing=$(gh issue list --label ssg-drift --state open --limit 1 \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "Reusing open drift issue #$existing — not filing a duplicate."
+            gh issue comment "$existing" --body "Still drifting as of run ${{ github.run_id }}: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            exit 0
+          fi
+
+          body="$RUNNER_TEMP/issue.md"
+          {
+            echo "\`docs/audit-story/\` no longer matches the SSG content the distros ship."
+            echo
+            echo "Shipping versions this run compared against:"
+            echo
+            echo '```'
+            cat "$DS_DIR/shipping-versions.txt"
+            echo '```'
+            echo
+            cat "$REPORT"
+            echo "---"
+            echo
+            echo "Fix: re-extract per \`docs/audit-story/SSG-VERSIONS.md\`, review whether any"
+            echo "ks-gen rule references a moved ID, and update the version table."
+            echo
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > "$body"
+
+          gh issue create --label ssg-drift \
+            --title "SSG content drift: docs/audit-story/ is stale" \
+            --body-file "$body"
+
+      - name: Fail on drift
+        if: steps.compare.outputs.drift == 'true'
+        run: |
+          echo "::error title=SSG content drift::Shipping SSG content differs from docs/audit-story/. See the job summary and the ssg-drift issue."
+          exit 1

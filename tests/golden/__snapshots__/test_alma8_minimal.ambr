@@ -33,12 +33,12 @@
   | `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled` | `banner_text` |
   | `xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text` | `banner_text` |
   | `xccdf_org.ssgproject.content_rule_enable_fips_mode` | `crypto_policy` |
+  | `xccdf_org.ssgproject.content_rule_fips_crypto_subpolicy` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_sysctl_crypto_fips_enabled` | `crypto_policy` |
-  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_enable_dracut_fips_module` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root` | `faillock_safety` |
   | `xccdf_org.ssgproject.content_rule_package_usbguard_installed` | `usbguard` |
@@ -65,12 +65,12 @@
   
   Disabled XCCDF rules:
   - `xccdf_org.ssgproject.content_rule_enable_fips_mode`
+  - `xccdf_org.ssgproject.content_rule_fips_crypto_subpolicy`
   - `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy`
   - `xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy`
   - `xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy`
   - `xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy`
   - `xccdf_org.ssgproject.content_rule_sysctl_crypto_fips_enabled`
-  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig`
   - `xccdf_org.ssgproject.content_rule_enable_dracut_fips_module`
   
   ### `dod_root_ca` — DoD root/intermediate CA bundle not installed.
@@ -339,6 +339,17 @@
   
   test -s /root/tailoring.xml
   head -c 5 /root/tailoring.xml | grep -q '<?xml'
+  
+  # Pull SCAP content up to what the repos ship before remediating (#90).
+  # Install media can be many SSG releases behind: the AlmaLinux 8.10 DVD carries
+  # 0.1.72 while the repos ship 0.1.81, and the two disagree about which crypto
+  # policy the stig profile expects. Without this, oscap remediates against media
+  # content and ks-gen's own dnf-automatic timer upgrades it minutes later, so
+  # every later scan judges the host against rules that never ran.
+  # Best-effort by design: an offline install keeps the media's content and stays
+  # self-consistent, which is the other correct outcome.
+  dnf -y upgrade scap-security-guide || \
+    echo "ks-gen: could not upgrade scap-security-guide; remediating against media content" >&2
   
   # --profile below names a profile that exists ONLY in this tailoring file, so
   # a mismatched tailoring makes oscap abort — and the `|| true` would swallow
@@ -609,12 +620,12 @@
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_enable_fips_mode" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_fips_crypto_subpolicy" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_openssh_conf_crypto_policy" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_ciphers_opensshserver_conf_crypto_policy" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_macs_openssh_conf_crypto_policy" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_harden_sshd_macs_opensshserver_conf_crypto_policy" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_sysctl_crypto_fips_enabled" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_enable_dracut_fips_module" selected="false"/>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_system_crypto_policy">DEFAULT</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time">900</xccdf:set-value>
