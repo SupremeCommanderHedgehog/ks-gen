@@ -101,14 +101,16 @@ def _allow_listed(distro: str) -> set[str]:
     return {f"{_PREFIX}{short}" for short in _PASSES_ANYWAY[distro]}
 
 
-def _disabled(minimal_cfg, distro: str, policy: CryptoPolicy) -> set[str]:
-    """Every SSG rule the distro's rules disable under the given crypto policy.
-
-    Re-validated rather than model_copy'd: `distro` drives a mode="before"
-    validator that derives meta.scap_content.
-    """
+def _cfg(minimal_cfg, distro: str, policy: CryptoPolicy) -> HostConfig:
+    """Re-validated rather than model_copy'd: `distro` drives a mode="before"
+    validator that derives meta.scap_content."""
     base = minimal_cfg.model_dump(exclude={"meta", "install"})
-    cfg = HostConfig.model_validate({**base, "distro": distro, "crypto": {"policy": policy.value}})
+    return HostConfig.model_validate({**base, "distro": distro, "crypto": {"policy": policy.value}})
+
+
+def _disabled(minimal_cfg, distro: str, policy: CryptoPolicy) -> set[str]:
+    """Every SSG rule the distro's rules disable under the given crypto policy."""
+    cfg = _cfg(minimal_cfg, distro, policy)
     return {
         op.rule_id
         for rule in load_rules(distro)
@@ -116,6 +118,19 @@ def _disabled(minimal_cfg, distro: str, policy: CryptoPolicy) -> set[str]:
         for op in rule.emit_tailoring(cfg)
         if op.action == "disable"
     }
+
+
+def _declared(minimal_cfg, distro: str, policy: CryptoPolicy) -> set[str]:
+    """Every SSG rule named in some rule's exception entry."""
+    cfg = _cfg(minimal_cfg, distro, policy)
+    out: set[str] = set()
+    for rule in load_rules(distro):
+        if not rule.applies(cfg):
+            continue
+        entry = rule.exception_entry(cfg)
+        if entry is not None:
+            out.update(entry.stig_rules_disabled)
+    return out
 
 
 @pytest.mark.parametrize("distro", _DISTROS)
@@ -162,8 +177,38 @@ def test_every_classified_rule_carries_a_reason(distro):
     assert not missing, f"{distro}: _PASSES_ANYWAY entries without a reason: {missing}"
 
 
-@pytest.mark.parametrize("distro", ["alma8", "alma9", "alma10"])
-def test_stig_policy_disables_no_fips_rule(distro, minimal_cfg):
-    """A STIG host runs FIPS, so none of these may be suppressed there."""
+@pytest.mark.parametrize("distro", _DISTROS)
+def test_stig_fips_candidates_are_reachable_or_declared(distro, minimal_cfg):
+    """#84: on a STIG host, no FIPS rule may fail without an explanation.
+
+    Where the host really reaches kernel FIPS (the RHEL family), the rules must
+    stay enabled and are expected to pass — suppressing them would hide a real
+    regression. Where it cannot (ubuntu2404 needs an Ubuntu Pro entitlement),
+    each candidate must be disabled AND named in an exception entry, or
+    classified in _PASSES_ANYWAY with a reason.
+    """
+    cfg = _cfg(minimal_cfg, distro, CryptoPolicy.STIG)
+    candidates = _candidates(distro)
     disabled = _disabled(minimal_cfg, distro, CryptoPolicy.STIG)
-    assert not (_candidates(distro) & disabled)
+
+    if cfg.kernel_fips:
+        suppressed = candidates & disabled
+        assert not suppressed, (
+            f"{distro}/STIG reaches kernel FIPS, so {sorted(suppressed)} must stay "
+            f"enabled and pass. Disabling them hides real regressions behind an "
+            f"exception the host does not need."
+        )
+        return
+
+    unexplained = candidates - disabled - _allow_listed(distro)
+    assert not unexplained, (
+        f"{distro}/STIG cannot reach kernel FIPS, so {sorted(unexplained)} fail on "
+        f"every host with nothing in exceptions.md to explain them — the #84 defect. "
+        f"Disable each one and name it in an exception entry, or classify it in "
+        f"_PASSES_ANYWAY with the reason it passes anyway."
+    )
+    undeclared = (candidates & disabled) - _declared(minimal_cfg, distro, CryptoPolicy.STIG)
+    assert not undeclared, (
+        f"{distro}/STIG disables {sorted(undeclared)} without naming them in any "
+        f"exception entry — exceptions.md would not mention them at all."
+    )

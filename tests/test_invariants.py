@@ -22,53 +22,83 @@ from ks_gen.writer import build_bundle
 _KEYS = ["ssh-ed25519 A a@b", "ssh-rsa B a@b"]
 
 
-def _cfg(**overrides_kwargs):
+_DISTROS = ("alma8", "alma9", "alma10", "ubuntu2404")
+
+
+def _admin():
+    return User(admin=AdminUser(name="ops", authorized_keys=_KEYS, sudo="nopasswd_yes"))
+
+
+def _cfg(distro: str = "alma9", **overrides_kwargs):
     overrides_obj = Overrides(**overrides_kwargs) if overrides_kwargs else None
-    base = dict(
-        system=System(hostname="x.example"),
-        user=User(admin=AdminUser(name="ops", authorized_keys=_KEYS, sudo="nopasswd_yes")),
-    )
+    base = dict(distro=distro, system=System(hostname="x.example"), user=_admin())
     if overrides_obj is not None:
         base["overrides"] = overrides_obj
     return HostConfig(**base)
 
 
 def _fuzz_configs():
-    yield _cfg()
-    yield _cfg(usbguard=UsbguardCfg(enable=True))
-    for port in (22, 2222):
-        for pw in (True, False):
+    """9 variants x 4 distros = 36 configs.
+
+    Distro is part of the matrix because rule behaviour is per-distro: pinned
+    to the alma9 default, these invariants never covered alma8, alma10 or
+    ubuntu2404 — the distros #67 and #84 were about. No variant sets
+    install.source, which is the one field a distro rejects (network is
+    invalid for ubuntu2404), so every combination below validates.
+    """
+    for distro in _DISTROS:
+        yield _cfg(distro)
+        yield _cfg(distro, usbguard=UsbguardCfg(enable=True))
+        for port in (22, 2222):
+            for pw in (True, False):
+                yield HostConfig(
+                    distro=distro,
+                    system=System(hostname="x"),
+                    user=_admin(),
+                    ssh=Ssh(port=port, password_authentication=pw),
+                )
+        for policy in CryptoPolicy:
             yield HostConfig(
+                distro=distro,
                 system=System(hostname="x"),
-                user=User(admin=AdminUser(name="ops", authorized_keys=_KEYS, sudo="nopasswd_yes")),
-                ssh=Ssh(port=port, password_authentication=pw),
+                user=_admin(),
+                crypto=Crypto(policy=policy),
             )
-    for policy in CryptoPolicy:
-        yield HostConfig(
-            system=System(hostname="x"),
-            user=User(admin=AdminUser(name="ops", authorized_keys=_KEYS, sudo="nopasswd_yes")),
-            crypto=Crypto(policy=policy),
-        )
+
+
+def _provisioning_script(cfg) -> str:
+    """The distro's provisioning text: ks.cfg for the RHEL family, autoinstall
+    user-data for ubuntu2404. Bundle.__post_init__ guarantees exactly one."""
+    bundle = build_bundle(cfg)
+    script = bundle.ks_cfg if bundle.ks_cfg is not None else bundle.user_data
+    assert script is not None, f"{cfg.distro} bundle carries neither ks_cfg nor user_data"
+    return script
+
+
+# Same lockout invariant, two firewalls: (open-port template, enable pattern).
+_UFW = ("ufw allow {port}/tcp", r"ufw\s+enable")
+_FIREWALLD = ("--add-port={port}/tcp", r"systemctl\s+(enable|start)\s+firewalld")
 
 
 @pytest.mark.parametrize("cfg", list(_fuzz_configs()))
 def test_authorized_keys_always_before_sshd_touches(cfg):
-    ks = build_bundle(cfg).ks_cfg
-    keys_idx = ks.find("authorized_keys")
-    sshd_idx = ks.find("sshd_config.d/00-ks-gen.conf")
-    assert keys_idx != -1, "authorized_keys must be written in %post"
-    assert sshd_idx != -1, "sshd drop-in must be written in %post"
+    script = _provisioning_script(cfg)
+    keys_idx = script.find("authorized_keys")
+    sshd_idx = script.find("sshd_config.d/00-ks-gen.conf")
+    assert keys_idx != -1, "authorized_keys must be written during provisioning"
+    assert sshd_idx != -1, "sshd drop-in must be written during provisioning"
     assert keys_idx < sshd_idx, (
         "lockout-resistance invariant: authorized_keys must precede sshd config"
     )
 
 
 @pytest.mark.parametrize("cfg", list(_fuzz_configs()))
-def test_ssh_port_opened_in_firewalld_before_any_firewalld_enable_command(cfg):
-    ks = build_bundle(cfg).ks_cfg
-    port_idx = ks.find(f"--add-port={cfg.ssh.port}/tcp")
-    enable_idx = re.search(r"systemctl\s+(enable|start)\s+firewalld", ks)
-    assert port_idx != -1, "ssh.port must be added to firewalld in %post"
+def test_ssh_port_opened_in_firewall_before_any_firewall_enable_command(cfg):
+    script = _provisioning_script(cfg)
+    open_tmpl, enable_pat = _UFW if cfg.distro == "ubuntu2404" else _FIREWALLD
+    port_idx = script.find(open_tmpl.format(port=cfg.ssh.port))
+    enable_idx = re.search(enable_pat, script)
+    assert port_idx != -1, "ssh.port must be opened in the firewall during provisioning"
     if enable_idx:
         assert port_idx < enable_idx.start()
 

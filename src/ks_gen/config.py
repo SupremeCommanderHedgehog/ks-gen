@@ -726,7 +726,11 @@ class UnattendedUpdatesCfg(StrictModel):
 
 
 class Overrides(StrictModel):
-    fips_mode: bool = False
+    # Deprecated and never an input: FIPS kernel mode is derived
+    # (HostConfig.kernel_fips). Kept as an accepted key rather than deleted —
+    # StrictModel forbids extras, so removing it would break every host.yaml
+    # naming it, including the ones ks-gen itself wrote (#84).
+    fips_mode: bool | None = None
     # Asserts a physical console exists; ks-gen cannot tell. See #76.
     console_login_only: bool = False
     faillock: FaillockCfg = Field(default_factory=FaillockCfg)
@@ -750,6 +754,11 @@ class ExceptionDecl(StrictModel):
     # here would reject previously-loadable host.yaml files, so it needs its own
     # change with a release note rather than riding along in a bugfix. See #69.
     stig_rules_disabled: list[str] = Field(..., min_length=1)
+
+
+# Distros where ks-gen can put the kernel in FIPS mode. Ubuntu needs an Ubuntu
+# Pro `fips-updates` entitlement ks-gen does not manage (#84).
+_KERNEL_FIPS_DISTROS = frozenset({"alma8", "alma9", "alma10"})
 
 
 _DEFAULT_SCAP_CONTENT_BY_DISTRO: dict[str, str] = {
@@ -778,15 +787,37 @@ class HostConfig(StrictModel):
     containers: Containers = Field(default_factory=Containers)
     install: Install = Field(default_factory=Install)
 
+    @property
+    def kernel_fips(self) -> bool:
+        """Whether the installed host boots with fips=1 (#84).
+
+        Derived, not configured: STIG means kernel FIPS on the RHEL family,
+        MODERN/FUTURE never do, and Ubuntu cannot without a Pro entitlement.
+        """
+        return self.crypto.policy is CryptoPolicy.STIG and self.distro in _KERNEL_FIPS_DISTROS
+
     @model_validator(mode="after")
-    def _crypto_fips_mutex(self) -> HostConfig:
+    def _fips_mode_agrees_with_policy(self) -> HostConfig:
+        """Reject a declaration that FIPS is on where it is not (#84).
+
+        The opposite direction — a stale `fips_mode: false` on a STIG host —
+        loads as an inert leftover: every bundle ks-gen wrote before the field
+        became derived carries it, and `verify` re-loads that host.yaml.
+        `load_host_config` reports it so it does not pass unnoticed.
+        """
+        declared = self.overrides.fips_mode
+        if not declared or declared == self.kernel_fips:
+            return self
         if self.crypto.policy in (CryptoPolicy.MODERN, CryptoPolicy.FUTURE):
-            if self.overrides.fips_mode:
-                raise ValueError(
-                    "crypto.policy=MODERN/FUTURE conflicts with overrides.fips_mode=true: "
-                    "FIPS kernel mode blocks Curve25519/Ed25519 at the kernel layer."
-                )
-        return self
+            raise ValueError(
+                "crypto.policy=MODERN/FUTURE conflicts with overrides.fips_mode=true: "
+                "FIPS kernel mode blocks Curve25519/Ed25519 at the kernel layer."
+            )
+        raise ValueError(
+            f"overrides.fips_mode=true is not supported for distro={self.distro}: "
+            "kernel FIPS needs an Ubuntu Pro fips-updates entitlement ks-gen does "
+            "not manage, so crypto.policy=STIG configures algorithms only."
+        )
 
     @model_validator(mode="after")
     def _console_login_only_needs_an_unlocked_admin(self) -> HostConfig:

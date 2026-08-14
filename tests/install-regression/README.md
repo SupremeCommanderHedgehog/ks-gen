@@ -118,9 +118,59 @@ Note the `configure_crypto_policy` line above predates the live-re-scan change
   `configure_crypto_policy`; that assertion is what trap 7 replaced, and the
   updated script passes against the installed host. Not yet re-run
   end-to-end from a fresh install.
-  This run also produced issue #84: a STIG host is not in FIPS *kernel*
+  This run also produced issue #84: a STIG host was not in FIPS *kernel*
   mode, so `sysctl_crypto_fips_enabled`, `system_booted_in_fips_mode` and
-  `enable_fips_mode` fail on it permanently.
+  `enable_fips_mode` failed on it on every scan. Fixed on
+  `feat/84-stig-kernel-fips` — `%post` now enables kernel FIPS natively
+  (`/etc/system-fips`, `40-fips.conf`, `dracut -f --regenerate-all`,
+  `grubby`), and the `FIPS*` arm of `smoke-check.sh` asserts the installed
+  host really boots in FIPS mode. An intermediate run that day aborted in
+  `%post` on `fips-mode-setup: command not found` — AL10 ships no such
+  command — which is why the mechanism is native.
+- **2026-08-14, AlmaLinux 10.2 / `STIG` with kernel FIPS** (`al10-stig-crypto`,
+  network install) — green end-to-end, `disk size: 4.36 GiB`. First ks-gen host
+  of any distro that actually boots in FIPS mode, and the run that closes #84.
+  The whole `FIPS*` arm on its first real exercise:
+
+```
+ok:   kernel booted with fips=1
+ok:   kernel command line carries boot=UUID=
+ok:   /proc/sys/crypto/fips_enabled is 1
+ok:   /etc/dracut.conf.d/40-fips.conf present
+ok:   enable_fips_mode: pass
+ok:   sysctl_crypto_fips_enabled: pass
+ok:   fips_crypto_subpolicy: pass
+ok:   system_booted_in_fips_mode: pass
+ok:   enable_dracut_fips_module: absent from this datastream
+```
+
+  That the host booted at all is the load-bearing result: it confirms
+  `01fips-crypto-policies` self-enables via its own `check()`, so naming only
+  `fips` in `40-fips.conf` yields a correct initramfs. Until this run that was
+  read out of dracut's `module-setup.sh`, not observed. SSH-with-RSA also
+  authenticated under FIPS (#73), since the smoke check ran at all.
+- **2026-08-14, AlmaLinux 9.8 / `STIG` with kernel FIPS** (`al9-stig-crypto`,
+  network install) — green end-to-end, `disk size: 5.02 GiB`. The second half
+  of #84's merge gate, and the run that proves the shared mechanism did not
+  cost AL9 its sub-policy:
+
+```
+ok:   live crypto policy is FIPS:STIG (as the kickstart intended)
+ok:   /proc/sys/crypto/fips_enabled is 1
+ok:   enable_fips_mode: pass
+ok:   sysctl_crypto_fips_enabled: pass
+ok:   fips_crypto_subpolicy: pass
+ok:   enable_dracut_fips_module: pass
+ok:   system_booted_in_fips_mode: absent from this datastream
+```
+
+  `enable_dracut_fips_module: pass` is the notable one. It is stig-selected on
+  AL9 with **no remediation shipped** in ssg-almalinux9 0.1.80, so it failed on
+  every AL9 STIG host — a fourth permanently-failing rule #84 never listed.
+  Writing `40-fips.conf` ourselves is what the missing remediation would have
+  done, so it now passes rather than needing an `exceptions.md` entry.
+  Note the mirror-image datastream split against AL10: `system_booted_in_fips_mode`
+  is absent here and present there, `enable_dracut_fips_module` the reverse.
 - **2026-06-12, AlmaLinux 9 default fixture** — 14 assertions.
 
 ## Eight traps documented for future maintainers

@@ -219,18 +219,37 @@ bootloader kernel cmdline:
 | `MODERN` | `DEFAULT` | off       | allowed |
 | `FUTURE` | `FUTURE`  | off       | allowed (and SHA-1 banned everywhere) |
 
-**Hard constraint:** `crypto.policy in {MODERN, FUTURE}` with
-`overrides.fips_mode: true` is rejected at config load. FIPS kernel
-mode would block Curve25519 below the application layer; the policies
-would silently conflict at runtime. The generator refuses to produce
-that combo.
+On `distro: ubuntu2404`, `crypto.policy: STIG` pins STIG-aligned algorithms
+but does **not** enable FIPS kernel mode — that needs an Ubuntu Pro
+`fips-updates` entitlement ks-gen does not manage. `is_fips_mode_enabled` is
+disabled and declared in `exceptions.md` for that reason.
+
+**Hard constraint:** `overrides.fips_mode` is derived, not chosen.
+`crypto.policy: STIG` on AlmaLinux enables FIPS kernel mode; MODERN and
+FUTURE never do; Ubuntu cannot. The key is deprecated — omit it. What
+ks-gen does with a declared value depends on the direction:
+
+- `fips_mode: true` where FIPS is **off** (`MODERN`/`FUTURE`, or
+  `distro: ubuntu2404`) is rejected at config load (exit code 3, rule
+  conflict). It asserts a protection the host will not have.
+- `fips_mode: false` on a STIG AlmaLinux host loads, warns on stderr
+  naming the key, and changes nothing — the host still boots `fips=1`.
+  Every bundle ks-gen wrote before the field became derived carries this
+  value in its `host.yaml`, and `ks-gen verify` re-loads that file, so
+  rejecting it would strand already-deployed hosts.
+
+Generated `host.yaml` files no longer contain the key at all.
 
 **Hard constraint:** `crypto.policy: STIG` requires at least one
 `ssh-rsa`/`rsa-sha2-*` or `ecdsa-sha2-nistp{256,384,521}` key in
 `user.admin.authorized_keys` — and in every `containers.users[]` entry
-when `containers.enabled` is true. FIPS strips `ssh-ed25519` from
-sshd's `PubkeyAcceptedAlgorithms`, so an Ed25519-only key list means
-no key can authenticate. With the admin account `passwd -l`'d and
+when `containers.enabled` is true. `ssh-ed25519` is absent from sshd's
+`PubkeyAcceptedAlgorithms` under STIG on **every** distro, so an
+Ed25519-only key list means no key can authenticate. On AlmaLinux that is
+FIPS kernel mode doing it; on Ubuntu, which never enters FIPS kernel mode,
+ks-gen writes the same restriction itself in the sshd drop-in — so the
+constraint applies there too, for a different reason. With the admin
+account `passwd -l`'d and
 `PasswordAuthentication no`, that is an unrecoverable lockout, so it
 is rejected at config load. A password on the admin is *not* on its
 own an exemption — see the login-path invariant in §4.5. (#73, #76)
@@ -747,7 +766,10 @@ or loosen the STIG/remote-safe tradeoff for a specific host.
 
 ```yaml
 overrides:
-  fips_mode: false                 # bool; mutex with crypto.policy != STIG
+  # fips_mode:                     # DEPRECATED — derived from crypto.policy +
+                                   # distro (§3.5). Omit it; a declared value
+                                   # is either rejected (true where FIPS is
+                                   # off) or warned about and ignored.
   console_login_only: false        # bool; declares a physical console exists,
                                    # opening the console login path (§4.5).
                                    # Requires user.admin.password.
@@ -868,8 +890,9 @@ The optional sections cover:
   `unattended_updates`), and default-off rules to enable (`usbguard`,
   `dod_root_ca`). Nested fields (e.g., `faillock.deny`,
   `unattended_updates.nightly_security.on_calendar`) remain
-  hand-edit; same for `fips_mode`, `auditd_actions`, `ssh_keep_open`,
-  and the `exceptions:` list.
+  hand-edit; same for `auditd_actions`, `ssh_keep_open`, and the
+  `exceptions:` list. `fips_mode` is derived from `crypto.policy`
+  (§3.5) and isn't prompted for at all — leave it unset.
 
 ### 5.2 `ks-gen gen`
 
@@ -882,8 +905,8 @@ ks-gen gen --config build/web01/host.yaml --out build/web01
 # Override individual fields on the command line
 ks-gen gen --config build/web01/host.yaml \
            --set ssh.port=2222 \
-           --set overrides.fips_mode=true \
-           --out build/web01-fips
+           --set crypto.policy=STIG \
+           --out build/web01-stig
 ```
 
 `--set` supports `key=value` pairs (repeatable). Values are parsed
@@ -986,7 +1009,7 @@ will give you autocomplete + inline validation via:
 | 0 | Success |
 | 1 | Usage error (bad CLI arguments) |
 | 2 | Config invalid (YAML or schema failed) |
-| 3 | Rule conflict (e.g., `crypto.policy=MODERN` + `fips_mode=true`) |
+| 3 | Rule conflict (e.g., `crypto.policy=MODERN` + `overrides.fips_mode=true`, or `distro=ubuntu2404` + `overrides.fips_mode=true`) |
 | 4 | Lint failure on generated `ks.cfg` |
 | 5 | External tool missing (`xorriso`, `ksvalidator`, `ssh`/`scp`) |
 | 6 | `verify`: at least one rule fails on the live host |
@@ -1013,7 +1036,7 @@ exact XCCDF IDs.
 | `admin_user_and_keys` | Creates the wheel admin in `%post`, drops `authorized_keys`, writes `/etc/sudoers.d/00-ks-gen-admin`. **Runs first.** |
 | `ssh_keep_open` | If `ssh.port != 22`: `semanage port -a -t ssh_port_t -p tcp <port>`. Always (when enabled): `firewall-offline-cmd --add-port=<port>/tcp`. **Runs before firewalld is enabled.** |
 | `faillock_safety` | Tailors `unlock_time` and `deny` variables; when `even_deny_root=false`, disables the matching XCCDF rule; re-asserts `/etc/security/faillock.conf` in `%post`. |
-| `crypto_policy` | `update-crypto-policies --set {FIPS[:STIG]\|DEFAULT\|FUTURE}` — the STIG target is per-distro (AL9 expects `FIPS:STIG`, AL8/AL10 plain `FIPS`). When not STIG: tailoring retunes `var_system_crypto_policy` to the chosen policy and disables the FIPS-only rules that host can never pass — the exact set differs per distro, so read `exceptions.md` or run `ks-gen rules` for the live list. `%post` runs `ssh-keygen -A` to generate Ed25519 host keys (which `sshd-keygen` won't make in FIPS mode). |
+| `crypto_policy` | `update-crypto-policies --set {FIPS[:STIG]\|DEFAULT\|FUTURE}` — the STIG target is per-distro (AL9 expects `FIPS:STIG`, AL8/AL10 plain `FIPS`). When not STIG: tailoring retunes `var_system_crypto_policy` to the chosen policy and disables the FIPS-only rules that host can never pass — the exact set differs per distro, so read `exceptions.md` or run `ks-gen rules` for the live list. `%post` runs `ssh-keygen -A` to generate Ed25519 host keys (which `sshd-keygen` won't make in FIPS mode). Under STIG on AlmaLinux, `%post` also writes `/etc/system-fips` and `/etc/dracut.conf.d/40-fips.conf`, runs `dracut -f --regenerate-all`, and asserts `fips=1 boot=UUID=…` on every installed kernel entry, so the host boots in FIPS mode and the FIPS-only rules pass instead of failing forever (#84). It does this natively rather than by calling `fips-mode-setup`, which AlmaLinux 10 does not ship. |
 | `ssh_config_apply` | Writes `/etc/ssh/sshd_config.d/00-ks-gen.conf` with `Port`, `PermitRootLogin`, `PasswordAuthentication`, `ClientAlive*`, `MaxAuthTries`, `UsePAM`; runs `sshd -t` to validate. Hard depends on `admin_user_and_keys` and `ssh_keep_open`. |
 
 ### DoD-content neutralization
@@ -2020,14 +2043,20 @@ any upstream proxy configuration.
 
 ### "the install reboots to a black screen"
 
-`fips=1` on the bootloader requires the dracut FIPS module. If
-`overrides.fips_mode: true` is set and the dracut module wasn't
-regenerated, the kernel won't come up. This is one of the reasons
-the v0.1 default is `fips_mode: false`.
+`fips=1` on the bootloader requires the dracut FIPS module in the
+initramfs. Under `crypto.policy: STIG` the `crypto_policy` rule writes
+`/etc/system-fips` and `/etc/dracut.conf.d/40-fips.conf`, then runs
+`dracut -f --regenerate-all` in `%post`, so this should not happen —
+`--regenerate-all` is used because `uname -r` inside anaconda's chroot
+is the *installer's* kernel, not the installed one. It does that
+natively rather than by calling `fips-mode-setup`, which AlmaLinux 10
+does not ship (#84).
 
-If you need FIPS, ensure `dracut --regenerate-all --force` ran
-successfully in `%post`. The `crypto_policy` rule does this in the
-STIG path; if it didn't, check the log.
+If it does happen, check `/mnt/sysimage/root/ks-post.log` for the
+`dracut -f --regenerate-all` line and the `grubby` assertions after it.
+A failure there aborts the install rather than shipping a host that
+claims FIPS without being in FIPS mode, so a black screen points at the
+initramfs rather than at ks-gen's `%post`.
 
 ### "I added a rule but it's not running"
 

@@ -4,6 +4,7 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
+import typer
 import yaml
 from pydantic import ValidationError
 
@@ -64,6 +65,25 @@ def _apply_set(data: dict[str, Any], expr: str) -> None:
     cursor[path[-1]] = _parse_scalar(raw)
 
 
+def _report_ignored_fips_mode(path: Path, cfg: HostConfig) -> None:
+    """Name an `overrides.fips_mode` that took no effect (#84).
+
+    Only the stale-false direction reaches here (the true direction raises),
+    but someone who wrote it believes they opted out of FIPS — so it warns
+    instead of passing silently. stderr keeps `--format json` stdout clean.
+    """
+    declared = cfg.overrides.fips_mode
+    if declared is None or declared == cfg.kernel_fips:
+        return
+    typer.echo(
+        f"ks-gen: warning: {path}: overrides.fips_mode={str(declared).lower()} is "
+        f"ignored — FIPS kernel mode is derived from crypto.policy "
+        f"(={cfg.crypto.policy.value}) and distro (={cfg.distro}), which give "
+        f"fips_mode={str(cfg.kernel_fips).lower()}. The key is deprecated; drop it.",
+        err=True,
+    )
+
+
 def load_host_config(path: Path, sets: list[str]) -> HostConfig:
     try:
         text = Path(path).read_text(encoding="utf-8")
@@ -78,12 +98,16 @@ def load_host_config(path: Path, sets: list[str]) -> HostConfig:
     for s in sets:
         _apply_set(data, s)
     try:
-        return HostConfig.model_validate(data)
+        cfg = HostConfig.model_validate(data)
     except ValidationError as e:
         msg = str(e)
-        code = (
-            ExitCode.RULE_CONFLICT
-            if ("MODERN" in msg and "fips_mode" in msg)
-            else ExitCode.CONFIG_INVALID
+        # Both terms must co-occur in one validator's message, not just anywhere
+        # in the concatenated errors — else two unrelated bad fields misroute here.
+        is_conflict = any(
+            "crypto.policy" in err.get("msg", "") and "fips_mode" in err.get("msg", "")
+            for err in e.errors()
         )
+        code = ExitCode.RULE_CONFLICT if is_conflict else ExitCode.CONFIG_INVALID
         raise ConfigError(msg, code) from e
+    _report_ignored_fips_mode(path, cfg)
+    return cfg

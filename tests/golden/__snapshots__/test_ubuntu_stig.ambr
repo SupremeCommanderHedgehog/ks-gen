@@ -1,14 +1,14 @@
 # serializer version: 1
-# name: test_ubuntu_minimal[exceptions.md]
+# name: test_ubuntu_stig[exceptions.md]
   '''
   # Exceptions report
   
   Generated: SNAP
-  Host: `u24-min`
+  Host: `u2404-stig.example.com`
   
   ## Summary
   - Applied rules: 13
-  - Tailored XCCDF rules: 7
+  - Tailored XCCDF rules: 4
   - Declared exceptions: 0
   
   ## Applied rules
@@ -33,9 +33,6 @@
   | `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled` | `banner_text` |
   | `xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text` | `banner_text` |
   | `xccdf_org.ssgproject.content_rule_is_fips_mode_enabled` | `crypto_policy` |
-  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers_ordered_stig` | `crypto_policy` |
-  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig` | `crypto_policy` |
-  | `xccdf_org.ssgproject.content_rule_sshd_use_approved_macs_ordered_stig` | `crypto_policy` |
   
   ## Rule exception details
   ### `auditd_actions` — disk_full=SUSPEND, disk_error=SUSPEND, max_log_file=ROTATE
@@ -51,15 +48,12 @@
   - `xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled`
   - `xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text`
   
-  ### `crypto_policy` — MODERN crypto policy
+  ### `crypto_policy` — STIG algorithms without FIPS kernel mode
   
-  _Reason:_ MODERN accepts loss of FIPS 140-3 certification in exchange for Curve25519 / Ed25519 / ChaCha20-Poly1305 support.
+  _Reason:_ Ubuntu 24.04 cannot enter FIPS kernel mode without an Ubuntu Pro fips-updates entitlement, which ks-gen does not manage. crypto.policy=STIG pins STIG-aligned algorithms across sshd, OpenSSL and GnuTLS, but the host is not FIPS 140-3 validated.
   
   Disabled XCCDF rules:
   - `xccdf_org.ssgproject.content_rule_is_fips_mode_enabled`
-  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers_ordered_stig`
-  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig`
-  - `xccdf_org.ssgproject.content_rule_sshd_use_approved_macs_ordered_stig`
   
   ### `dod_root_ca` — DoD root/intermediate CA bundle not installed.
   
@@ -78,7 +72,7 @@
   
   '''
 # ---
-# name: test_ubuntu_minimal[host.yaml]
+# name: test_ubuntu_stig[host.yaml]
   '''
   distro: ubuntu2404
   meta:
@@ -86,7 +80,7 @@
     profile: stig
     scap_content: ssg-ubuntu2404-ds.xml
   system:
-    hostname: u24-min
+    hostname: u2404-stig.example.com
     timezone: UTC
     locale: en_US.UTF-8
     keyboard: us
@@ -115,7 +109,7 @@
     data_disks: []
   user:
     admin:
-      name: opsadmin
+      name: stigops
       gecos: ''
       groups:
       - wheel
@@ -123,7 +117,7 @@
       password: null
       sudo: nopasswd_yes
       authorized_keys:
-      - ssh-ed25519 AAAA a@b
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABTESTKEYubuntustig ops@bastion
   ssh:
     port: 22
     permit_root_login: 'no'
@@ -150,7 +144,7 @@
     - pool.ntp.org
     chrony_makestep_threshold: 1.0
   crypto:
-    policy: MODERN
+    policy: STIG
   packages:
     preset: standard
     base_groups:
@@ -233,14 +227,14 @@
   
   '''
 # ---
-# name: test_ubuntu_minimal[meta-data]
+# name: test_ubuntu_stig[meta-data]
   '''
-  instance-id: "u24-min"
-  local-hostname: "u24-min"
+  instance-id: "u2404-stig.example.com"
+  local-hostname: "u2404-stig.example.com"
   
   '''
 # ---
-# name: test_ubuntu_minimal[tailoring.xml]
+# name: test_ubuntu_stig[tailoring.xml]
   '''
   <?xml version='1.0' encoding='UTF-8'?>
   <xccdf:Tailoring xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" id="xccdf_ks-gen_tailoring_default">
@@ -256,9 +250,6 @@
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_banner_enabled" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_login_banner_text" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_is_fips_mode_enabled" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers_ordered_stig" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig" selected="false"/>
-      <xccdf:select idref="xccdf_org.ssgproject.content_rule_sshd_use_approved_macs_ordered_stig" selected="false"/>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time">900</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_deny">3</xccdf:set-value>
     </xccdf:Profile>
@@ -266,23 +257,23 @@
   
   '''
 # ---
-# name: test_ubuntu_minimal[user-data]
+# name: test_ubuntu_stig[user-data]
   '''
   #cloud-config
   autoinstall:
     version: 1
     identity:
-      hostname: "u24-min"
-      realname: "opsadmin"
-      username: "opsadmin"
+      hostname: "u2404-stig.example.com"
+      realname: "stigops"
+      username: "stigops"
       password: "*"
     user-data:
       users:
-        - name: "opsadmin"
+        - name: "stigops"
           sudo: "ALL=(ALL) NOPASSWD:ALL"
           shell: /bin/bash
           ssh_authorized_keys:
-            - "ssh-ed25519 AAAA a@b"
+            - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABTESTKEYubuntustig ops@bastion"
     packages:
       - "auditd"
       - "ufw"
@@ -321,19 +312,21 @@
       chmod 644 /etc/ssh/sshd-banner'
     - |
       curtin in-target --target=/target -- bash -c '# rule:crypto_policy
-      # SSH crypto policy (MODERN)
+      # SSH crypto policy (STIG)
       install -d -m 755 /etc/ssh/sshd_config.d
       cat > /etc/ssh/sshd_config.d/10-ks-gen-crypto.conf <<'"'"'__KS_GEN_EOF__'"'"'
-      Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
-      KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group16-sha512,diffie-hellman-group14-sha256
+      # WARNING: STIG-aligned algorithms but NOT FIPS-validated. For
+      # FIPS-validated crypto, add the future pro_attach rule to enable
+      # Ubuntu Pro `fips-updates`.
+      Ciphers aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+      KexAlgorithms ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group16-sha512,diffie-hellman-group14-sha256
       MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
-      HostKeyAlgorithms ssh-ed25519,ssh-rsa,rsa-sha2-512,rsa-sha2-256,ecdsa-sha2-nistp521,ecdsa-sha2-nistp384,ecdsa-sha2-nistp256
-      PubkeyAcceptedAlgorithms ssh-ed25519,ssh-rsa,rsa-sha2-512,rsa-sha2-256,ecdsa-sha2-nistp521,ecdsa-sha2-nistp384,ecdsa-sha2-nistp256
+      HostKeyAlgorithms ssh-rsa,rsa-sha2-512,rsa-sha2-256,ecdsa-sha2-nistp521,ecdsa-sha2-nistp384,ecdsa-sha2-nistp256
+      PubkeyAcceptedAlgorithms ssh-rsa,rsa-sha2-512,rsa-sha2-256,ecdsa-sha2-nistp521,ecdsa-sha2-nistp384,ecdsa-sha2-nistp256
       __KS_GEN_EOF__
       chmod 600 /etc/ssh/sshd_config.d/10-ks-gen-crypto.conf
-      ssh-keygen -A
       sshd -t
-      # OpenSSL crypto policy (MODERN)
+      # OpenSSL crypto policy (STIG)
       install -d -m 755 /etc/ssl/openssl.cnf.d
       cat > /etc/ssl/openssl.cnf.d/10-ks-gen.conf <<'"'"'__KS_GEN_EOF__'"'"'
       [default_sect]
@@ -343,7 +336,7 @@
       CipherString = DEFAULT@SECLEVEL=2
       __KS_GEN_EOF__
       chmod 644 /etc/ssl/openssl.cnf.d/10-ks-gen.conf
-      # GnuTLS crypto policy (MODERN)
+      # GnuTLS crypto policy (STIG)
       install -d -m 755 /etc/gnutls
       cat > /etc/gnutls/default-priorities <<'"'"'__KS_GEN_EOF__'"'"'
       SECURE128

@@ -1,4 +1,5 @@
 import re
+from typing import get_args
 
 import pytest
 from pydantic import ValidationError
@@ -234,7 +235,7 @@ def test_packages_preset_rejects_unknown_value():
 
 def test_overrides_safe_defaults():
     o = Overrides()
-    assert o.fips_mode is False
+    assert o.fips_mode is None
     assert o.faillock.unlock_time == 900
     assert o.faillock.even_deny_root is False
     assert o.auditd.disk_full_action == AuditdSystemAction.SUSPEND
@@ -298,7 +299,9 @@ def test_modern_crypto_and_fips_mode_rejected():
         HostConfig.model_validate(payload)
 
 
-def test_stig_crypto_without_fips_allowed():
+def test_stig_crypto_without_declared_fips_derives_kernel_fips():
+    """crypto.policy=STIG alone (no overrides.fips_mode) loads fine and
+    implies kernel FIPS on the RHEL family (#84)."""
     cfg = HostConfig.model_validate(
         {
             "system": {"hostname": "x"},
@@ -310,10 +313,10 @@ def test_stig_crypto_without_fips_allowed():
                 }
             },
             "crypto": {"policy": "STIG"},
-            "overrides": {"fips_mode": False},
         }
     )
     assert cfg.crypto.policy == CryptoPolicy.STIG
+    assert cfg.kernel_fips is True
 
 
 def test_locked_admin_with_password_sudo_rejected():
@@ -1796,3 +1799,99 @@ def test_host_config_data_disks_pass_through_happy_path():
     cfg = HostConfig.model_validate(payload)
     assert len(cfg.disk.data_disks) == 1
     assert cfg.disk.data_disks[0].mount == "/data"
+
+
+_FIPS_DISTROS = ["alma8", "alma9", "alma10"]
+_ALL_DISTROS = [*_FIPS_DISTROS, "ubuntu2404"]
+
+
+def _fips_cfg(minimal_cfg, distro, policy, fips_mode=None):
+    base = minimal_cfg.model_dump(exclude={"meta", "install"})
+    overrides = dict(base.get("overrides") or {})
+    overrides["fips_mode"] = fips_mode
+    return HostConfig.model_validate(
+        {**base, "distro": distro, "crypto": {"policy": policy.value}, "overrides": overrides}
+    )
+
+
+@pytest.mark.parametrize("distro", _ALL_DISTROS)
+@pytest.mark.parametrize("policy", list(CryptoPolicy))
+def test_kernel_fips_truth_table(minimal_cfg, distro, policy):
+    """kernel_fips is exactly 'STIG on the RHEL family' (#84)."""
+    cfg = _fips_cfg(minimal_cfg, distro, policy)
+    expected = policy is CryptoPolicy.STIG and distro in set(_FIPS_DISTROS)
+    assert cfg.kernel_fips is expected
+
+
+@pytest.mark.parametrize("distro", _ALL_DISTROS)
+@pytest.mark.parametrize("policy", list(CryptoPolicy))
+def test_declared_fips_mode_matching_the_derived_value_is_accepted(minimal_cfg, distro, policy):
+    """An explicit fips_mode that agrees with the policy must still load."""
+    derived = _fips_cfg(minimal_cfg, distro, policy).kernel_fips
+    cfg = _fips_cfg(minimal_cfg, distro, policy, fips_mode=derived)
+    assert cfg.kernel_fips is derived
+
+
+@pytest.mark.parametrize("distro", _FIPS_DISTROS)
+def test_stig_ignores_a_stale_fips_mode_false(minimal_cfg, distro):
+    """A STIG host still gets kernel FIPS when the config says otherwise (#84).
+
+    Every bundle ks-gen wrote before fips_mode became derived carries
+    `overrides.fips_mode: false` in its host.yaml, and `verify` re-loads that
+    file — so rejecting the value would strand already-deployed STIG hosts.
+    It loads, it is kept verbatim (the loader flags it), and it changes nothing.
+    """
+    cfg = _fips_cfg(minimal_cfg, distro, CryptoPolicy.STIG, fips_mode=False)
+    assert cfg.kernel_fips is True
+    assert cfg.overrides.fips_mode is False
+
+
+@pytest.mark.parametrize("distro", _ALL_DISTROS)
+@pytest.mark.parametrize("policy", list(CryptoPolicy))
+def test_declared_fips_mode_never_changes_kernel_fips(minimal_cfg, distro, policy):
+    """Declared values are assertions, never inputs (#84).
+
+    Whatever loads keeps the derived kernel_fips, and the only declaration
+    rejected is the dangerous direction: fips_mode=true where FIPS is off.
+    """
+    derived = _fips_cfg(minimal_cfg, distro, policy).kernel_fips
+    for declared in (True, False):
+        try:
+            cfg = _fips_cfg(minimal_cfg, distro, policy, fips_mode=declared)
+        except ValidationError:
+            assert declared is True and derived is False
+            continue
+        assert cfg.kernel_fips is derived
+
+
+@pytest.mark.parametrize("distro", _ALL_DISTROS)
+@pytest.mark.parametrize("policy", [CryptoPolicy.MODERN, CryptoPolicy.FUTURE])
+def test_fips_mode_true_rejected_off_stig(minimal_cfg, distro, policy):
+    with pytest.raises(ValidationError, match="MODERN/FUTURE"):
+        _fips_cfg(minimal_cfg, distro, policy, fips_mode=True)
+
+
+def test_fips_mode_true_rejected_on_ubuntu_stig(minimal_cfg):
+    """Kernel FIPS on Ubuntu needs a Pro entitlement ks-gen does not manage."""
+    with pytest.raises(ValidationError, match="fips-updates"):
+        _fips_cfg(minimal_cfg, "ubuntu2404", CryptoPolicy.STIG, fips_mode=True)
+
+
+# Distros that deliberately cannot reach kernel FIPS, with the reason.
+_CANNOT_KERNEL_FIPS = {"ubuntu2404": "needs an Ubuntu Pro fips-updates entitlement"}
+
+
+def test_every_distro_is_classified_for_kernel_fips(minimal_cfg):
+    """A new distro must be a decision, not a silent False (#84).
+
+    kernel_fips reads False for any distro missing from _KERNEL_FIPS_DISTROS,
+    which is the shape of the bug this whole change fixes. Pinning the split
+    against the `distro` Literal means adding one without classifying it fails
+    here rather than shipping a STIG host that is quietly not in FIPS mode.
+    """
+    declared = set(get_args(HostConfig.model_fields["distro"].annotation))
+    capable = {d for d in declared if _fips_cfg(minimal_cfg, d, CryptoPolicy.STIG).kernel_fips}
+    assert capable == declared - set(_CANNOT_KERNEL_FIPS), (
+        "every distro must be either kernel-FIPS capable or listed in "
+        "_CANNOT_KERNEL_FIPS with the reason it cannot be"
+    )

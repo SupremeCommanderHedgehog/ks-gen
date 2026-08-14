@@ -1,0 +1,53 @@
+# AlmaLinux 8 with crypto.policy: STIG — the third leg of the #84 gate.
+#
+# AL8 is the one alma distro whose kernel-FIPS behaviour was reasoned rather
+# than observed: `alma8/crypto_policy.py` records that SSG's
+# enable_dracut_fips_module remediation runs `fips-mode-setup --enable`, which
+# on AL8 exists (AL10 ships no such command — that is why ks-gen enables FIPS
+# natively now). So oscap may already have put this host in FIPS before
+# ks-gen's own %post block runs; the block must be idempotent over that.
+#
+# Datastream split vs its siblings: ssg-almalinux8 0.1.74 ships neither
+# fips_crypto_subpolicy nor system_booted_in_fips_mode, and its stig profile
+# refines var_system_crypto_policy to plain FIPS (AL9 uses FIPS:STIG). The
+# smoke check skips rules a datastream does not ship and requires a real
+# `pass` from the ones it does.
+#
+# Uses the AL8 DVD, which carries a package payload, so no install.source
+# override is needed — unlike the AL9/AL10 boot.iso fixtures.
+#
+# MUST be run with KEY_TYPE=rsa. A FIPS/STIG host drops ssh-ed25519 from
+# PubkeyAcceptedAlgorithms, so the harness's default ed25519 key cannot log in
+# and the run times out at the SSH wait even when the install is perfect (#73).
+# run.sh detects `policy: STIG` here and switches the key type itself.
+distro: alma8
+system:
+  hostname: regression.local
+crypto:
+  policy: STIG
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "__SSH_PUBKEY__"
+    sudo: nopasswd_yes
+disk:
+  target: vda
+packages:
+  required:
+    - scap-security-guide
+    - openscap-scanner
+    - aide
+    - audit
+    - rsyslog
+    - chrony
+    - firewalld
+    - sudo
+    - policycoreutils-python-utils
+# smoke-check.sh asserts the container-host state unconditionally, so every
+# fixture enables it.
+containers:
+  enabled: true
+  users: []
+  volume:
+    size: "5G"  # 60G test disk vs 44G of fixed LVs + swap + /boot + EFI ≈ 12G free
