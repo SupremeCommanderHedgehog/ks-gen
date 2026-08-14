@@ -56,15 +56,27 @@ _GNUTLS_PRIORITY = {"STIG": "SECURE128", "MODERN": "SECURE128", "FUTURE": "SECUR
 
 # ssg-ubuntu2404-ds.xml names the FIPS check `is_fips_mode_enabled` (vs
 # alma9's `enable_fips_mode`) and the three sshd cipher checks carry an
-# `_ordered_stig` suffix (vs alma9's bare names). Same conceptual targets
-# — our crypto_policy override moots them when policy != STIG.
+# `_ordered_stig` suffix (vs alma9's bare names). Same conceptual targets —
+# our crypto_policy override moots the sshd ones when policy != STIG.
 _PREFIX = "xccdf_org.ssgproject.content_rule_"
+
+# No Ubuntu policy can pass this: kernel FIPS needs an Ubuntu Pro fips-updates
+# entitlement ks-gen does not manage. Left enabled it fails on every host with
+# nothing in exceptions.md, and oscap remediates toward a FIPS it cannot
+# reach (#84).
+_ALWAYS_DISABLED = [f"{_PREFIX}is_fips_mode_enabled"]
+
 _TAILORED_WHEN_NOT_STIG = [
-    f"{_PREFIX}is_fips_mode_enabled",
     f"{_PREFIX}sshd_use_approved_ciphers_ordered_stig",
     f"{_PREFIX}sshd_use_approved_kex_ordered_stig",
     f"{_PREFIX}sshd_use_approved_macs_ordered_stig",
 ]
+
+
+def _disabled_for(cfg: HostConfig) -> list[str]:
+    if cfg.crypto.policy.value == "STIG":
+        return list(_ALWAYS_DISABLED)
+    return [*_ALWAYS_DISABLED, *_TAILORED_WHEN_NOT_STIG]
 
 
 def _emit_ssh(cfg: HostConfig) -> str:
@@ -132,15 +144,15 @@ class _Rule:
     id: str = meta.ID
     summary: str = meta.SUMMARY
     depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
-    stig_rules_affected: list[str] = field(default_factory=lambda: list(_TAILORED_WHEN_NOT_STIG))
+    stig_rules_affected: list[str] = field(
+        default_factory=lambda: [*_ALWAYS_DISABLED, *_TAILORED_WHEN_NOT_STIG]
+    )
 
     def applies(self, cfg: HostConfig) -> bool:
         return True
 
     def emit_tailoring(self, cfg: HostConfig) -> list[TailoringOp]:
-        if cfg.crypto.policy.value == "STIG":
-            return []
-        return [TailoringOp(rule_id=r, action="disable") for r in _TAILORED_WHEN_NOT_STIG]
+        return [TailoringOp(rule_id=r, action="disable") for r in _disabled_for(cfg)]
 
     def emit_post(self, cfg: HostConfig) -> str:
         return _emit(cfg)
@@ -149,14 +161,25 @@ class _Rule:
         return []
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
-        if cfg.crypto.policy.value == "STIG":
-            return None
+        policy = cfg.crypto.policy.value
+        if policy == "STIG":
+            return ExceptionEntry(
+                rule_id=meta.ID,
+                summary="STIG algorithms without FIPS kernel mode",
+                stig_rules_disabled=list(_ALWAYS_DISABLED),
+                reason=(
+                    "Ubuntu 24.04 cannot enter FIPS kernel mode without an Ubuntu Pro "
+                    "fips-updates entitlement, which ks-gen does not manage. "
+                    "crypto.policy=STIG pins STIG-aligned algorithms across sshd, "
+                    "OpenSSL and GnuTLS, but the host is not FIPS 140-3 validated."
+                ),
+            )
         return ExceptionEntry(
             rule_id=meta.ID,
-            summary=f"{cfg.crypto.policy.value} crypto policy",
-            stig_rules_disabled=list(_TAILORED_WHEN_NOT_STIG),
+            summary=f"{policy} crypto policy",
+            stig_rules_disabled=_disabled_for(cfg),
             reason=(
-                f"{cfg.crypto.policy.value} accepts loss of FIPS 140-3 certification "
+                f"{policy} accepts loss of FIPS 140-3 certification "
                 "in exchange for Curve25519 / Ed25519 / ChaCha20-Poly1305 support."
             ),
         )

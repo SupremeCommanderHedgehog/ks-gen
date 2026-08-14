@@ -179,18 +179,25 @@ def test_emit_tailoring_disables_four_cipher_rules_when_not_stig(ubuntu_cfg_fact
     assert all(op.action == "disable" for op in ops)
 
 
-def test_emit_tailoring_returns_empty_when_stig_policy(ubuntu_cfg_factory):
+def test_emit_tailoring_disables_only_the_fips_rule_when_stig_policy(ubuntu_cfg_factory):
+    # #84: STIG writes the algorithm lists the three sshd_ rules check, so those
+    # must stay enabled — but no Ubuntu host can reach kernel FIPS.
     from ks_gen.config import Crypto, CryptoPolicy
 
     cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.STIG)})
-    assert RULE.emit_tailoring(cfg) == []
+    ops = RULE.emit_tailoring(cfg)
+    assert {op.rule_id for op in ops} == {"xccdf_org.ssgproject.content_rule_is_fips_mode_enabled"}
+    assert all(op.action == "disable" for op in ops)
 
 
-def test_exception_entry_returns_none_when_stig_policy(ubuntu_cfg_factory):
+def test_exception_entry_declares_the_fips_rule_when_stig_policy(ubuntu_cfg_factory):
     from ks_gen.config import Crypto, CryptoPolicy
 
     cfg = ubuntu_cfg_factory().model_copy(update={"crypto": Crypto(policy=CryptoPolicy.STIG)})
-    assert RULE.exception_entry(cfg) is None
+    entry = RULE.exception_entry(cfg)
+    assert entry is not None
+    assert entry.stig_rules_disabled == ["xccdf_org.ssgproject.content_rule_is_fips_mode_enabled"]
+    assert "fips-updates" in entry.reason
 
 
 def test_exception_entry_populated_when_not_stig(ubuntu_cfg_factory):

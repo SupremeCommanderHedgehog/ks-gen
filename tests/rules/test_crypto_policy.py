@@ -81,11 +81,14 @@ def test_no_exception_for_stig(minimal_cfg):
 _ALMA = ["alma8", "alma9", "alma10"]
 
 
+def _rule(distro: str):
+    return next(r for r in load_rules(distro) if r.id == "crypto_policy")
+
+
 def _post(minimal_cfg, distro: str, policy: str) -> str:
     base = minimal_cfg.model_dump(exclude={"meta", "install"})
     cfg = HostConfig.model_validate({**base, "distro": distro, "crypto": {"policy": policy}})
-    rule = next(r for r in load_rules(distro) if r.id == "crypto_policy")
-    return rule.emit_post(cfg)
+    return _rule(distro).emit_post(cfg)
 
 
 @pytest.mark.parametrize("distro", _ALMA)
@@ -134,3 +137,42 @@ def test_policy_header_line_stays_first(minimal_cfg, distro, policy):
     """run.sh parses this line to learn the expected policy — keep it line 1."""
     body = _post(minimal_cfg, distro, policy)
     assert body.splitlines()[0].startswith("# Apply system-wide crypto policy:")
+
+
+# ---- #84: Ubuntu can never reach kernel FIPS, so say so under STIG too ----
+
+_IS_FIPS = "xccdf_org.ssgproject.content_rule_is_fips_mode_enabled"
+
+
+def _ubuntu_cfg(minimal_cfg, policy: str) -> HostConfig:
+    base = minimal_cfg.model_dump(exclude={"meta", "install"})
+    return HostConfig.model_validate({**base, "distro": "ubuntu2404", "crypto": {"policy": policy}})
+
+
+def _ubuntu_disabled(minimal_cfg, policy: str) -> set[str]:
+    cfg = _ubuntu_cfg(minimal_cfg, policy)
+    return {op.rule_id for op in _rule("ubuntu2404").emit_tailoring(cfg) if op.action == "disable"}
+
+
+@pytest.mark.parametrize("policy", ["STIG", "MODERN", "FUTURE"])
+def test_ubuntu_always_disables_is_fips_mode_enabled(minimal_cfg, policy):
+    assert _IS_FIPS in _ubuntu_disabled(minimal_cfg, policy)
+
+
+@pytest.mark.parametrize("policy", ["STIG", "MODERN", "FUTURE"])
+def test_ubuntu_declares_every_rule_it_disables(minimal_cfg, policy):
+    entry = _rule("ubuntu2404").exception_entry(_ubuntu_cfg(minimal_cfg, policy))
+    assert entry is not None
+    assert _ubuntu_disabled(minimal_cfg, policy) <= set(entry.stig_rules_disabled)
+
+
+def test_ubuntu_stig_exception_names_the_pro_entitlement(minimal_cfg):
+    """The reason must say why it cannot pass, not just that it is disabled."""
+    entry = _rule("ubuntu2404").exception_entry(_ubuntu_cfg(minimal_cfg, "STIG"))
+    assert entry is not None
+    assert "fips-updates" in entry.reason
+
+
+def test_ubuntu_stig_keeps_the_sshd_algorithm_rules_enabled(minimal_cfg):
+    """STIG writes exactly those algorithm lists, so those rules must evaluate."""
+    assert _ubuntu_disabled(minimal_cfg, "STIG") == {_IS_FIPS}
