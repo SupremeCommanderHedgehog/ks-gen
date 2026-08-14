@@ -726,9 +726,10 @@ class UnattendedUpdatesCfg(StrictModel):
 
 
 class Overrides(StrictModel):
-    # None = derive from crypto.policy (HostConfig.kernel_fips). Kept as an
-    # explicit assertion rather than deleted: StrictModel forbids extra keys,
-    # so removing it would break every host.yaml naming it (#84).
+    # Deprecated and never an input: FIPS kernel mode is derived
+    # (HostConfig.kernel_fips). Kept as an accepted key rather than deleted —
+    # StrictModel forbids extras, so removing it would break every host.yaml
+    # naming it, including the ones ks-gen itself wrote (#84).
     fips_mode: bool | None = None
     # Asserts a physical console exists; ks-gen cannot tell. See #76.
     console_login_only: bool = False
@@ -797,24 +798,25 @@ class HostConfig(StrictModel):
 
     @model_validator(mode="after")
     def _fips_mode_agrees_with_policy(self) -> HostConfig:
+        """Reject a declaration that FIPS is on where it is not (#84).
+
+        The opposite direction — a stale `fips_mode: false` on a STIG host —
+        loads as an inert leftover: every bundle ks-gen wrote before the field
+        became derived carries it, and `verify` re-loads that host.yaml.
+        `load_host_config` reports it so it does not pass unnoticed.
+        """
         declared = self.overrides.fips_mode
-        if declared is None or declared == self.kernel_fips:
+        if not declared or declared == self.kernel_fips:
             return self
-        if declared and self.crypto.policy in (CryptoPolicy.MODERN, CryptoPolicy.FUTURE):
+        if self.crypto.policy in (CryptoPolicy.MODERN, CryptoPolicy.FUTURE):
             raise ValueError(
                 "crypto.policy=MODERN/FUTURE conflicts with overrides.fips_mode=true: "
                 "FIPS kernel mode blocks Curve25519/Ed25519 at the kernel layer."
             )
-        if declared:
-            raise ValueError(
-                f"overrides.fips_mode=true is not supported for distro={self.distro}: "
-                "kernel FIPS needs an Ubuntu Pro fips-updates entitlement ks-gen does "
-                "not manage, so crypto.policy=STIG configures algorithms only."
-            )
         raise ValueError(
-            "crypto.policy=STIG enables FIPS kernel mode and overrides.fips_mode=false "
-            "cannot opt out. Choose crypto.policy=MODERN or FUTURE, or drop "
-            "overrides.fips_mode to accept the derived value."
+            f"overrides.fips_mode=true is not supported for distro={self.distro}: "
+            "kernel FIPS needs an Ubuntu Pro fips-updates entitlement ks-gen does "
+            "not manage, so crypto.policy=STIG configures algorithms only."
         )
 
     @model_validator(mode="after")

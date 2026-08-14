@@ -181,8 +181,6 @@ def test_run_wizard_empty_group_selector_matches_legacy(monkeypatch: pytest.Monk
 
     _cfg, yaml_text = run_wizard(interactive=True)
     # Build the legacy payload from the same inputs to compare.
-    import yaml
-
     legacy = {
         "system": {"hostname": "host01", "timezone": "UTC", "locale": "en_US.UTF-8"},
         "user": {
@@ -196,12 +194,12 @@ def test_run_wizard_empty_group_selector_matches_legacy(monkeypatch: pytest.Monk
         "crypto": {"policy": "MODERN"},
     }
     from ks_gen.config import HostConfig
+    from ks_gen.writer import dump_host_yaml
 
-    legacy_cfg = HostConfig.model_validate(legacy)
-    legacy_yaml = yaml.safe_dump(
-        legacy_cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False
-    )
-    assert yaml_text == legacy_yaml
+    assert yaml_text == dump_host_yaml(HostConfig.model_validate(legacy))
+    # The wizard never prompts for the derived fips_mode, so it must not
+    # write one either (#84).
+    assert "fips_mode" not in yaml_text
 
 
 # --- _disk group tests -----------------------------------------------------

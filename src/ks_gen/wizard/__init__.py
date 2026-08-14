@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import yaml
-
 from ks_gen.config import HostConfig
 from ks_gen.wizard import _core, _disk, _network, _overrides, _prompts
 from ks_gen.wizard._core import WizardError as WizardError
 from ks_gen.wizard._core import write_initial as write_initial
+from ks_gen.writer import dump_host_yaml
 
 __all__ = ["WizardError", "run_wizard", "write_initial"]
 
@@ -33,9 +32,6 @@ def run_wizard(*, interactive: bool) -> tuple[HostConfig, str]:
             if overrides_fragment:  # omit empty dict so schema defaults apply
                 payload["overrides"] = overrides_fragment
         cfg = HostConfig.model_validate(payload)
-        yaml_text = yaml.safe_dump(
-            cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False
-        )
-        return cfg, yaml_text
+        return cfg, dump_host_yaml(cfg)
     except KeyboardInterrupt as e:
         raise WizardError("aborted by user") from e

@@ -29,6 +29,26 @@ def test_build_bundle_returns_four_artifacts(tmp_path):
     assert bundle.host_yaml.startswith("meta:") or "system:" in bundle.host_yaml
 
 
+def test_host_yaml_omits_the_derived_fips_mode(tmp_path):
+    """#84: dumping the derived value is what let it go stale — a bundle
+    generated now must not carry the key at all, and must still round-trip."""
+    cfg_path = tmp_path / "host.yaml"
+    cfg_path.write_text(
+        YAML.replace("system:", "crypto: {policy: STIG}\nsystem:").replace(
+            "ssh-ed25519 AAAA a@b", "ssh-rsa AAAA a@b"
+        ),
+        encoding="utf-8",
+    )
+    cfg = load_host_config(cfg_path, sets=[])
+    assert cfg.kernel_fips is True
+    dumped = yaml.safe_load(build_bundle(cfg).host_yaml)
+    assert "fips_mode" not in dumped["overrides"]
+
+    out = tmp_path / "regen.yaml"
+    out.write_text(yaml.safe_dump(dumped), encoding="utf-8")
+    assert load_host_config(out, sets=[]).kernel_fips is True
+
+
 def test_write_bundle_creates_files(tmp_path):
     cfg_path = tmp_path / "host.yaml"
     cfg_path.write_text(YAML, encoding="utf-8")

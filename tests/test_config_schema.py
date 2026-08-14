@@ -1833,9 +1833,35 @@ def test_declared_fips_mode_matching_the_derived_value_is_accepted(minimal_cfg, 
 
 
 @pytest.mark.parametrize("distro", _FIPS_DISTROS)
-def test_stig_cannot_opt_out_of_kernel_fips(minimal_cfg, distro):
-    with pytest.raises(ValidationError, match="cannot opt out"):
-        _fips_cfg(minimal_cfg, distro, CryptoPolicy.STIG, fips_mode=False)
+def test_stig_ignores_a_stale_fips_mode_false(minimal_cfg, distro):
+    """A STIG host still gets kernel FIPS when the config says otherwise (#84).
+
+    Every bundle ks-gen wrote before fips_mode became derived carries
+    `overrides.fips_mode: false` in its host.yaml, and `verify` re-loads that
+    file — so rejecting the value would strand already-deployed STIG hosts.
+    It loads, it is kept verbatim (the loader flags it), and it changes nothing.
+    """
+    cfg = _fips_cfg(minimal_cfg, distro, CryptoPolicy.STIG, fips_mode=False)
+    assert cfg.kernel_fips is True
+    assert cfg.overrides.fips_mode is False
+
+
+@pytest.mark.parametrize("distro", _ALL_DISTROS)
+@pytest.mark.parametrize("policy", list(CryptoPolicy))
+def test_declared_fips_mode_never_changes_kernel_fips(minimal_cfg, distro, policy):
+    """Declared values are assertions, never inputs (#84).
+
+    Whatever loads keeps the derived kernel_fips, and the only declaration
+    rejected is the dangerous direction: fips_mode=true where FIPS is off.
+    """
+    derived = _fips_cfg(minimal_cfg, distro, policy).kernel_fips
+    for declared in (True, False):
+        try:
+            cfg = _fips_cfg(minimal_cfg, distro, policy, fips_mode=declared)
+        except ValidationError:
+            assert declared is True and derived is False
+            continue
+        assert cfg.kernel_fips is derived
 
 
 @pytest.mark.parametrize("distro", _ALL_DISTROS)

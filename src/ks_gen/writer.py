@@ -34,6 +34,20 @@ def _exception_tailoring_ops(cfg: HostConfig) -> list[TailoringOp]:
     return ops
 
 
+def dump_host_yaml(cfg: HostConfig) -> str:
+    """Serialize `cfg` as a host.yaml, minus fields ks-gen derives.
+
+    `overrides.fips_mode` is derived from crypto.policy + distro, so writing it
+    back out bakes in a value that goes stale the next time the derivation
+    changes — which is exactly what broke `verify` on older bundles (#84).
+    """
+    return yaml.safe_dump(
+        cfg.model_dump(mode="json", exclude={"overrides": {"fips_mode"}}),
+        sort_keys=False,
+        default_flow_style=False,
+    )
+
+
 @dataclass(frozen=True)
 class Bundle:
     """Generated artifacts for one host.
@@ -120,9 +134,7 @@ def _build_rhel_family_bundle(cfg: HostConfig) -> Bundle:
         tailoring_ops, profile_id=profile_id, scap_content=cfg.meta.scap_content
     )
     ks_cfg = render_skeleton(cfg, post_blocks=list(post_blocks), rule_packages=rule_packages)
-    host_yaml = yaml.safe_dump(
-        cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False
-    )
+    host_yaml = dump_host_yaml(cfg)
     exceptions_md = render_exceptions_md(cfg, applicable)
     return Bundle(
         distro=cfg.distro,
@@ -158,9 +170,7 @@ def _build_ubuntu2404_bundle(cfg: HostConfig) -> Bundle:
     )
     user_data = render_user_data(cfg, post_blocks, rule_packages=rule_packages)
     meta_data = render_meta_data(cfg)
-    host_yaml = yaml.safe_dump(
-        cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False
-    )
+    host_yaml = dump_host_yaml(cfg)
     exceptions_md = render_exceptions_md(cfg, applicable)
     return Bundle(
         distro="ubuntu2404",

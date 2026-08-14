@@ -226,9 +226,19 @@ disabled and declared in `exceptions.md` for that reason.
 
 **Hard constraint:** `overrides.fips_mode` is derived, not chosen.
 `crypto.policy: STIG` on AlmaLinux enables FIPS kernel mode; MODERN and
-FUTURE never do; Ubuntu cannot. Omit the key and ks-gen derives it. Setting
-it to a value that contradicts `crypto.policy` is rejected at config load
-(exit code 3, rule conflict) rather than silently ignored.
+FUTURE never do; Ubuntu cannot. The key is deprecated — omit it. What
+ks-gen does with a declared value depends on the direction:
+
+- `fips_mode: true` where FIPS is **off** (`MODERN`/`FUTURE`, or
+  `distro: ubuntu2404`) is rejected at config load (exit code 3, rule
+  conflict). It asserts a protection the host will not have.
+- `fips_mode: false` on a STIG AlmaLinux host loads, warns on stderr
+  naming the key, and changes nothing — the host still boots `fips=1`.
+  Every bundle ks-gen wrote before the field became derived carries this
+  value in its `host.yaml`, and `ks-gen verify` re-loads that file, so
+  rejecting it would strand already-deployed hosts.
+
+Generated `host.yaml` files no longer contain the key at all.
 
 **Hard constraint:** `crypto.policy: STIG` requires at least one
 `ssh-rsa`/`rsa-sha2-*` or `ecdsa-sha2-nistp{256,384,521}` key in
@@ -756,7 +766,10 @@ or loosen the STIG/remote-safe tradeoff for a specific host.
 
 ```yaml
 overrides:
-  fips_mode: null                  # derived from crypto.policy; omit it
+  # fips_mode:                     # DEPRECATED — derived from crypto.policy +
+                                   # distro (§3.5). Omit it; a declared value
+                                   # is either rejected (true where FIPS is
+                                   # off) or warned about and ignored.
   console_login_only: false        # bool; declares a physical console exists,
                                    # opening the console login path (§4.5).
                                    # Requires user.admin.password.
@@ -996,7 +1009,7 @@ will give you autocomplete + inline validation via:
 | 0 | Success |
 | 1 | Usage error (bad CLI arguments) |
 | 2 | Config invalid (YAML or schema failed) |
-| 3 | Rule conflict (e.g., `crypto.policy=MODERN` + `overrides.fips_mode=true`, or `crypto.policy=STIG` + `overrides.fips_mode=false`) |
+| 3 | Rule conflict (e.g., `crypto.policy=MODERN` + `overrides.fips_mode=true`, or `distro=ubuntu2404` + `overrides.fips_mode=true`) |
 | 4 | Lint failure on generated `ks.cfg` |
 | 5 | External tool missing (`xorriso`, `ksvalidator`, `ssh`/`scp`) |
 | 6 | `verify`: at least one rule fails on the live host |
