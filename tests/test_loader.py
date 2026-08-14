@@ -63,3 +63,42 @@ def test_exit_code_tailoring_drift_is_8() -> None:
     from ks_gen.loader import ExitCode
 
     assert int(ExitCode.TAILORING_DRIFT) == 8
+
+
+def test_stig_with_fips_mode_false_is_a_rule_conflict(tmp_path):
+    """#84: opting out of kernel FIPS under STIG is a conflict, not bad syntax."""
+    p = tmp_path / "host.yaml"
+    p.write_text(
+        "system: {hostname: h.example.com}\n"
+        "crypto: {policy: STIG}\n"
+        "overrides: {fips_mode: false}\n"
+        "user:\n"
+        "  admin:\n"
+        "    name: ops\n"
+        '    authorized_keys: ["ssh-rsa AAAA a@b"]\n'
+        "    sudo: nopasswd_yes\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError) as e:
+        load_host_config(p, sets=[])
+    assert e.value.exit_code == ExitCode.RULE_CONFLICT
+
+
+def test_ubuntu_stig_with_fips_mode_true_is_a_rule_conflict(tmp_path):
+    """#84: kernel FIPS on Ubuntu needs a Pro entitlement ks-gen doesn't manage."""
+    p = tmp_path / "host.yaml"
+    p.write_text(
+        "system: {hostname: h.example.com}\n"
+        "distro: ubuntu2404\n"
+        "crypto: {policy: STIG}\n"
+        "overrides: {fips_mode: true}\n"
+        "user:\n"
+        "  admin:\n"
+        "    name: ops\n"
+        '    authorized_keys: ["ssh-rsa AAAA a@b"]\n'
+        "    sudo: nopasswd_yes\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError) as e:
+        load_host_config(p, sets=[])
+    assert e.value.exit_code == ExitCode.RULE_CONFLICT
