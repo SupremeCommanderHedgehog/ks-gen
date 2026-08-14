@@ -120,6 +120,16 @@ def test_non_stig_never_touches_fips(minimal_cfg, distro, policy):
 
 @pytest.mark.parametrize("distro", _ALMA)
 @pytest.mark.parametrize("policy", ["STIG", "MODERN", "FUTURE"])
+def test_post_fips_block_matches_the_bootloader_predicate(minimal_cfg, distro, policy):
+    """%post and the fips=1 boot arg must never disagree (#84)."""
+    base = minimal_cfg.model_dump(exclude={"meta", "install"})
+    cfg = HostConfig.model_validate({**base, "distro": distro, "crypto": {"policy": policy}})
+    rule = next(r for r in load_rules(distro) if r.id == "crypto_policy")
+    assert ("fips-mode-setup --enable" in rule.emit_post(cfg)) is cfg.kernel_fips
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+@pytest.mark.parametrize("policy", ["STIG", "MODERN", "FUTURE"])
 def test_policy_header_line_stays_first(minimal_cfg, distro, policy):
     """run.sh parses this line to learn the expected policy — keep it line 1."""
     body = _post(minimal_cfg, distro, policy)

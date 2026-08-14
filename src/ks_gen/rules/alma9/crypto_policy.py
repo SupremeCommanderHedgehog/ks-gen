@@ -126,7 +126,8 @@ def _emit_post(cfg: HostConfig) -> str:
     target = _policy_target(cfg)
     lines = [f"# Apply system-wide crypto policy: {policy} ({target})"]
 
-    if policy == "STIG":
+    if cfg.kernel_fips:
+        # Same predicate as the fips=1 bootloader arg, so the two cannot disagree.
         # fips-mode-setup resets the policy to plain FIPS, so it must run
         # before the update-crypto-policies call below (#66). Its own
         # `dracut -f` targets `uname -r` — the *installer's* kernel inside
