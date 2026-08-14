@@ -129,18 +129,35 @@ def _emit_post(cfg: HostConfig) -> str:
     if cfg.kernel_fips:
         # Same predicate as the fips=1 bootloader arg, so the two cannot disagree.
         # fips-mode-setup resets the policy to plain FIPS, so it must run
-        # before the update-crypto-policies call below (#66). Its own
-        # `dracut -f` targets `uname -r` — the *installer's* kernel inside
-        # anaconda's chroot — so regenerate every installed initramfs after.
-        # No `|| true`: a host that claims FIPS without being in FIPS is #84.
+        # before the update-crypto-policies call below (#66). Its exit code is
+        # not evidence: its inner `dracut -f` targets `uname -r` — the
+        # *installer's* kernel inside anaconda's chroot, absent on a network
+        # install — so assert the outcome and abort only on that (#84).
         lines += [
             "# Kernel FIPS mode: dracut module + fips=1; takes effect at first boot",
-            "fips-mode-setup --enable || {",
-            "  echo 'ks-gen: fips-mode-setup --enable failed; refusing to ship a host"
-            " that claims FIPS but is not in FIPS mode (#84)' >&2",
-            "  exit 1",
-            "}",
+            "# Its exit code is not evidence: the inner dracut -f targets the"
+            " installer's kernel, so assert the outcome instead (#84)",
+            "fips-mode-setup --enable || echo 'ks-gen: fips-mode-setup --enable returned"
+            " non-zero; verifying the outcome below (#84)' >&2",
+            "[ -f /etc/dracut.conf.d/40-fips.conf ] || { echo 'ks-gen:"
+            " /etc/dracut.conf.d/40-fips.conf is missing, so no initramfs would carry the"
+            " FIPS module (#84)' >&2; exit 1; }",
             "dracut -f --regenerate-all",
+            'ks_kargs="$(grubby --info=ALL)"',
+            "# /boot is always separate here, and fips=1 without a matching boot= leaves"
+            " dracut unable to find /boot/.vmlinuz-*.hmac",
+            'if [[ "$ks_kargs" != *boot=UUID=[0-9a-fA-F]* ]]; then',
+            '  ks_boot_uuid="$(findmnt -no UUID /boot || true)"',
+            '  [ -n "$ks_boot_uuid" ] || { echo \'ks-gen: cannot read the /boot UUID;'
+            " refusing to ship fips=1 with no boot=UUID= (#84)' >&2; exit 1; }",
+            '  grubby --update-kernel=ALL --args="boot=UUID=$ks_boot_uuid"',
+            '  ks_kargs="$(grubby --info=ALL)"',
+            "fi",
+            '[[ "$ks_kargs" == *fips=1* ]] || { echo \'ks-gen: no fips=1 in the installed'
+            " kernel args; the host would boot without FIPS (#84)' >&2; exit 1; }",
+            '[[ "$ks_kargs" == *boot=UUID=[0-9a-fA-F]* ]] || { echo \'ks-gen: no boot=UUID='
+            " in the installed kernel args; a FIPS boot would drop to the dracut emergency"
+            " shell (#84)' >&2; exit 1; }",
         ]
 
     base, _, submodule = target.partition(":")

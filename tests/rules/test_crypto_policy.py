@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
+
 import pytest
 
 from ks_gen.config import Crypto, CryptoPolicy, HostConfig
@@ -114,11 +117,87 @@ def test_fips_enablement_failure_aborts_the_install(minimal_cfg, distro):
 
 
 @pytest.mark.parametrize("distro", _ALMA)
+def test_fips_mode_setup_exit_code_alone_is_not_fatal(minimal_cfg, distro):
+    """Its inner `dracut -f` targets the installer's kernel and fails on a
+    network install; the outcome is what matters, not the exit code (#84)."""
+    body = _post(minimal_cfg, distro, "STIG")
+    stmt = next(ln for ln in body.splitlines() if ln.startswith("fips-mode-setup --enable"))
+    assert "exit 1" not in stmt
+    assert not stmt.rstrip().endswith("{")
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_stig_asserts_fips_reached_the_installed_kernel_args(minimal_cfg, distro):
+    """fips=1 missing from the installed entries means a non-FIPS boot (#84)."""
+    body = _post(minimal_cfg, distro, "STIG")
+    assert "grubby --info=ALL" in body
+    checks = [ln for ln in body.splitlines() if "fips=1" in ln and "exit 1" in ln]
+    assert checks, body
+    assert all("ks-gen:" in ln for ln in checks)
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_stig_requires_the_dracut_fips_conf(minimal_cfg, distro):
+    """No 40-fips.conf means the regenerated initramfs has no FIPS module (#84)."""
+    body = _post(minimal_cfg, distro, "STIG")
+    check = next(ln for ln in body.splitlines() if "/etc/dracut.conf.d/40-fips.conf" in ln)
+    assert "exit 1" in check
+    assert "ks-gen:" in check
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_stig_establishes_a_non_empty_boot_uuid(minimal_cfg, distro):
+    """/boot is always separate; fips=1 without boot= drops to the dracut shell."""
+    body = _post(minimal_cfg, distro, "STIG")
+    assert "findmnt -no UUID /boot" in body
+    assert "grubby --update-kernel=ALL --args=" in body
+    assert "boot=UUID=$" in body or "boot=UUID=${" in body
+    assert 'boot=UUID="' not in body  # never a bare, empty value
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_stig_aborts_when_boot_uuid_cannot_be_resolved(minimal_cfg, distro):
+    body = _post(minimal_cfg, distro, "STIG")
+    guard = next(ln for ln in body.splitlines() if "findmnt" not in ln and "boot_uuid" in ln)
+    assert "exit 1" in guard
+    assert "ks-gen:" in guard
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_initramfs_is_regenerated_for_every_installed_kernel(minimal_cfg, distro):
+    """`dracut -f` alone targets `uname -r` — the installer's kernel (#84)."""
+    body = _post(minimal_cfg, distro, "STIG")
+    assert "dracut -f --regenerate-all" in body
+
+
+@pytest.mark.parametrize("distro", _ALMA)
+def test_fips_verification_precedes_the_policy_set(minimal_cfg, distro):
+    """All of it must land before update-crypto-policies re-applies the policy (#66)."""
+    body = _post(minimal_cfg, distro, "STIG")
+    assert body.index("40-fips.conf") < body.index("update-crypto-policies --set")
+    assert body.index("grubby") < body.index("update-crypto-policies --set")
+
+
+@pytest.mark.parametrize("distro", _ALMA)
 @pytest.mark.parametrize("policy", ["MODERN", "FUTURE"])
 def test_non_stig_never_touches_fips(minimal_cfg, distro, policy):
     body = _post(minimal_cfg, distro, policy)
     assert "fips-mode-setup" not in body
     assert "dracut" not in body
+    assert "grubby" not in body
+    assert "findmnt" not in body
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+@pytest.mark.parametrize("distro", _ALMA)
+@pytest.mark.parametrize("policy", ["STIG", "MODERN", "FUTURE"])
+def test_emitted_post_is_valid_bash(minimal_cfg, distro, policy, tmp_path):
+    script = tmp_path / "post.sh"
+    script.write_text("set -euxo pipefail\n" + _post(minimal_cfg, distro, policy))
+    proc = subprocess.run(
+        [shutil.which("bash") or "bash", "-n", str(script)], capture_output=True, text=True
+    )
+    assert proc.returncode == 0, proc.stderr
 
 
 @pytest.mark.parametrize("distro", _ALMA)
