@@ -124,10 +124,31 @@ Note the `configure_crypto_policy` line above predates the live-re-scan change
   `feat/84-stig-kernel-fips` — `%post` now enables kernel FIPS natively
   (`/etc/system-fips`, `40-fips.conf`, `dracut -f --regenerate-all`,
   `grubby`), and the `FIPS*` arm of `smoke-check.sh` asserts the installed
-  host really boots in FIPS mode. A 2026-08-13 AL10 run aborted in `%post`
-  on `fips-mode-setup: command not found` — AL10 ships no such command —
-  which is why the mechanism is native. That arm has never completed
-  against a real VM.
+  host really boots in FIPS mode. An intermediate run that day aborted in
+  `%post` on `fips-mode-setup: command not found` — AL10 ships no such
+  command — which is why the mechanism is native.
+- **2026-08-14, AlmaLinux 10.2 / `STIG` with kernel FIPS** (`al10-stig-crypto`,
+  network install) — green end-to-end, `disk size: 4.36 GiB`. First ks-gen host
+  of any distro that actually boots in FIPS mode, and the run that closes #84.
+  The whole `FIPS*` arm on its first real exercise:
+
+```
+ok:   kernel booted with fips=1
+ok:   kernel command line carries boot=UUID=
+ok:   /proc/sys/crypto/fips_enabled is 1
+ok:   /etc/dracut.conf.d/40-fips.conf present
+ok:   enable_fips_mode: pass
+ok:   sysctl_crypto_fips_enabled: pass
+ok:   fips_crypto_subpolicy: pass
+ok:   system_booted_in_fips_mode: pass
+ok:   enable_dracut_fips_module: absent from this datastream
+```
+
+  That the host booted at all is the load-bearing result: it confirms
+  `01fips-crypto-policies` self-enables via its own `check()`, so naming only
+  `fips` in `40-fips.conf` yields a correct initramfs. Until this run that was
+  read out of dracut's `module-setup.sh`, not observed. SSH-with-RSA also
+  authenticated under FIPS (#73), since the smoke check ran at all.
 - **2026-06-12, AlmaLinux 9 default fixture** — 14 assertions.
 
 ## Eight traps documented for future maintainers
