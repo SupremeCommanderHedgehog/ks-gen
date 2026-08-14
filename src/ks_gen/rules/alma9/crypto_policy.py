@@ -72,6 +72,44 @@ def _policy_target(cfg: HostConfig) -> str:
     return _NON_STIG_POLICY[policy]
 
 
+# The long lines of the kernel-FIPS %post block, named rather than split inside
+# the list literal: implicit concatenation there reads as a missing comma, which
+# is both a CodeQL finding and a real hazard in a list of shell commands.
+_ERR_NO_DRACUT_CONF = (
+    "ks-gen: /etc/dracut.conf.d/40-fips.conf is missing, so no initramfs "
+    "would carry the FIPS module (#84)"
+)
+_ERR_NO_BOOT_UUID = (
+    "ks-gen: cannot read the /boot UUID; refusing to ship fips=1 with no boot=UUID= (#84)"
+)
+_ERR_NO_FIPS_KARG = (
+    "ks-gen: no fips=1 in the installed kernel args; the host would boot without FIPS (#84)"
+)
+_ERR_NO_BOOT_KARG = (
+    "ks-gen: no boot=UUID= in the installed kernel args; a FIPS boot would drop "
+    "to the dracut emergency shell (#84)"
+)
+_C_FIPS_CRYPTO_POLICIES = (
+    "# AL10's fips-crypto-policies module is pulled in by its own dracut "
+    "dependency; naming it here would break AL8, which has no such module"
+)
+_C_REGENERATE_ALL = (
+    "# --regenerate-all: `dracut -f` alone targets uname -r, which inside "
+    "anaconda's chroot is the installer's kernel"
+)
+_C_SEPARATE_BOOT = (
+    "# /boot is always separate here, and fips=1 without a matching boot= leaves "
+    "dracut unable to find /boot/.vmlinuz-*.hmac"
+)
+_C_FSTAB_FIRST = (
+    "# --fstab first: in the chroot the live mount table keys /boot as "
+    "/mnt/sysimage/boot, so only the fstab lookup resolves"
+)
+_FINDMNT_LIVE_FALLBACK = (
+    '[ -n "$ks_boot_uuid" ] || ks_boot_uuid="$(findmnt -f -t noautofs -no UUID '
+    '--mountpoint /boot || true)"'
+)
+
 _EXCEPTION_REASON = (
     "{policy} accepts loss of FIPS 140-3 certification in exchange for "
     "Curve25519 / Ed25519 / ChaCha20-Poly1305 support. The system crypto "
@@ -140,30 +178,21 @@ def _emit_post(cfg: HostConfig) -> str:
             "# dracut's fips module installs this file into the initramfs; no package ships it",
             "echo '# FIPS module installation complete' > /etc/system-fips",
             "echo 'add_dracutmodules+=\" fips \"' > /etc/dracut.conf.d/40-fips.conf",
-            "# AL10's fips-crypto-policies module is pulled in by its own dracut"
-            " dependency; naming it here would break AL8, which has no such module",
-            "[ -f /etc/dracut.conf.d/40-fips.conf ] || { echo 'ks-gen:"
-            " /etc/dracut.conf.d/40-fips.conf is missing, so no initramfs would carry the"
-            " FIPS module (#84)' >&2; exit 1; }",
-            "# --regenerate-all: `dracut -f` alone targets uname -r, which inside"
-            " anaconda's chroot is the installer's kernel",
+            _C_FIPS_CRYPTO_POLICIES,
+            f"[ -f /etc/dracut.conf.d/40-fips.conf ] || {{ echo '{_ERR_NO_DRACUT_CONF}'"
+            f" >&2; exit 1; }}",
+            _C_REGENERATE_ALL,
             "dracut -f --regenerate-all",
-            "# /boot is always separate here, and fips=1 without a matching boot= leaves"
-            " dracut unable to find /boot/.vmlinuz-*.hmac",
-            "# --fstab first: in the chroot the live mount table keys /boot as"
-            " /mnt/sysimage/boot, so only the fstab lookup resolves",
+            _C_SEPARATE_BOOT,
+            _C_FSTAB_FIRST,
             'ks_boot_uuid="$(findmnt -f -t noautofs -no UUID --fstab --mountpoint /boot || true)"',
-            '[ -n "$ks_boot_uuid" ] || ks_boot_uuid="$(findmnt -f -t noautofs -no UUID'
-            ' --mountpoint /boot || true)"',
-            '[ -n "$ks_boot_uuid" ] || { echo \'ks-gen: cannot read the /boot UUID;'
-            " refusing to ship fips=1 with no boot=UUID= (#84)' >&2; exit 1; }",
+            _FINDMNT_LIVE_FALLBACK,
+            f"[ -n \"$ks_boot_uuid\" ] || {{ echo '{_ERR_NO_BOOT_UUID}' >&2; exit 1; }}",
             'grubby --update-kernel=ALL --args="fips=1 boot=UUID=$ks_boot_uuid"',
             'ks_kargs="$(grubby --info=ALL)"',
-            '[[ "$ks_kargs" == *fips=1* ]] || { echo \'ks-gen: no fips=1 in the installed'
-            " kernel args; the host would boot without FIPS (#84)' >&2; exit 1; }",
-            '[[ "$ks_kargs" == *boot=UUID=[0-9a-fA-F]* ]] || { echo \'ks-gen: no boot=UUID='
-            " in the installed kernel args; a FIPS boot would drop to the dracut emergency"
-            " shell (#84)' >&2; exit 1; }",
+            f"[[ \"$ks_kargs\" == *fips=1* ]] || {{ echo '{_ERR_NO_FIPS_KARG}' >&2; exit 1; }}",
+            f'[[ "$ks_kargs" == *boot=UUID=[0-9a-fA-F]* ]] || {{ echo'
+            f" '{_ERR_NO_BOOT_KARG}' >&2; exit 1; }}",
         ]
 
     base, _, submodule = target.partition(":")
