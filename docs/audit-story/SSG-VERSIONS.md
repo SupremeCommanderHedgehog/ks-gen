@@ -5,15 +5,16 @@ specific downstream `scap-security-guide` / `ssg-debderived` package versions.
 **These were the versions installed on a freshly-built ks-gen host as of
 2026-08-14** — i.e., what `oscap` saw at install time on that date.
 
-> **These lists are a snapshot, and nothing detects drift from them.** No
-> test, no CI job and no runtime check compares them against what the distro
-> currently ships; they only go stale quietly. That is #90: AlmaLinux 8 moved
-> from SSG 0.1.74 to 0.1.81, its `stig` profile switched to the `FIPS:STIG`
-> sub-policy and dropped most of the FIPS-only rules it used to select, and
-> ks-gen kept applying plain `FIPS` — so `configure_crypto_policy` failed on
-> every AL8 STIG host until a real install turned it up. Re-extract per the
-> recipe below whenever a target's SSG package moves, and treat the date above
-> as the age of everything in this directory.
+> **These lists are a snapshot**, so treat the date above as the age of
+> everything in this directory. Drift from them used to go unnoticed
+> entirely — that was #90: AlmaLinux 8 moved from SSG 0.1.74 to 0.1.81, its
+> `stig` profile switched to the `FIPS:STIG` sub-policy and dropped most of
+> the FIPS-only rules it used to select, and ks-gen kept applying plain
+> `FIPS` — so `configure_crypto_policy` failed on every AL8 STIG host until a
+> real install turned it up. `.github/workflows/ssg-drift.yml` now re-extracts
+> from the live repos weekly and opens an `ssg-drift` issue when these files
+> stop matching shipping content; re-extract per the recipe below when it
+> does.
 
 | Distro | Package | Version | Source URL |
 |---|---|---|---|
@@ -24,38 +25,32 @@ specific downstream `scap-security-guide` / `ssg-debderived` package versions.
 
 ## Re-extraction recipe (reproducibility for SSG version bumps)
 
-Tools needed: `rpm2cpio`, `cpio`, `dpkg-deb`. On Ubuntu WSL:
-`sudo apt install rpm2cpio cpio` (`dpkg-deb` is preinstalled).
+Tools needed: `curl`, `rpm2cpio`, `cpio`, `dpkg-deb`, `gzip`. On Ubuntu WSL:
+`sudo apt install rpm2cpio cpio` (the rest are preinstalled).
+
+`scripts/audit_story/fetch_shipping_datastreams.sh` downloads whatever each
+distro ships *right now* — it resolves the highest `scap-security-guide` RPM in
+each AlmaLinux AppStream repo and the highest `ssg-debderived` deb in noble's
+universe pool, so it does not need updating when a version moves. `ssg-drift.yml`
+runs this same script; keeping one copy is the point.
 
 ```bash
 WORK=/tmp/ssg-extract
-mkdir -p "$WORK" && cd "$WORK"
 
-curl -sLo al8.rpm \
-  https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el8_10.alma.1.noarch.rpm
-curl -sLo al9.rpm \
-  https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el9_8.alma.1.noarch.rpm
-curl -sLo al10.rpm \
-  https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el10_2.alma.1.noarch.rpm
-curl -sLo ssg.deb \
-  http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.80-1_all.deb
-
-# Extract the datastream files
-rpm2cpio al8.rpm | cpio -id --quiet './usr/share/xml/scap/ssg/content/ssg-almalinux8-ds.xml'
-mkdir al9-ex && (cd al9-ex && rpm2cpio ../al9.rpm | cpio -id --quiet \
-  './usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml')
-mkdir al10-ex && (cd al10-ex && rpm2cpio ../al10.rpm | cpio -id --quiet \
-  './usr/share/xml/scap/ssg/content/ssg-almalinux10-ds.xml')
-mkdir ubuntu-ex && dpkg-deb -x ssg.deb ubuntu-ex/
+# Downloads the 4 datastreams and prints "<label> package: <exact filename>"
+# for each (also written to $WORK/shipping-versions.txt).
+scripts/audit_story/fetch_shipping_datastreams.sh "$WORK"
 
 # Run the extractor (from the ks-gen repo root)
 python3 scripts/audit_story/extract_ssg_rule_ids.py \
-  --datastream alma8="$WORK/usr/share/xml/scap/ssg/content/ssg-almalinux8-ds.xml" \
-  --datastream alma9="$WORK/al9-ex/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml" \
-  --datastream alma10="$WORK/al10-ex/usr/share/xml/scap/ssg/content/ssg-almalinux10-ds.xml" \
-  --datastream ubuntu2404="$WORK/ubuntu-ex/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml" \
+  --datastream alma8="$WORK/ssg-almalinux8-ds.xml" \
+  --datastream alma9="$WORK/ssg-almalinux9-ds.xml" \
+  --datastream alma10="$WORK/ssg-almalinux10-ds.xml" \
+  --datastream ubuntu2404="$WORK/ssg-ubuntu2404-ds.xml" \
   --out-dir docs/audit-story/
 ```
+
+Then update the version table above from the printed `package:` lines.
 
 Re-running on a bump rewrites `*-rule-ids.txt`, `*-stig-selected.txt`, and
 `cross-distro-rule-id-diff.md` in-place — `git diff` shows what SSG changed.
@@ -128,5 +123,7 @@ latest upstream release. So we pin against what's actually deployable today.
 
 When a downstream bumps SSG, re-extract per the recipe above. If the diff
 moves rule IDs that ks-gen rules reference, update the rules and bump the
-versions in this file. Nothing notices the bump for you — see the note at the
-top.
+versions in this file. `ssg-drift.yml` notices the bump for you, weekly, and
+files an `ssg-drift` issue naming the changed files — a fetch failure fails
+that job with a different message and never opens an issue, so a drift issue
+always means real content movement.
