@@ -38,6 +38,17 @@ KS_GEN_PY="${KS_GEN_PY:-$HOME/.venvs/ks-gen/bin/python}"
 
 SRC_ISO="${SRC_ISO:-$REPO/AlmaLinux-9-latest-x86_64-dvd.iso}"
 
+# Default fixture is the AL9 STIG one. Override with FIXTURE_TEMPLATE
+# (absolute or harness-relative) to run a different cfg — e.g., the AL8
+# fixture at fixtures/al8-omit-dnf-automatic.host.yaml.tmpl.
+#
+# Defined here rather than at step 2 because step 1 greps it to pick KEY_TYPE,
+# and the admin defaults below are derived from it too. Under `set -u` the
+# earlier reference aborted the run outright unless the caller happened to
+# export FIXTURE_TEMPLATE, which is why only overridden invocations worked.
+FIXTURE_TEMPLATE="${FIXTURE_TEMPLATE:-$FIXTURES/omit-dnf-automatic.host.yaml.tmpl}"
+[[ -r "$FIXTURE_TEMPLATE" ]] || { echo "missing fixture template: $FIXTURE_TEMPLATE" >&2; exit 1; }
+
 # The admin account the fixture creates — this is who we SSH in as. Override
 # for fixtures that name their admin something other than the stock opsadmin.
 ADMIN_USER="${ADMIN_USER:-opsadmin}"
@@ -107,11 +118,8 @@ PUBKEY="$(cat "$KEY.pub")"
 
 # ---- step 2: render host.yaml ---------------------------------------------
 HOST_YAML="$BUILD/host.yaml"
-# Default fixture is the AL9 STIG one. Override with FIXTURE_TEMPLATE
-# (absolute or harness-relative) to run a different cfg — e.g., the AL8
-# fixture at fixtures/al8-omit-dnf-automatic.host.yaml.tmpl.
-FIXTURE_TEMPLATE="${FIXTURE_TEMPLATE:-$FIXTURES/omit-dnf-automatic.host.yaml.tmpl}"
-[[ -r "$FIXTURE_TEMPLATE" ]] || { echo "missing fixture template: $FIXTURE_TEMPLATE" >&2; exit 1; }
+# FIXTURE_TEMPLATE is resolved and checked up in the config block, because
+# step 1 needs it to derive KEY_TYPE.
 # sed substitution rather than envsubst so the public key (which contains '+'
 # and '/') passes through unmangled. The placeholder is fixed and unique.
 awk -v pk="$PUBKEY" '{ gsub(/__SSH_PUBKEY__/, pk); print }' \
