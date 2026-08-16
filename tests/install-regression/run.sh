@@ -28,9 +28,24 @@ FIXTURES="$HERE/fixtures"
 # via a symlink so artifacts stay browseable from PowerShell.
 BUILD="${BUILD:-$HOME/.cache/ks-gen-install-regression}"
 mkdir -p "$BUILD"
-if [[ ! -L "$HERE/build" ]]; then
+# Rebuild the link when it is missing, is not a symlink, or DANGLES. Testing
+# only for -L left a dangling link untouched forever: a checkout migrated
+# between machines kept a link into the old host's home directory silently,
+# because a broken symlink is still a symlink. `-e` follows the link, so
+# `! -e` is exactly the dangling case ($BUILD already exists by now, via the
+# mkdir above).
+#
+# Deliberately NOT "repoint whenever the target differs from $BUILD": with
+# BUILD set to somewhere at or under $HERE/build, that aims the link inside
+# itself and every subsequent write dies with ELOOP. The link is cosmetic —
+# nothing in this script reads through it, $BUILD is used directly — so
+# leaving a valid link alone is the safe behaviour.
+#
+# rm -rf first because `ln -sfn` does NOT replace a real directory: it creates
+# the link *inside* it and still exits 0.
+if [[ ! -L "$HERE/build" || ! -e "$HERE/build" ]]; then
   rm -rf "$HERE/build"
-  ln -sf "$BUILD" "$HERE/build"
+  ln -sfn "$BUILD" "$HERE/build"
 fi
 
 KS_GEN="${KS_GEN:-$HOME/.venvs/ks-gen/bin/ks-gen}"
