@@ -49,12 +49,36 @@ SRC_ISO="${SRC_ISO:-$REPO/AlmaLinux-9-latest-x86_64-dvd.iso}"
 FIXTURE_TEMPLATE="${FIXTURE_TEMPLATE:-$FIXTURES/omit-dnf-automatic.host.yaml.tmpl}"
 [[ -r "$FIXTURE_TEMPLATE" ]] || { echo "missing fixture template: $FIXTURE_TEMPLATE" >&2; exit 1; }
 
-# The admin account the fixture creates — this is who we SSH in as. Override
-# for fixtures that name their admin something other than the stock opsadmin.
+# Read one scalar out of the fixture's user.admin block. Indentation-scoped so
+# a `name:` or `sudo:` elsewhere in the cfg cannot be picked up by accident.
+fixture_admin_field() {
+  awk -v want="$1:" '
+    /^user:/                          { in_user = 1; next }
+    in_user && /^[^[:space:]]/        { in_user = 0; in_admin = 0 }
+    in_user && /^[[:space:]]+admin:/  { in_admin = 1; next }
+    in_admin && /^[[:space:]]{1,2}[^[:space:]]/ { in_admin = 0 }
+    in_admin && $1 == want            { print $2; exit }
+  ' "$FIXTURE_TEMPLATE"
+}
+
+# The admin account the fixture creates — this is who we SSH in as. DERIVED
+# from the fixture for the same reason KEY_TYPE is (see step 1): getting it
+# wrong does not fail fast, it burns the whole DEADLINE_SECONDS budget and then
+# reports "SSH never came up", which reads as a product failure rather than a
+# harness misconfiguration. An explicit ADMIN_USER still wins.
+ADMIN_USER="${ADMIN_USER:-$(fixture_admin_field name)}"
 ADMIN_USER="${ADMIN_USER:-opsadmin}"
-# Set when the fixture uses sudo: nopasswd_no, so the smoke check escalates
-# with `sudo -S` instead. Fed over ssh stdin, never as a command argument.
+
+# Likewise for the sudo mode. A nopasswd_no fixture needs ADMIN_SUDO_PASSWORD
+# or the smoke check dies on "sudo: no tty present" at the very end of the run;
+# a nopasswd_yes fixture must NOT be handed one, because sudo then never reads
+# stdin and the password stays on the pipe for the smoke check to inherit.
+ADMIN_SUDO_MODE="${ADMIN_SUDO_MODE:-$(fixture_admin_field sudo)}"
+ADMIN_SUDO_MODE="${ADMIN_SUDO_MODE:-nopasswd_yes}"
+# Fed over ssh stdin, never as a command argument, so it stays out of the
+# guest's process list.
 ADMIN_SUDO_PASSWORD="${ADMIN_SUDO_PASSWORD:-}"
+
 # Virtual disk size. Raise it for a fixture whose layout allocates more than
 # the 60G default.
 DISK_SIZE="${DISK_SIZE:-60G}"
@@ -86,6 +110,26 @@ done
 [[ -r "$OVMF_CODE"          ]] || { echo "missing: $OVMF_CODE (apt install ovmf)"      >&2; exit 1; }
 [[ -r "$OVMF_VARS_TEMPLATE" ]] || { echo "missing: $OVMF_VARS_TEMPLATE (apt install ovmf)" >&2; exit 1; }
 [[ -r "$SRC_ISO"            ]] || { echo "missing: $SRC_ISO"                              >&2; exit 1; }
+
+# qemu-img takes a bare integer as BYTES, so a well-meant DISK_SIZE=800 creates
+# an 800-byte image, succeeds, and surfaces an hour later as an opaque anaconda
+# partitioning failure. Demand an explicit unit.
+[[ "$DISK_SIZE" =~ ^[0-9]+([.][0-9]+)?[kKmMgGtT]$ ]] || {
+  echo "DISK_SIZE must carry a unit suffix, e.g. 60G (got: $DISK_SIZE)" >&2; exit 1; }
+
+# Fail fast on a sudo-mode/password mismatch rather than at the smoke check,
+# which is 13-90 min in.
+if [[ "$ADMIN_SUDO_MODE" == "nopasswd_no" && -z "$ADMIN_SUDO_PASSWORD" ]]; then
+  echo "fixture $(basename "$FIXTURE_TEMPLATE") sets sudo: nopasswd_no —" >&2
+  echo "set ADMIN_SUDO_PASSWORD to the admin's password or the smoke check" >&2
+  echo "will fail with 'sudo: no tty present' after the full install." >&2
+  exit 1
+fi
+if [[ "$ADMIN_SUDO_MODE" != "nopasswd_no" && -n "$ADMIN_SUDO_PASSWORD" ]]; then
+  echo "[fixture is sudo: $ADMIN_SUDO_MODE] ignoring ADMIN_SUDO_PASSWORD — sudo"
+  echo "would not consume it and it would leak onto the smoke check's stdin."
+  ADMIN_SUDO_PASSWORD=""
+fi
 
 # ---- step 1: SSH key ------------------------------------------------------
 # KEY_TYPE must suit the fixture's crypto policy. A FIPS/STIG host removes
@@ -261,7 +305,8 @@ while (( $(date +%s) < DEADLINE )); do
 done
 
 if ! ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 true 2>/dev/null; then
-  echo "SSH never came up within 2h" >&2
+  echo "SSH never came up within ${DEADLINE_SECONDS:-5400}s as $ADMIN_USER" >&2
+  echo "(if the fixture's admin is not '$ADMIN_USER', set ADMIN_USER)" >&2
   exit 1
 fi
 
@@ -272,15 +317,33 @@ fi
 # "Sorry, try again" with no hint the account is now locked.
 # Measured 2026-08-15: one failed pre-flight costs 2 of the 3 tallies (sudo
 # retries internally and hits EOF on the exhausted stdin), so this fails
-# *before* lockout but does not leave room for a second attempt — fix the
-# password rather than re-running, and reset faillock if you already tripped it.
+# *before* lockout but does not leave room for a second attempt.
+#
+# No faillock reset instructions here on purpose: `trap cleanup EXIT` SIGKILLs
+# QEMU on the way out and step 5 recreates disk.qcow2 from scratch, so the
+# lockout dies with the guest. Correct the password and re-run.
 if [[ -n "$ADMIN_SUDO_PASSWORD" ]]; then
-  if ! printf '%s\n' "$ADMIN_SUDO_PASSWORD" \
-       | ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 "sudo -S -p '' true" 2>/dev/null; then
-    echo "ADMIN_SUDO_PASSWORD is not valid for $ADMIN_USER — not retrying." >&2
-    echo "faillock deny=3 would lock the account for 900s. If it is already" >&2
-    echo "locked, reset from another wheel account on the guest:" >&2
-    echo "  sudo faillock --user $ADMIN_USER --reset" >&2
+  preflight_err=""
+  preflight_rc=0
+  # Captured with `|| rc=$?` rather than `if ! ...`, because inside an
+  # `if ! cmd` body $? is the *inverted* status (always 0) and the ssh-255
+  # branch below would never be reachable.
+  preflight_err="$(printf '%s\n' "$ADMIN_SUDO_PASSWORD" \
+    | ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 "sudo -S -p '' true" 2>&1 >/dev/null)" \
+    || preflight_rc=$?
+  if (( preflight_rc != 0 )); then
+    # ssh reserves 255 for its own failures (connection dropped, host key
+    # changed, sshd restarting during first-boot settling). Calling that a bad
+    # password sends the operator to debug a password that was fine.
+    if (( preflight_rc == 255 )); then
+      echo "ssh transport failure during sudo pre-flight (rc=255), not an auth failure:" >&2
+      echo "${preflight_err:-<no stderr>}" >&2
+    else
+      echo "ADMIN_SUDO_PASSWORD appears invalid for $ADMIN_USER (rc=$preflight_rc)." >&2
+      echo "${preflight_err:-<no stderr>}" >&2
+      echo "Not retrying — faillock deny=3 leaves no room for a second attempt." >&2
+      echo "The guest is discarded on exit, so just fix the password and re-run." >&2
+    fi
     exit 1
   fi
 fi
