@@ -39,6 +39,25 @@ STAGNATION_BUDGET=3600 \
   tests/install-regression/run.sh
 ```
 
+### Admin identity and disk size
+
+`ADMIN_USER` and `ADMIN_SUDO_MODE` are **derived from the fixture's
+`user.admin` block**, the same way `KEY_TYPE` is derived from its crypto
+policy — a mismatch does not fail fast, it burns the whole
+`DEADLINE_SECONDS` budget and then reports "SSH never came up", which reads
+as a product failure. Override only to contradict the fixture.
+
+| Var | Default | Notes |
+|---|---|---|
+| `ADMIN_USER` | fixture's `user.admin.name` (else `opsadmin`) | who the harness SSHes in as |
+| `ADMIN_SUDO_PASSWORD` | empty | **required** when the fixture is `sudo: nopasswd_no`; ignored (and cleared) otherwise, since sudo would not consume it and it would land on the smoke check's stdin |
+| `DISK_SIZE` | `60G` | must carry a unit suffix — a bare `800` is 800 *bytes* to `qemu-img` and fails an hour later as an opaque anaconda partitioning error |
+
+Sizing note: qcow2 is sparse, so a larger `DISK_SIZE` costs only what anaconda
+actually writes — but size the **host's** free space to the install, not to
+`DISK_SIZE`. A workstation fixture with ~700G of thick LVs consumed ~11 GiB of
+an 800G virtual disk, and a guest that really did fill it would fill the host.
+
 ## Two traps when driving this from an automated session
 
 1. **Never background the launch** (a detached shell SIGHUPs QEMU) and
@@ -181,8 +200,9 @@ ok:   system_booted_in_fips_mode: absent from this datastream
    sends anaconda's TUI to the invisible VGA framebuffer and the
    install hangs. Use `inst.text inst.notmux
    inst.console=ttyS0,115200n8 console=ttyS0,115200n8`.
-2. **Disk size.** Default STIG layout needs ≥ 50G. Harness uses 60G
-   qcow2 (sparse — costs ~the install footprint, not 60G).
+2. **Disk size.** Default STIG layout needs ≥ 50G. Harness defaults to a 60G
+   qcow2 (sparse — costs ~the install footprint, not 60G), overridable with
+   `DISK_SIZE`.
 3. **WSL `/mnt/c` (DrvFs).** Kills qcow2 perf (~10x slower than
    ext4), ignores `chmod` (breaks SSH key perms), rejects Unix
    sockets (breaks QEMU `-monitor unix:`). Keep runtime artifacts

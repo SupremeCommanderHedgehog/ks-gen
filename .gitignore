@@ -24,6 +24,11 @@ out/
 # Source AlmaLinux ISOs (multi-GiB, not source code)
 *.iso
 
+# Local store of vendor install media for the install-regression harness.
+# The whole directory, not just *.iso — checksums, .sig/.asc files and notes
+# that land alongside the media are equally not source.
+/vendor_iso/
+
 # Editor / OS
 .vscode/
 .idea/
