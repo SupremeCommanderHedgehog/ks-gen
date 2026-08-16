@@ -38,6 +38,16 @@ KS_GEN_PY="${KS_GEN_PY:-$HOME/.venvs/ks-gen/bin/python}"
 
 SRC_ISO="${SRC_ISO:-$REPO/AlmaLinux-9-latest-x86_64-dvd.iso}"
 
+# The admin account the fixture creates — this is who we SSH in as. Override
+# for fixtures that name their admin something other than the stock opsadmin.
+ADMIN_USER="${ADMIN_USER:-opsadmin}"
+# Set when the fixture uses sudo: nopasswd_no, so the smoke check escalates
+# with `sudo -S` instead. Fed over ssh stdin, never as a command argument.
+ADMIN_SUDO_PASSWORD="${ADMIN_SUDO_PASSWORD:-}"
+# Virtual disk size. Raise it for a fixture whose layout allocates more than
+# the 60G default.
+DISK_SIZE="${DISK_SIZE:-60G}"
+
 # Ubuntu's ovmf package. As of 26.04 the legacy plain-name files
 # (OVMF_CODE.fd) are gone; only the 4M variants ship. SecureBoot off
 # variant — kickstart has no secure-boot signing story.
@@ -137,15 +147,18 @@ fi
 [[ -f "$DATA_DISK" ]] && rm "$DATA_DISK"
 [[ -f "$NVRAM" ]]     && rm "$NVRAM"
 # 60G covers the default STIG layout (15+5+3+10+5+3+2 = 43G of LVs + 1G boot
-# + 1G EFI + recommended-size swap). qcow2 is sparse — backing file stays
-# small until anaconda actually allocates extents.
+# + 1G EFI + recommended-size swap). qcow2 is sparse, so a bigger DISK_SIZE
+# costs only what anaconda actually writes — but size the HOST's free space to
+# the install, not to DISK_SIZE: a workstation fixture with ~700G of thick LVs
+# consumed ~11 GiB of a 800G virtual disk, and a guest that really did fill it
+# would fill the host too.
 # Remove the previous run's serial log. If QEMU dies before writing one, the
 # failure branches below would otherwise tail a stale log — which replays an
 # EARLIER successful boot and reads as a passing run. That cost three
 # misdiagnosed runs on 2026-08-12.
 rm -f "$SERIAL_LOG" "$QEMU_LOG"
 
-qemu-img create -f qcow2 "$DISK" 60G >/dev/null
+qemu-img create -f qcow2 "$DISK" "$DISK_SIZE" >/dev/null
 # Data disk: 1G raw, pre-filled with the marker at offset 0. Small + raw
 # so smoke-check can dd-read the first sector directly without parsing
 # qcow2. The marker is the regression signal — if it survives, anaconda
@@ -233,26 +246,54 @@ while (( $(date +%s) < DEADLINE )); do
       exit 1
     fi
   fi
-  if ssh "${SSH_OPTS[@]}" opsadmin@127.0.0.1 true 2>/dev/null; then
+  if ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 true 2>/dev/null; then
     break
   fi
   sleep 20
 done
 
-if ! ssh "${SSH_OPTS[@]}" opsadmin@127.0.0.1 true 2>/dev/null; then
+if ! ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 true 2>/dev/null; then
   echo "SSH never came up within 2h" >&2
   exit 1
 fi
 
 # ---- step 8: smoke check --------------------------------------------------
+# Pre-flight the sudo password before the real call. These hosts run faillock
+# with deny=3, and a wrong ADMIN_SUDO_PASSWORD otherwise burns all three tries
+# and locks the admin out for unlock_time (900s), surfacing only as a bare
+# "Sorry, try again" with no hint the account is now locked.
+# Measured 2026-08-15: one failed pre-flight costs 2 of the 3 tallies (sudo
+# retries internally and hits EOF on the exhausted stdin), so this fails
+# *before* lockout but does not leave room for a second attempt — fix the
+# password rather than re-running, and reset faillock if you already tripped it.
+if [[ -n "$ADMIN_SUDO_PASSWORD" ]]; then
+  if ! printf '%s\n' "$ADMIN_SUDO_PASSWORD" \
+       | ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 "sudo -S -p '' true" 2>/dev/null; then
+    echo "ADMIN_SUDO_PASSWORD is not valid for $ADMIN_USER — not retrying." >&2
+    echo "faillock deny=3 would lock the account for 900s. If it is already" >&2
+    echo "locked, reset from another wheel account on the guest:" >&2
+    echo "  sudo faillock --user $ADMIN_USER --reset" >&2
+    exit 1
+  fi
+fi
+
 scp -P "$SSH_HOST_PORT" \
     -i "$KEY" \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
-    "$HERE/smoke-check.sh" opsadmin@127.0.0.1:/tmp/smoke-check.sh
+    "$HERE/smoke-check.sh" "$ADMIN_USER"@127.0.0.1:/tmp/smoke-check.sh
 
-ssh "${SSH_OPTS[@]}" opsadmin@127.0.0.1 \
-  "sudo DATA_DISK_MARKER='$DATA_DISK_MARKER' EXPECTED_CRYPTO_POLICY='$EXPECTED_CRYPTO_POLICY' bash /tmp/smoke-check.sh"
+SMOKE_ENV="DATA_DISK_MARKER='$DATA_DISK_MARKER' EXPECTED_CRYPTO_POLICY='$EXPECTED_CRYPTO_POLICY'"
+if [[ -n "$ADMIN_SUDO_PASSWORD" ]]; then
+  # -S reads the password from stdin, -p '' drops the prompt. Fed over ssh
+  # stdin so it never appears in the guest's process list.
+  printf '%s\n' "$ADMIN_SUDO_PASSWORD" \
+    | ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 \
+        "sudo -S -p '' $SMOKE_ENV bash /tmp/smoke-check.sh"
+else
+  ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 \
+    "sudo $SMOKE_ENV bash /tmp/smoke-check.sh"
+fi
 
 echo
 echo "install-regression PASS — install completed end-to-end + smoke check green"
