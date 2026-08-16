@@ -44,3 +44,30 @@ pytest-out.txt
 # Convenience symlink created by tests/install-regression/run.sh at runtime
 # (points into ~/.cache; a symlink cannot be indexed by git on Windows).
 tests/install-regression/build
+
+# Generated bundles — these carry a real `rootpw --iscrypted` hash and real
+# authorized_keys. `build/` and `out/` above cover the documented --out paths,
+# but `ks-gen new --out ./anywhere-else` lands outside both, so name the
+# artifacts themselves. The curated placeholder copies under examples/ and
+# tests/ are unaffected (they are not at these paths).
+ks.cfg
+tailoring.xml
+exceptions.md
+/*.host.yaml
+
+# Secret material — never commit.
+.env
+.env.*
+!.env.example
+*.pem
+*.pfx
+*.p12
+id_rsa
+id_ed25519
+secrets.*
+credentials.*
+
+# *.key would catch stray private keys, but tests/golden/ has a tracked LUKS
+# sidecar fixture by that name — keep the fixture, ignore everything else.
+*.key
+!tests/golden/*.key
