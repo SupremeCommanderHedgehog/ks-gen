@@ -3,6 +3,23 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.36.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.35.1...v0.36.0) (2026-09-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **crypto:** crypto.policy=STIG now enables FIPS kernel mode ([#89](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/89))
+
+### Features
+
+* **crypto:** crypto.policy=STIG now enables FIPS kernel mode ([#89](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/89)) ([4c4a66e](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/4c4a66efc067d31979fb26c45ecb621d47663ba7))
+
+
+### Bug Fixes
+
+* **crypto:** let oscap own the STIG crypto target and pin content across the install ([#90](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/90)) ([#92](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/92)) ([23b8ee5](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/23b8ee50fb4492b2f32e3383fe05d688d519a7fe))
+* **install-regression:** rebuild the build/ convenience link when it dangles ([#95](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/95)) ([02b761d](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/02b761d6e7f7092bb0c091041867a87c1888e9f9))
+
 ## [0.35.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.35.0...v0.35.1) (2026-08-14)
 
 
