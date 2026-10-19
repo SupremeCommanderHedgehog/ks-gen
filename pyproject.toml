@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ks-gen"
 version = "0.36.0"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 description = "Remote-safe DISA STIG kickstart generator for AlmaLinux 8/9/10."
 authors = [{ name = "Patrick Connallon" }]
 license = { file = "LICENSE" }
@@ -34,9 +34,7 @@ classifiers = [
   "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
   "Topic :: System :: Installation/Setup",
   "Topic :: System :: Systems Administration",
 ]
@@ -69,7 +67,7 @@ packages = ["src/ks_gen"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 src = ["src", "tests"]
 # Ad-hoc operator/debug helpers for the manual install-regression harness —
 # they monkey-patch module constants before importing, so E402 is inherent.

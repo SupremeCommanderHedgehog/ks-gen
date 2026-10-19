@@ -6,7 +6,7 @@ document before opening a PR.
 
 ## Development environment
 
-Python 3.11+ is required. From a clean checkout:
+Python 3.12+ is required (CI tests 3.12). From a clean checkout:
 
 ```bash
 python -m venv .venv
