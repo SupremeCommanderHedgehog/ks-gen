@@ -2,7 +2,7 @@
 
 [![ci](https://github.com/SupremeCommanderHedgehog/ks-gen/actions/workflows/ci.yml/badge.svg)](https://github.com/SupremeCommanderHedgehog/ks-gen/actions/workflows/ci.yml)
 [![License: GPL v3+](https://img.shields.io/badge/License-GPLv3+-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/ks-gen/)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://pypi.org/project/ks-gen/)
 [![Latest release](https://img.shields.io/github/v/release/SupremeCommanderHedgehog/ks-gen?display_name=tag&sort=semver)](https://github.com/SupremeCommanderHedgehog/ks-gen/releases/latest)
 [![Open issues](https://img.shields.io/github/issues/SupremeCommanderHedgehog/ks-gen)](https://github.com/SupremeCommanderHedgehog/ks-gen/issues)
 

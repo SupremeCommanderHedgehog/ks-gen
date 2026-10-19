@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Protocol, TypeVar
+from typing import Protocol
 
 
 class _HasIdAndDeps(Protocol):
@@ -9,14 +9,11 @@ class _HasIdAndDeps(Protocol):
     depends_on: list[str]
 
 
-T = TypeVar("T", bound=_HasIdAndDeps)
-
-
 class CycleError(Exception):
     pass
 
 
-def topo_sort(rules: Iterable[T]) -> list[T]:
+def topo_sort[T: _HasIdAndDeps](rules: Iterable[T]) -> list[T]:
     by_id: dict[str, T] = {r.id: r for r in rules}
     visited: dict[str, str] = {}  # id -> "in" | "done"
     order: list[T] = []

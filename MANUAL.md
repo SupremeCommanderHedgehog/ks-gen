@@ -23,7 +23,7 @@ This document is the operator's reference for `ks-gen` v0.1. The
 
 ## 1. What ks-gen is
 
-`ks-gen` is a Python 3.11+ CLI that turns one YAML file into a fully
+`ks-gen` is a Python 3.12+ CLI that turns one YAML file into a fully
 configured AlmaLinux 9 Anaconda kickstart. The generated kickstart is:
 
 - **DISA STIG compliant** — most rules are applied by the upstream
@@ -70,7 +70,7 @@ configured AlmaLinux 9 Anaconda kickstart. The generated kickstart is:
 
 ### Requirements
 
-- Python 3.11, 3.12, or 3.13
+- Python 3.12 or newer (tested on 3.12)
 - `pip` or `pipx`
 - `xorriso` (only for `ks-gen iso`)
 

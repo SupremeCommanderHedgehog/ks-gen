@@ -131,9 +131,7 @@ gh api -X PUT repos/SupremeCommanderHedgehog/ks-gen/rulesets/$RULESET_ID \
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
           {"context": "ruff"},
-          {"context": "test (3.11)"},
           {"context": "test (3.12)"},
-          {"context": "test (3.13)"},
           {"context": "analyze (python)"}
         ]
       }
