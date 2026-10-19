@@ -20,6 +20,11 @@ bounced a PR before (2026-06-02, PR #2).
 If `ruff format --check` fails, fix with `ruff format src tests`, verify
 with `--check` again, then commit as `style:`.
 
+If the diff touches `.github/workflows/`, also run
+`uvx --from actionlint-py actionlint` (the CI `ruff` job runs actionlint
+1.7.12). GitHub drops an invalid workflow file without failing any check —
+`ssg-drift.yml` never ran from 2026-08-14 until #109 for that reason.
+
 ## Code review — run /code-review before shipping
 
 Run `/code-review` on the working diff before shipping ANY code change —

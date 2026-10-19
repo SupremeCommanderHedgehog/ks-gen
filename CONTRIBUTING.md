@@ -30,6 +30,16 @@ misses formatting drift — `ruff format --check` is a separate check.
 If `ruff format --check` fails, fix with `ruff format src tests`,
 verify with `--check` again, then commit as `style:`.
 
+If you touched `.github/workflows/`, also run
+[actionlint](https://github.com/rhysd/actionlint) (CI runs it in the
+`ruff` job). GitHub rejects an invalid workflow file silently instead
+of failing a check, which is how `ssg-drift.yml` went months without
+running (#109):
+
+```bash
+uvx --from actionlint-py actionlint   # or any actionlint 1.7.12 binary
+```
+
 ## Snapshot tests
 
 Golden snapshots use `syrupy` and live at `tests/__snapshots__/` and
