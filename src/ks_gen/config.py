@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -658,7 +658,10 @@ class AuditdActionsCfg(StrictModel):
 class SshKeepOpenCfg(StrictModel):
     ensure_firewalld_port: bool = True
     ensure_selinux_port: bool = True
-    ensure_ufw_port: bool = True
+    # Deprecated, no effect: Ubuntu support was removed (#103). Accepted so
+    # host.yaml files that `gen` wrote before then (it writes every default
+    # back out) still load; `load_host_config` warns and `gen` drops it.
+    ensure_ufw_port: bool | None = Field(default=None, json_schema_extra={"deprecated": True})
 
 
 class UsbguardCfg(StrictModel):
@@ -756,21 +759,31 @@ class ExceptionDecl(StrictModel):
     stig_rules_disabled: list[str] = Field(..., min_length=1)
 
 
-# Distros where ks-gen can put the kernel in FIPS mode. Ubuntu needs an Ubuntu
-# Pro `fips-updates` entitlement ks-gen does not manage (#84).
-_KERNEL_FIPS_DISTROS = frozenset({"alma8", "alma9", "alma10"})
+Distro = Literal["alma9", "alma8", "alma10"]
+SUPPORTED_DISTROS: tuple[str, ...] = get_args(Distro)
+
+# Removed distros, mapped to the issue that removed them, so a stale host.yaml
+# gets told why instead of a bare "input should be 'alma9', ..." error.
+REMOVED_DISTROS = {"ubuntu2404": "#103"}
+
+
+def removed_distro_message(distro: str) -> str:
+    return (
+        f"distro={distro} is no longer supported: ks-gen targets AlmaLinux only "
+        f"({', '.join(sorted(SUPPORTED_DISTROS))}) since {REMOVED_DISTROS[distro]}. "
+        "Use an earlier ks-gen release to regenerate this host."
+    )
 
 
 _DEFAULT_SCAP_CONTENT_BY_DISTRO: dict[str, str] = {
     "alma9": "ssg-almalinux9-ds.xml",
     "alma8": "ssg-almalinux8-ds.xml",
     "alma10": "ssg-almalinux10-ds.xml",
-    "ubuntu2404": "ssg-ubuntu2404-ds.xml",
 }
 
 
 class HostConfig(StrictModel):
-    distro: Literal["alma9", "alma8", "alma10", "ubuntu2404"] = "alma9"
+    distro: Distro = "alma9"
     meta: Meta = Field(default_factory=Meta)
     system: System
     network: Network = Field(default_factory=Network)
@@ -791,10 +804,9 @@ class HostConfig(StrictModel):
     def kernel_fips(self) -> bool:
         """Whether the installed host boots with fips=1 (#84).
 
-        Derived, not configured: STIG means kernel FIPS on the RHEL family,
-        MODERN/FUTURE never do, and Ubuntu cannot without a Pro entitlement.
+        Derived, not configured: STIG means kernel FIPS, MODERN/FUTURE never do.
         """
-        return self.crypto.policy is CryptoPolicy.STIG and self.distro in _KERNEL_FIPS_DISTROS
+        return self.crypto.policy is CryptoPolicy.STIG
 
     @model_validator(mode="after")
     def _fips_mode_agrees_with_policy(self) -> HostConfig:
@@ -805,19 +817,12 @@ class HostConfig(StrictModel):
         became derived carries it, and `verify` re-loads that host.yaml.
         `load_host_config` reports it so it does not pass unnoticed.
         """
-        declared = self.overrides.fips_mode
-        if not declared or declared == self.kernel_fips:
-            return self
-        if self.crypto.policy in (CryptoPolicy.MODERN, CryptoPolicy.FUTURE):
+        if self.overrides.fips_mode and not self.kernel_fips:
             raise ValueError(
                 "crypto.policy=MODERN/FUTURE conflicts with overrides.fips_mode=true: "
                 "FIPS kernel mode blocks Curve25519/Ed25519 at the kernel layer."
             )
-        raise ValueError(
-            f"overrides.fips_mode=true is not supported for distro={self.distro}: "
-            "kernel FIPS needs an Ubuntu Pro fips-updates entitlement ks-gen does "
-            "not manage, so crypto.policy=STIG configures algorithms only."
-        )
+        return self
 
     @model_validator(mode="after")
     def _console_login_only_needs_an_unlocked_admin(self) -> HostConfig:
@@ -909,12 +914,6 @@ class HostConfig(StrictModel):
     def _network_install_source_is_supported(self) -> HostConfig:
         if self.install.source != InstallSourceKind.NETWORK:
             return self
-        if self.distro == "ubuntu2404":
-            raise ValueError(
-                "install.source=network is not supported for distro=ubuntu2404: "
-                "the Ubuntu autoinstall path does not consume install.* (the "
-                "setting would be silently ignored)."
-            )
         # Reject another distro's mirrors — including this distro's own
         # stale defaults after a `gen` round-trip made them explicit.
         foreign = {
@@ -943,6 +942,15 @@ class HostConfig(StrictModel):
                 "admin unable to escalate privileges."
             )
         return self
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_removed_distro(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            distro = data.get("distro")
+            if isinstance(distro, str) and distro in REMOVED_DISTROS:
+                raise ValueError(removed_distro_message(distro))
+        return data
 
     @model_validator(mode="before")
     @classmethod

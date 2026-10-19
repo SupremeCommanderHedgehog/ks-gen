@@ -5,24 +5,20 @@
 - `alma10`: 1061 rules
 - `alma8`: 1699 rules
 - `alma9`: 1532 rules
-- `ubuntu2404`: 642 rules
 
-## In all 4 distros
+## In all 3 distros
 
-- 427 rules shared across `alma10`, `alma8`, `alma9`, `ubuntu2404`
+- 931 rules shared across `alma10`, `alma8`, `alma9`
 
 ## Pairwise intersections
 
 - `alma10` ∩ `alma8`: 971 rules
 - `alma10` ∩ `alma9`: 992 rules
-- `alma10` ∩ `ubuntu2404`: 447 rules
 - `alma8` ∩ `alma9`: 1468 rules
-- `alma8` ∩ `ubuntu2404`: 491 rules
-- `alma9` ∩ `ubuntu2404`: 475 rules
 
 ## Distro-only sets
 
-### `alma10` only (27 rules)
+### `alma10` only (29 rules)
 
 - `xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_fchmodat2`
 - `xccdf_org.ssgproject.content_rule_audit_rules_file_deletion_events_renameat2`
@@ -35,10 +31,12 @@
 - `xccdf_org.ssgproject.content_rule_audit_rules_networkconfig_modification_setdomainname`
 - `xccdf_org.ssgproject.content_rule_audit_rules_networkconfig_modification_sethostname`
 - `xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_insmod`
+- `xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_modprobe`
 - `xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_pkexec`
 - `xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_rmmod`
 - `xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_unix2_chkpwd`
 - `xccdf_org.ssgproject.content_rule_chrony_set_nts`
+- `xccdf_org.ssgproject.content_rule_chronyd_configure_pool_and_server`
 - `xccdf_org.ssgproject.content_rule_ensure_journald_and_rsyslog_not_active_together`
 - `xccdf_org.ssgproject.content_rule_file_groupowner_boot_grub2`
 - `xccdf_org.ssgproject.content_rule_file_owner_boot_grub2`
@@ -52,7 +50,7 @@
 - `xccdf_org.ssgproject.content_rule_set_password_hashing_yescrypt_cost_factor_logindefs`
 - `xccdf_org.ssgproject.content_rule_system_booted_in_fips_mode`
 
-### `alma8` only (185 rules)
+### `alma8` only (191 rules)
 
 - `xccdf_org.ssgproject.content_rule_accounts_user_interactive_home_directory_on_separate_partition`
 - `xccdf_org.ssgproject.content_rule_accounts_users_netrc_file_permissions`
@@ -150,6 +148,8 @@
 - `xccdf_org.ssgproject.content_rule_install_mcafee_cma_rt`
 - `xccdf_org.ssgproject.content_rule_install_mcafee_hbss_accm`
 - `xccdf_org.ssgproject.content_rule_install_mcafee_hbss_pa`
+- `xccdf_org.ssgproject.content_rule_ip6tables_rules_for_open_ports`
+- `xccdf_org.ssgproject.content_rule_iptables_rules_for_open_ports`
 - `xccdf_org.ssgproject.content_rule_ldap_client_start_tls`
 - `xccdf_org.ssgproject.content_rule_ldap_client_tls_cacertpath`
 - `xccdf_org.ssgproject.content_rule_logwatch_configured_hostlimit`
@@ -182,6 +182,7 @@
 - `xccdf_org.ssgproject.content_rule_package_dnf-plugin-subscription-manager_installed`
 - `xccdf_org.ssgproject.content_rule_package_iptables-services_installed`
 - `xccdf_org.ssgproject.content_rule_package_iptables-services_removed`
+- `xccdf_org.ssgproject.content_rule_package_iptables_installed`
 - `xccdf_org.ssgproject.content_rule_package_libcap-ng-utils_installed`
 - `xccdf_org.ssgproject.content_rule_package_libreport-plugin-logger_removed`
 - `xccdf_org.ssgproject.content_rule_package_libreport-plugin-rhtsupport_removed`
@@ -211,6 +212,7 @@
 - `xccdf_org.ssgproject.content_rule_service_nails_enabled`
 - `xccdf_org.ssgproject.content_rule_service_netconsole_disabled`
 - `xccdf_org.ssgproject.content_rule_service_nfslock_disabled`
+- `xccdf_org.ssgproject.content_rule_service_nftables_enabled`
 - `xccdf_org.ssgproject.content_rule_service_portreserve_disabled`
 - `xccdf_org.ssgproject.content_rule_service_psacct_enabled`
 - `xccdf_org.ssgproject.content_rule_service_quota_nld_disabled`
@@ -220,12 +222,14 @@
 - `xccdf_org.ssgproject.content_rule_service_rpcsvcgssd_disabled`
 - `xccdf_org.ssgproject.content_rule_service_saslauthd_disabled`
 - `xccdf_org.ssgproject.content_rule_service_sysstat_disabled`
+- `xccdf_org.ssgproject.content_rule_service_tftp_disabled`
 - `xccdf_org.ssgproject.content_rule_service_ypbind_disabled`
 - `xccdf_org.ssgproject.content_rule_service_zebra_disabled`
 - `xccdf_org.ssgproject.content_rule_smb_server_disable_root`
 - `xccdf_org.ssgproject.content_rule_snmpd_not_default_password`
 - `xccdf_org.ssgproject.content_rule_ssh_client_use_strong_rng_csh`
 - `xccdf_org.ssgproject.content_rule_ssh_client_use_strong_rng_sh`
+- `xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig`
 - `xccdf_org.ssgproject.content_rule_sshd_use_approved_macs`
 - `xccdf_org.ssgproject.content_rule_sssd_ldap_configure_tls_ca`
 - `xccdf_org.ssgproject.content_rule_sssd_ldap_configure_tls_ca_dir`
@@ -240,153 +244,8 @@
 - `xccdf_org.ssgproject.content_rule_umask_for_daemons`
 - `xccdf_org.ssgproject.content_rule_use_root_squashing_all_exports`
 
-### `alma9` only (1 rules)
+### `alma9` only (3 rules)
 
+- `xccdf_org.ssgproject.content_rule_no_dirs_unowned_by_root`
+- `xccdf_org.ssgproject.content_rule_root_path_all_dirs`
 - `xccdf_org.ssgproject.content_rule_ssh_private_keys_have_passcode`
-
-### `ubuntu2404` only (144 rules)
-
-- `xccdf_org.ssgproject.content_rule_accounts_password_pam_enforcing`
-- `xccdf_org.ssgproject.content_rule_accounts_password_pam_pwhistory_enabled`
-- `xccdf_org.ssgproject.content_rule_accounts_password_pam_pwhistory_enforce_root`
-- `xccdf_org.ssgproject.content_rule_accounts_password_pam_pwhistory_remember`
-- `xccdf_org.ssgproject.content_rule_accounts_password_pam_pwquality_enabled`
-- `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faildelay_delay`
-- `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_enabled`
-- `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_root_unlock_time`
-- `xccdf_org.ssgproject.content_rule_aide_disable_silentreports`
-- `xccdf_org.ssgproject.content_rule_aide_periodic_checking_systemd_timer`
-- `xccdf_org.ssgproject.content_rule_all_apparmor_profiles_enforced`
-- `xccdf_org.ssgproject.content_rule_all_apparmor_profiles_in_enforce_complain_mode`
-- `xccdf_org.ssgproject.content_rule_apparmor_configured`
-- `xccdf_org.ssgproject.content_rule_apt_conf_disallow_unauthenticated`
-- `xccdf_org.ssgproject.content_rule_audit_rules_login_events_faillog`
-- `xccdf_org.ssgproject.content_rule_audit_rules_mac_modification_etc_apparmor`
-- `xccdf_org.ssgproject.content_rule_audit_rules_mac_modification_etc_apparmor_d`
-- `xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_apparmor_parser`
-- `xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_chfn`
-- `xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_fdisk`
-- `xccdf_org.ssgproject.content_rule_audit_rules_var_log_journal`
-- `xccdf_org.ssgproject.content_rule_auditd_offload_logs`
-- `xccdf_org.ssgproject.content_rule_banner_etc_profiled_ssh_confirm`
-- `xccdf_org.ssgproject.content_rule_check_ufw_active`
-- `xccdf_org.ssgproject.content_rule_chronyd_sync_clock`
-- `xccdf_org.ssgproject.content_rule_dir_groupowner_system_journal`
-- `xccdf_org.ssgproject.content_rule_dir_groupownership_binary_dirs`
-- `xccdf_org.ssgproject.content_rule_dir_owner_system_journal`
-- `xccdf_org.ssgproject.content_rule_dir_permissions_system_journal`
-- `xccdf_org.ssgproject.content_rule_ensure_root_access_controlled`
-- `xccdf_org.ssgproject.content_rule_ensure_rtc_utc_configuration`
-- `xccdf_org.ssgproject.content_rule_ensure_shadow_group_empty`
-- `xccdf_org.ssgproject.content_rule_ensure_sudo_group_restricted`
-- `xccdf_org.ssgproject.content_rule_file_group_ownership_var_log_audit_stig`
-- `xccdf_org.ssgproject.content_rule_file_groupowner_at_deny`
-- `xccdf_org.ssgproject.content_rule_file_groupowner_journalctl`
-- `xccdf_org.ssgproject.content_rule_file_groupowner_system_journal`
-- `xccdf_org.ssgproject.content_rule_file_groupowner_var_log_auth`
-- `xccdf_org.ssgproject.content_rule_file_groupowner_var_log_cloud_init`
-- `xccdf_org.ssgproject.content_rule_file_groupowner_var_log_journal`
-- `xccdf_org.ssgproject.content_rule_file_groupowner_var_log_lastlog`
-- `xccdf_org.ssgproject.content_rule_file_groupowner_var_log_localmessages`
-- `xccdf_org.ssgproject.content_rule_file_groupowner_var_log_secure`
-- `xccdf_org.ssgproject.content_rule_file_groupowner_var_log_waagent`
-- `xccdf_org.ssgproject.content_rule_file_groupowner_var_log_wbtmp`
-- `xccdf_org.ssgproject.content_rule_file_groupownerships_var_log`
-- `xccdf_org.ssgproject.content_rule_file_groupownerships_var_log_apt`
-- `xccdf_org.ssgproject.content_rule_file_groupownerships_var_log_gdm`
-- `xccdf_org.ssgproject.content_rule_file_groupownerships_var_log_gdm3`
-- `xccdf_org.ssgproject.content_rule_file_groupownerships_var_log_landscape`
-- `xccdf_org.ssgproject.content_rule_file_groupownerships_var_log_sssd`
-- `xccdf_org.ssgproject.content_rule_file_owner_at_deny`
-- `xccdf_org.ssgproject.content_rule_file_owner_journalctl`
-- `xccdf_org.ssgproject.content_rule_file_owner_system_journal`
-- `xccdf_org.ssgproject.content_rule_file_owner_var_log_auth`
-- `xccdf_org.ssgproject.content_rule_file_owner_var_log_cloud_init`
-- `xccdf_org.ssgproject.content_rule_file_owner_var_log_journal`
-- `xccdf_org.ssgproject.content_rule_file_owner_var_log_lastlog`
-- `xccdf_org.ssgproject.content_rule_file_owner_var_log_localmessages`
-- `xccdf_org.ssgproject.content_rule_file_owner_var_log_secure`
-- `xccdf_org.ssgproject.content_rule_file_owner_var_log_waagent`
-- `xccdf_org.ssgproject.content_rule_file_owner_var_log_wbtmp`
-- `xccdf_org.ssgproject.content_rule_file_ownerships_var_log`
-- `xccdf_org.ssgproject.content_rule_file_ownerships_var_log_apt`
-- `xccdf_org.ssgproject.content_rule_file_ownerships_var_log_gdm`
-- `xccdf_org.ssgproject.content_rule_file_ownerships_var_log_gdm3`
-- `xccdf_org.ssgproject.content_rule_file_ownerships_var_log_landscape`
-- `xccdf_org.ssgproject.content_rule_file_ownerships_var_log_sssd`
-- `xccdf_org.ssgproject.content_rule_file_permissions_at_deny`
-- `xccdf_org.ssgproject.content_rule_file_permissions_etc_audit_rules`
-- `xccdf_org.ssgproject.content_rule_file_permissions_journalctl`
-- `xccdf_org.ssgproject.content_rule_file_permissions_system_journal`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_apt`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_audit_stig`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_auth`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_cloud-init`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_gdm`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_gdm3`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_lastlog`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_localmessages`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_secure`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_sssd`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_stig`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_waagent`
-- `xccdf_org.ssgproject.content_rule_file_permissions_var_log_wbtmp`
-- `xccdf_org.ssgproject.content_rule_firewall_single_service_active`
-- `xccdf_org.ssgproject.content_rule_grub2_enable_apparmor`
-- `xccdf_org.ssgproject.content_rule_is_fips_mode_enabled`
-- `xccdf_org.ssgproject.content_rule_logging_services_active`
-- `xccdf_org.ssgproject.content_rule_nftables_ensure_default_deny_policy`
-- `xccdf_org.ssgproject.content_rule_nftables_rules_permanent`
-- `xccdf_org.ssgproject.content_rule_no_duplicate_uids`
-- `xccdf_org.ssgproject.content_rule_no_empty_passwords_unix`
-- `xccdf_org.ssgproject.content_rule_ntp_single_service_active`
-- `xccdf_org.ssgproject.content_rule_only_allow_dod_certs`
-- `xccdf_org.ssgproject.content_rule_package_apparmor-utils_installed`
-- `xccdf_org.ssgproject.content_rule_package_apparmor_installed`
-- `xccdf_org.ssgproject.content_rule_package_autofs_removed`
-- `xccdf_org.ssgproject.content_rule_package_inetutils-telnet_removed`
-- `xccdf_org.ssgproject.content_rule_package_iptables-persistent_installed`
-- `xccdf_org.ssgproject.content_rule_package_iptables-persistent_removed`
-- `xccdf_org.ssgproject.content_rule_package_nfs-kernel-server_removed`
-- `xccdf_org.ssgproject.content_rule_package_nss_sss_installed`
-- `xccdf_org.ssgproject.content_rule_package_ntp_removed`
-- `xccdf_org.ssgproject.content_rule_package_pam_modules_installed`
-- `xccdf_org.ssgproject.content_rule_package_pam_runtime_installed`
-- `xccdf_org.ssgproject.content_rule_package_pam_sss_installed`
-- `xccdf_org.ssgproject.content_rule_package_prelink_removed`
-- `xccdf_org.ssgproject.content_rule_package_timesyncd_installed`
-- `xccdf_org.ssgproject.content_rule_package_timesyncd_removed`
-- `xccdf_org.ssgproject.content_rule_package_tnftp_removed`
-- `xccdf_org.ssgproject.content_rule_package_ufw_installed`
-- `xccdf_org.ssgproject.content_rule_package_ufw_removed`
-- `xccdf_org.ssgproject.content_rule_permissions_local_var_log`
-- `xccdf_org.ssgproject.content_rule_prevent_direct_root_logins`
-- `xccdf_org.ssgproject.content_rule_service_apport_disabled`
-- `xccdf_org.ssgproject.content_rule_service_chronyd_disabled`
-- `xccdf_org.ssgproject.content_rule_service_dhcpd6_disabled`
-- `xccdf_org.ssgproject.content_rule_service_nginx_disabled`
-- `xccdf_org.ssgproject.content_rule_service_timesyncd_configured`
-- `xccdf_org.ssgproject.content_rule_service_timesyncd_disabled`
-- `xccdf_org.ssgproject.content_rule_service_timesyncd_enabled`
-- `xccdf_org.ssgproject.content_rule_set_nftables_base_chain`
-- `xccdf_org.ssgproject.content_rule_set_nftables_loopback_traffic`
-- `xccdf_org.ssgproject.content_rule_set_password_hashing_algorithm_auth_stig`
-- `xccdf_org.ssgproject.content_rule_set_ufw_default_rule`
-- `xccdf_org.ssgproject.content_rule_set_ufw_loopback_traffic`
-- `xccdf_org.ssgproject.content_rule_smartcard_configure_ca`
-- `xccdf_org.ssgproject.content_rule_smartcard_configure_cert_checking`
-- `xccdf_org.ssgproject.content_rule_smartcard_configure_crl`
-- `xccdf_org.ssgproject.content_rule_smartcard_pam_enabled`
-- `xccdf_org.ssgproject.content_rule_ssh_client_use_approved_ciphers_ordered_stig`
-- `xccdf_org.ssgproject.content_rule_ssh_use_approved_macs_ordered_stig`
-- `xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers_ordered_stig`
-- `xccdf_org.ssgproject.content_rule_sshd_use_approved_macs_ordered_stig`
-- `xccdf_org.ssgproject.content_rule_sshd_use_strong_ciphers`
-- `xccdf_org.ssgproject.content_rule_sssd_certification_path_trust_anchor`
-- `xccdf_org.ssgproject.content_rule_sssd_enable_user_cert`
-- `xccdf_org.ssgproject.content_rule_systemd_journal_upload_server_tls`
-- `xccdf_org.ssgproject.content_rule_systemd_journal_upload_url`
-- `xccdf_org.ssgproject.content_rule_ufw_only_required_services`
-- `xccdf_org.ssgproject.content_rule_ufw_rate_limit`
-- `xccdf_org.ssgproject.content_rule_ufw_rules_for_open_ports`
-- `xccdf_org.ssgproject.content_rule_vlock_installed`

@@ -209,7 +209,6 @@
     ssh_keep_open:
       ensure_firewalld_port: true
       ensure_selinux_port: true
-      ensure_ufw_port: true
     usbguard:
       enable: false
     kernel_module_blacklist:

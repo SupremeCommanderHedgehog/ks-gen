@@ -111,24 +111,47 @@ def test_fips_mode_agreeing_with_the_derived_value_is_not_reported(tmp_path, cap
     assert capsys.readouterr().err == ""
 
 
-def test_ubuntu_stig_with_fips_mode_true_is_a_rule_conflict(tmp_path):
-    """#84: kernel FIPS on Ubuntu needs a Pro entitlement ks-gen doesn't manage."""
+_ADMIN_YAML = (
+    "user:\n"
+    "  admin:\n"
+    "    name: ops\n"
+    '    authorized_keys: ["ssh-rsa AAAA a@b"]\n'
+    "    sudo: nopasswd_yes\n"
+)
+
+
+def test_removed_ubuntu_distro_is_config_invalid(tmp_path):
+    """#103: an Ubuntu host.yaml fails to load, naming why."""
     p = tmp_path / "host.yaml"
     p.write_text(
-        "system: {hostname: h.example.com}\n"
-        "distro: ubuntu2404\n"
-        "crypto: {policy: STIG}\n"
-        "overrides: {fips_mode: true}\n"
-        "user:\n"
-        "  admin:\n"
-        "    name: ops\n"
-        '    authorized_keys: ["ssh-rsa AAAA a@b"]\n'
-        "    sudo: nopasswd_yes\n",
+        "system: {hostname: h.example.com}\ndistro: ubuntu2404\n" + _ADMIN_YAML,
         encoding="utf-8",
     )
     with pytest.raises(ConfigError) as e:
         load_host_config(p, sets=[])
-    assert e.value.exit_code == ExitCode.RULE_CONFLICT
+    assert e.value.exit_code == ExitCode.CONFIG_INVALID
+    assert "no longer supported" in str(e.value)
+
+
+def test_stale_ensure_ufw_port_loads_with_a_warning(tmp_path, capsys):
+    """#103: every pre-removal bundle's host.yaml carries the key; verify must still load it."""
+    p = tmp_path / "host.yaml"
+    p.write_text(
+        "system: {hostname: h.example.com}\n"
+        "overrides: {ssh_keep_open: {ensure_ufw_port: true}}\n" + _ADMIN_YAML,
+        encoding="utf-8",
+    )
+    load_host_config(p, sets=[])
+    err = capsys.readouterr().err
+    assert "ensure_ufw_port is ignored" in err
+    assert str(p) in err
+
+
+def test_no_ufw_warning_without_the_key(tmp_path, capsys):
+    p = tmp_path / "host.yaml"
+    p.write_text("system: {hostname: h.example.com}\n" + _ADMIN_YAML, encoding="utf-8")
+    load_host_config(p, sets=[])
+    assert capsys.readouterr().err == ""
 
 
 def test_two_malformed_fields_is_not_a_rule_conflict(tmp_path):

@@ -78,8 +78,24 @@ def _report_ignored_fips_mode(path: Path, cfg: HostConfig) -> None:
     typer.echo(
         f"ks-gen: warning: {path}: overrides.fips_mode={str(declared).lower()} is "
         f"ignored — FIPS kernel mode is derived from crypto.policy "
-        f"(={cfg.crypto.policy.value}) and distro (={cfg.distro}), which give "
+        f"(={cfg.crypto.policy.value}), which gives "
         f"fips_mode={str(cfg.kernel_fips).lower()}. The key is deprecated; drop it.",
+        err=True,
+    )
+
+
+def _report_ignored_ufw_port(path: Path, cfg: HostConfig) -> None:
+    """Name an `ensure_ufw_port` left over from before Ubuntu was removed (#103).
+
+    Every host.yaml `gen` wrote before then carries it, since `gen` writes all
+    defaults back out, so it loads rather than failing `verify` on old bundles.
+    """
+    if cfg.overrides.ssh_keep_open.ensure_ufw_port is None:
+        return
+    typer.echo(
+        f"ks-gen: warning: {path}: overrides.ssh_keep_open.ensure_ufw_port is "
+        "ignored — ks-gen no longer supports Ubuntu, so there is no ufw to "
+        "configure. The key is deprecated; drop it.",
         err=True,
     )
 
@@ -110,4 +126,5 @@ def load_host_config(path: Path, sets: list[str]) -> HostConfig:
         code = ExitCode.RULE_CONFLICT if is_conflict else ExitCode.CONFIG_INVALID
         raise ConfigError(msg, code) from e
     _report_ignored_fips_mode(path, cfg)
+    _report_ignored_ufw_port(path, cfg)
     return cfg

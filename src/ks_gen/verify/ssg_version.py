@@ -16,7 +16,6 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-Manager = Literal["rpm", "dpkg"]
 SsgVersionStatus = Literal["match", "older", "newer", "differs", "unknown"]
 
 
@@ -26,21 +25,14 @@ class ExpectedSsg:
 
     package: str
     version: str
-    manager: Manager
 
 
 # Machine-readable twin of the table in docs/audit-story/SSG-VERSIONS.md.
 # tests/test_verify_ssg_version.py fails if the two disagree.
 EXPECTED_SSG_VERSIONS: dict[str, ExpectedSsg] = {
-    "alma8": ExpectedSsg("scap-security-guide", "0.1.81-1.el8_10.alma.1", "rpm"),
-    "alma9": ExpectedSsg("scap-security-guide", "0.1.81-1.el9_8.alma.1", "rpm"),
-    "alma10": ExpectedSsg("scap-security-guide", "0.1.81-1.el10_2.alma.1", "rpm"),
-    # Where the extracts came from, NOT something a stock noble host can have:
-    # noble ships ssg-debderived 0.1.71-1 in every pocket, and that version
-    # carries datastreams for 16.04-22.04 only. A real 24.04 host therefore
-    # reports drift here, correctly — it has no ssg-ubuntu2404-ds.xml at all
-    # for oscap to evaluate (#86).
-    "ubuntu2404": ExpectedSsg("ssg-debderived", "0.1.80-1", "dpkg"),
+    "alma8": ExpectedSsg("scap-security-guide", "0.1.81-1.el8_10.alma.1"),
+    "alma9": ExpectedSsg("scap-security-guide", "0.1.81-1.el9_8.alma.1"),
+    "alma10": ExpectedSsg("scap-security-guide", "0.1.81-1.el10_2.alma.1"),
 }
 
 
@@ -63,17 +55,11 @@ class SsgVersionReport:
 
 
 def ssg_version_command(distro: str) -> str | None:
-    """Shell command printing the installed SSG version, or None if unpinned.
-
-    Both forms print a bare version string and nothing else, so the output
-    parses the same way whichever package manager answered.
-    """
+    """Shell command printing the installed SSG version, or None if unpinned."""
     expected = EXPECTED_SSG_VERSIONS.get(distro)
     if expected is None:
         return None
-    if expected.manager == "rpm":
-        return f"rpm -q --qf '%{{VERSION}}-%{{RELEASE}}\\n' {expected.package}"
-    return f"dpkg-query -W -f='${{Version}}' {expected.package}"
+    return f"rpm -q --qf '%{{VERSION}}-%{{RELEASE}}\\n' {expected.package}"
 
 
 _VERSION_TOKEN = re.compile(r"^\d\S*$")

@@ -64,8 +64,8 @@ def test_cert_authority_prefixed_keys_read_as_their_base_type():
 
 
 def test_certificate_key_types_are_not_usable():
-    # Deliberate: the STIG PubkeyAcceptedAlgorithms list ks-gen writes on
-    # Ubuntu carries no cert forms, so a cert-only list cannot authenticate.
+    # Deliberate: ks-gen does not trust cert forms to survive the installed
+    # FIPS policy, and guessing wrong is a lockout.
     entry = "ecdsa-sha2-nistp256-cert-v01@openssh.com AAAAB3Nz a@b"
     assert key_type(entry) is None
     assert not has_fips_usable_key([entry])
@@ -102,14 +102,3 @@ def test_describe_key_types_dedupes_in_order():
 
 def test_describe_key_types_of_nothing():
     assert describe_key_types([]) == "<none>"
-
-
-def test_ubuntu_stig_pubkey_list_matches_fips_usable():
-    """Pin the allowlist against the rule that writes it into sshd_config.
-
-    ks-gen writes PubkeyAcceptedAlgorithms itself on Ubuntu, so if that list
-    gains or loses an algorithm the lockout check must learn about it too.
-    """
-    from ks_gen.rules.ubuntu2404.crypto_policy import _SSH_PUBKEYS
-
-    assert set(_SSH_PUBKEYS["STIG"].split(",")) == set(FIPS_USABLE)

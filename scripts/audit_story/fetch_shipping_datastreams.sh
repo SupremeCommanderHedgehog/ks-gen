@@ -12,14 +12,14 @@
 #
 # Writes into OUT_DIR (default ./ssg-datastreams):
 #     ssg-almalinux8-ds.xml   ssg-almalinux9-ds.xml
-#     ssg-almalinux10-ds.xml  ssg-ubuntu2404-ds.xml
+#     ssg-almalinux10-ds.xml
 #     shipping-versions.txt   (the "<label> package: <file>" lines, for reuse)
 #
 # Exit codes: 0 success, 3 fetch/extract failure (never confuse this with
 # "content drifted" — a network blip must not read as a content change).
 #
-# Prerequisites: curl, rpm2cpio, cpio, dpkg-deb, gzip, sort -V.
-# On Ubuntu/WSL: sudo apt install -y rpm2cpio cpio  (dpkg-deb is preinstalled).
+# Prerequisites: curl, rpm2cpio, cpio, gzip, sort -V.
+# On a Debian-family workstation/WSL: sudo apt install -y rpm2cpio cpio
 
 set -Eeuo pipefail
 
@@ -84,64 +84,12 @@ fetch_alma() {
 	note_version "$label" "${href##*/}"
 }
 
-# Ubuntu ships SSG as ssg-debderived. Resolve it from noble's *suite indexes*,
-# never from the pool directory listing: pool/universe/s/scap-security-guide/ is
-# shared by every Ubuntu release, so picking the highest .deb there returns a
-# version noble cannot install. That is how ks-gen came to validate its Ubuntu
-# rules against 0.1.80 content when noble ships 0.1.71 (#90).
-#
-# All three pockets, because a fixed package arrives in -updates or -security
-# and only the suite index says which version the release actually resolves to.
-fetch_ubuntu() {
-	local label=ubuntu2404 ds=ssg-ubuntu2404-ds.xml
-	local archive="http://archive.ubuntu.com/ubuntu"
-	local suite pkgs found="" best=""
-
-	for suite in noble noble-updates noble-security; do
-		curl -fsSL -o "$WORK/$label-$suite.gz" \
-			"$archive/dists/$suite/universe/binary-amd64/Packages.gz" ||
-			die "$label: could not download the $suite package index"
-		# Architecture: all lands in the amd64 index on Ubuntu. Emit
-		# "<version> <pool/path.deb>" for the one stanza we want.
-		pkgs=$(gunzip -c "$WORK/$label-$suite.gz" |
-			awk '/^Package: ssg-debderived$/{f=1} f&&/^Version:/{v=$2}
-			     f&&/^Filename:/{print v" "$2; f=0}') ||
-			die "$label: could not read the $suite package index"
-		found+="$pkgs"$'\n'
-	done
-
-	best=$(printf '%s' "$found" | grep -v '^[[:space:]]*$' | sort -V | tail -1) || true
-	[ -n "$best" ] || die "$label: ssg-debderived is in no noble suite index"
-
-	local path="${best#* }" deb
-	deb="${path##*/}"
-
-	curl -fsSL -o "$WORK/$label.deb" "$archive/$path" ||
-		die "$label: download failed for $archive/$path"
-
-	mkdir -p "$WORK/$label-ex"
-	dpkg-deb -x "$WORK/$label.deb" "$WORK/$label-ex" ||
-		die "$label: could not unpack $deb"
-	# Not a fetch glitch when this fires: as of 0.1.71-1, the version noble
-	# ships, ssg-debderived carries datastreams for 16.04-22.04 only. 24.04
-	# content first appears in 0.1.76, which no noble pocket offers — so a
-	# stock 24.04 host has nothing for `oscap` to evaluate.
-	[ -s "$WORK/$label-ex/$CONTENT_DIR/$ds" ] || die \
-		"$label: $deb ships no $ds (has: $(
-			dpkg-deb -c "$WORK/$label.deb" | grep -o 'ssg-[a-z0-9]*-ds\.xml' | sort -u | tr '\n' ' '
-		))"
-
-	cp "$WORK/$label-ex/$CONTENT_DIR/$ds" "$OUT_DIR/$ds"
-	note_version "$label" "$deb"
-}
-
-for tool in curl rpm2cpio cpio dpkg-deb gunzip; do
+for tool in curl rpm2cpio cpio gunzip; do
 	command -v "$tool" >/dev/null 2>&1 || die "missing prerequisite: $tool"
 done
 
 fetch_alma 8 alma8
 fetch_alma 9 alma9
 fetch_alma 10 alma10
-fetch_ubuntu
 
 echo "datastreams written to $OUT_DIR"

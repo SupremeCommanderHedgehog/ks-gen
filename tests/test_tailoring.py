@@ -61,13 +61,13 @@ def test_benchmark_href_uses_scap_content_alma():
     assert '<xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml"/>' in xml
 
 
-def test_benchmark_href_uses_scap_content_ubuntu():
+def test_benchmark_href_follows_scap_content_across_distros():
     xml = build_tailoring_xml(
         [],
         profile_id="xccdf_org.ssgproject.content_profile_stig",
-        scap_content="ssg-ubuntu2404-ds.xml",
+        scap_content="ssg-almalinux10-ds.xml",
     )
-    assert '<xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml"/>' in xml
+    assert '<xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-almalinux10-ds.xml"/>' in xml
     assert "ssg-almalinux9-ds.xml" not in xml
 
 

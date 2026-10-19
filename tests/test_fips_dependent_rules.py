@@ -26,7 +26,7 @@ from ks_gen.config import CryptoPolicy, HostConfig
 from ks_gen.registry import load_rules
 
 _DOCS = Path(__file__).resolve().parent.parent / "docs" / "audit-story"
-_DISTROS = ["alma8", "alma9", "alma10", "ubuntu2404"]
+_DISTROS = ["alma8", "alma9", "alma10"]
 _PREFIX = "xccdf_org.ssgproject.content_rule_"
 _NON_STIG = [CryptoPolicy.MODERN, CryptoPolicy.FUTURE]
 
@@ -75,15 +75,6 @@ _PASSES_ANYWAY: dict[str, dict[str, str]] = {
             "passes under DEFAULT and FUTURE too"
         ),
     },
-    "ubuntu2404": {
-        "ssh_use_approved_macs_ordered_stig": (
-            "the *client* twin of the sshd_ rule, checking /etc/ssh/ssh_config{,.d} "
-            "against the profile's ssh_approved_macs variable — 'by FIPS' in that "
-            "variable's comment is what flags it here. ks-gen writes only the sshd "
-            "drop-in, so oscap's own remediation populates 00-mac-list.conf and the "
-            "rule passes"
-        ),
-    },
 }
 
 
@@ -95,7 +86,7 @@ def _candidates(distro: str) -> set[str]:
     # FIPS-only rule unclassified and CI green.
     assert path.is_file(), (
         f"missing {path.name} — re-run scripts/audit_story/extract_ssg_rule_ids.py "
-        f"with all four datastreams (see docs/audit-story/SSG-VERSIONS.md)."
+        f"with every datastream (see docs/audit-story/SSG-VERSIONS.md)."
     )
     lines = [line for line in path.read_text(encoding="utf-8").split("\n") if line]
     # A truncated extraction is a real failure; "extracted, found none" is not,
@@ -125,19 +116,6 @@ def _disabled(minimal_cfg, distro: str, policy: CryptoPolicy) -> set[str]:
         for op in rule.emit_tailoring(cfg)
         if op.action == "disable"
     }
-
-
-def _declared(minimal_cfg, distro: str, policy: CryptoPolicy) -> set[str]:
-    """Every SSG rule named in some rule's exception entry."""
-    cfg = _cfg(minimal_cfg, distro, policy)
-    out: set[str] = set()
-    for rule in load_rules(distro):
-        if not rule.applies(cfg):
-            continue
-        entry = rule.exception_entry(cfg)
-        if entry is not None:
-            out.update(entry.stig_rules_disabled)
-    return out
 
 
 @pytest.mark.parametrize("distro", _DISTROS)
@@ -185,37 +163,17 @@ def test_every_classified_rule_carries_a_reason(distro):
 
 
 @pytest.mark.parametrize("distro", _DISTROS)
-def test_stig_fips_candidates_are_reachable_or_declared(distro, minimal_cfg):
-    """#84: on a STIG host, no FIPS rule may fail without an explanation.
+def test_stig_fips_candidates_stay_enabled(distro, minimal_cfg):
+    """#84: a STIG host reaches kernel FIPS, so its FIPS rules must stay enabled.
 
-    Where the host really reaches kernel FIPS (the RHEL family), the rules must
-    stay enabled and are expected to pass — suppressing them would hide a real
-    regression. Where it cannot (ubuntu2404 needs an Ubuntu Pro entitlement),
-    each candidate must be disabled AND named in an exception entry, or
-    classified in _PASSES_ANYWAY with a reason.
+    They are expected to pass; suppressing them would hide a real regression
+    behind an exception the host does not need.
     """
     cfg = _cfg(minimal_cfg, distro, CryptoPolicy.STIG)
-    candidates = _candidates(distro)
-    disabled = _disabled(minimal_cfg, distro, CryptoPolicy.STIG)
-
-    if cfg.kernel_fips:
-        suppressed = candidates & disabled
-        assert not suppressed, (
-            f"{distro}/STIG reaches kernel FIPS, so {sorted(suppressed)} must stay "
-            f"enabled and pass. Disabling them hides real regressions behind an "
-            f"exception the host does not need."
-        )
-        return
-
-    unexplained = candidates - disabled - _allow_listed(distro)
-    assert not unexplained, (
-        f"{distro}/STIG cannot reach kernel FIPS, so {sorted(unexplained)} fail on "
-        f"every host with nothing in exceptions.md to explain them — the #84 defect. "
-        f"Disable each one and name it in an exception entry, or classify it in "
-        f"_PASSES_ANYWAY with the reason it passes anyway."
-    )
-    undeclared = (candidates & disabled) - _declared(minimal_cfg, distro, CryptoPolicy.STIG)
-    assert not undeclared, (
-        f"{distro}/STIG disables {sorted(undeclared)} without naming them in any "
-        f"exception entry — exceptions.md would not mention them at all."
+    assert cfg.kernel_fips, f"{distro}/STIG must boot with kernel FIPS (#84)"
+    suppressed = _candidates(distro) & _disabled(minimal_cfg, distro, CryptoPolicy.STIG)
+    assert not suppressed, (
+        f"{distro}/STIG reaches kernel FIPS, so {sorted(suppressed)} must stay "
+        f"enabled and pass. Disabling them hides real regressions behind an "
+        f"exception the host does not need."
     )

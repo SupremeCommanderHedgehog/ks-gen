@@ -369,17 +369,6 @@ def test_collect_ssg_version_unparseable_output_is_unknown() -> None:
     assert report.status == "unknown"
 
 
-def test_collect_ssg_version_ubuntu_uses_dpkg_query() -> None:
-    pin = EXPECTED_SSG_VERSIONS["ubuntu2404"].version
-    transport = _StubTransport(CmdResult(stdout=pin, stderr="", exit_code=0))
-
-    report = collect_ssg_version(distro="ubuntu2404", transport=transport)
-
-    assert report is not None
-    assert report.status == "match"
-    assert transport.commands[0].startswith("dpkg-query")
-
-
 # --- collect_deployed_tailoring ----------------------------------------------
 
 
