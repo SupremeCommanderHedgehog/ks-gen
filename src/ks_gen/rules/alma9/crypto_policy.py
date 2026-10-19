@@ -177,14 +177,13 @@ def _emit_post(cfg: HostConfig) -> str:
     the disabled-rule list differs per distro.
     """
     policy = cfg.crypto.policy.value
-    if policy == "STIG":
-        # Same shape as the non-STIG header because tests/install-regression
-        # parses the parenthesised value out of it. A glob, not a literal:
-        # which FIPS target lands here belongs to the installed content (#90).
-        lines = [f"# Apply system-wide crypto policy: {policy} (FIPS*)"]
-    else:
-        target = _policy_target(cfg)
-        lines = [f"# Apply system-wide crypto policy: {policy} ({target})"]
+    # Under STIG this is only a header label, never passed to --set below. A
+    # glob, not a literal: which FIPS target lands belongs to the installed
+    # content (#90). Bound once, up front, so every later read is initialised.
+    target = "FIPS*" if policy == "STIG" else _policy_target(cfg)
+    # One shape for every policy: tests/install-regression parses the
+    # parenthesised value out of this header.
+    lines = [f"# Apply system-wide crypto policy: {policy} ({target})"]
 
     if cfg.kernel_fips:
         # Same predicate as the fips=1 bootloader arg, so the two cannot disagree.
