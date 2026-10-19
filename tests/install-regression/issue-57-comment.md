@@ -93,6 +93,31 @@ nvram (which anaconda's `efibootmgr` wrote during install) prefers
 the installed HD, so the post-install boot picks up the new system
 without `-boot` order manipulation.
 
+#### USB variant (#26)
+
+The CD invocation above never exercises the path operators actually use: a
+`dd`/Rufus-DD stick is a USB *disk* (`/dev/sda`), where anaconda has no CD
+install-source auto-detection. PR #73's two bugs passed CD and broke USB. The
+USB variant presents the ISO's bytes unchanged — what `dd` writes; the ISO is
+hybrid, so OVMF boots it as a disk — through a throwaway qcow2 overlay, and
+replaces `-cdrom` with:
+
+```
+qemu-img create -f qcow2 -F raw -b $INSTALLER_ISO $USB_IMG   # fresh per run
+
+  -device qemu-xhci,id=xhci \
+  -drive if=none,id=usbstick,format=qcow2,file=$USB_IMG \
+  -device usb-storage,bus=xhci.0,drive=usbstick,removable=on \
+```
+
+Deliberately **no `bootindex`**: QEMU re-applies it on every boot, so it would
+put the never-ejected stick ahead of the installed system and reinstall
+forever. With none, OVMF boots the stick on the empty first boot and then
+follows the BootOrder anaconda's `efibootmgr` wrote.
+
+Run both (`run-all.sh`). CD-only is not sufficient evidence for an
+install-pipeline fix.
+
 ### Smoke-check assertions
 After SSH'ing in as `opsadmin` (or whatever `cfg.user.admin.name` is):
 - `systemctl is-active` on sshd, chronyd, firewalld, auditd, rsyslog
@@ -168,6 +193,10 @@ wsl -- bash -c "cd /mnt/c/Users/<you>/source/<repo> && .scratch/install-regressi
 
 Set `SKIP_ISO_BUILD=1` to skip the ~3 min ISO rebuild when iterating
 on QEMU/kickstart changes that don't affect ISO contents.
+
+_Update (#26): the harness is now tracked under `tests/install-regression/`
+and runs in two media modes. `run-all.sh` runs CD then USB and fails if
+either fails; `MEDIA=usb run.sh` runs the USB variant alone._
 
 ## When this is worth running
 

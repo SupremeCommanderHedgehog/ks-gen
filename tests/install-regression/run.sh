@@ -4,7 +4,8 @@
 # Runs inside WSL Ubuntu (or any Linux with QEMU + OVMF). Drives the full
 # pipeline:
 #   1. ks-gen gen + ks-gen iso (twice — exercises #52 idempotency)
-#   2. boot the ISO in QEMU/OVMF (KVM if available, else TCG)
+#   2. boot the ISO in QEMU/OVMF (KVM if available, else TCG), as a CD or
+#      as a USB stick (MEDIA=cd|usb; run-all.sh runs both)
 #   3. wait for anaconda to install + reboot + sshd to come up
 #   4. SSH in and run smoke-check.sh
 #
@@ -98,6 +99,19 @@ ADMIN_SUDO_PASSWORD="${ADMIN_SUDO_PASSWORD:-}"
 # the 60G default.
 DISK_SIZE="${DISK_SIZE:-60G}"
 
+# How the installer reaches the VM (#26). `cd` attaches the ISO as a SATA
+# CD-ROM (/dev/sr0), where anaconda auto-detects its install source. `usb`
+# writes the ISO byte-for-byte to a raw image and attaches it as USB mass
+# storage (/dev/sda) — what an operator gets from `dd` or Rufus's DD mode.
+# That path has no CD auto-detection, so it needs inst.repo=hd:LABEL=... and
+# a top-level `user` directive; both shipped broken in v0.11.0 (PR #73) and
+# only the USB path shows it. Rufus's *ISO* mode (files copied onto FAT32)
+# is a third path neither variant covers.
+MEDIA="${MEDIA:-cd}"
+[[ "$MEDIA" == cd || "$MEDIA" == usb ]] || {
+  echo "MEDIA must be cd or usb (got: $MEDIA)" >&2; exit 1; }
+echo "install media: $MEDIA"
+
 # Ubuntu's ovmf package. As of 26.04 the legacy plain-name files
 # (OVMF_CODE.fd) are gone; only the 4M variants ship. SecureBoot off
 # variant — kickstart has no secure-boot signing story.
@@ -105,6 +119,10 @@ OVMF_CODE="${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}"
 OVMF_VARS_TEMPLATE="${OVMF_VARS_TEMPLATE:-/usr/share/OVMF/OVMF_VARS_4M.fd}"
 
 INSTALLER_ISO="$BUILD/installer.iso"
+USB_IMG="$BUILD/usb-stick.qcow2"
+# Written only after both ISO builds succeed, so a reuser can tell a finished
+# image from one a failed build left half-written (run-all.sh keys on it).
+ISO_OK="$INSTALLER_ISO.ok"
 BUNDLE_DIR="$BUILD/bundle"
 DISK="$BUILD/disk.qcow2"
 # Second virtio disk for disk.target validation (#59). Pre-filled with a
@@ -125,6 +143,15 @@ done
 [[ -r "$OVMF_CODE"          ]] || { echo "missing: $OVMF_CODE (apt install ovmf)"      >&2; exit 1; }
 [[ -r "$OVMF_VARS_TEMPLATE" ]] || { echo "missing: $OVMF_VARS_TEMPLATE (apt install ovmf)" >&2; exit 1; }
 [[ -r "$SRC_ISO"            ]] || { echo "missing: $SRC_ISO"                              >&2; exit 1; }
+if [[ "$MEDIA" == usb ]]; then
+  # Captured, not piped into `grep -q`: grep exits on the first match, qemu
+  # takes SIGPIPE, and pipefail would report a device that is there as missing.
+  qemu_devices="$(qemu-system-x86_64 -device help 2>/dev/null)"
+  for dev in qemu-xhci usb-storage; do
+    [[ "$qemu_devices" == *"\"$dev\""* ]] \
+      || { echo "missing: QEMU device $dev (needed for MEDIA=usb)" >&2; exit 1; }
+  done
+fi
 
 # qemu-img takes a bare integer as BYTES, so a well-meant DISK_SIZE=800 creates
 # an 800-byte image, succeeds, and surfaces an hour later as an opaque anaconda
@@ -188,13 +215,6 @@ awk -v pk="$PUBKEY" '{ gsub(/__SSH_PUBKEY__/, pk); print }' \
 rm -rf "$BUNDLE_DIR"
 "$KS_GEN" gen --config "$HOST_YAML" --out "$BUNDLE_DIR"
 
-# The crypto policy the kickstart intends to leave the host in, taken from the
-# rule's own header comment ("... policy: STIG (FIPS:STIG)"). The ARF cannot
-# show whether %post achieved it — oscap runs BEFORE the rule %post — so the
-# smoke check asserts the live state against this instead (#66).
-EXPECTED_CRYPTO_POLICY="$(sed -n 's/^# Apply system-wide crypto policy: .*(\(.*\))$/\1/p' \
-  "$BUNDLE_DIR/ks.cfg" | head -1)"
-echo "expected crypto policy: ${EXPECTED_CRYPTO_POLICY:-<none found>}"
 
 # ---- step 4: ks-gen iso (twice; locks in PR #55 / issue #52) --------------
 # Uses build-debug-iso.py instead of the CLI so we can inject the debug
@@ -203,11 +223,26 @@ echo "expected crypto policy: ${EXPECTED_CRYPTO_POLICY:-<none found>}"
 # Set SKIP_ISO_BUILD=1 to skip rebuilding when iterating on QEMU/kickstart
 # changes that don't affect the ISO contents (saves ~3 min/run).
 if [[ -z "${SKIP_ISO_BUILD:-}" ]] || [[ ! -f "$INSTALLER_ISO" ]]; then
+  rm -f "$ISO_OK"
   "$KS_GEN_PY" "$HERE/build-debug-iso.py" "$SRC_ISO" "$BUNDLE_DIR" "$INSTALLER_ISO"
   "$KS_GEN_PY" "$HERE/build-debug-iso.py" "$SRC_ISO" "$BUNDLE_DIR" "$INSTALLER_ISO"
+  touch "$ISO_OK"
 else
   echo "[SKIP_ISO_BUILD] reusing $INSTALLER_ISO"
+  # The guest installs the ks.cfg baked into that ISO, not the one step 3 just
+  # regenerated. Take the expectation from what actually ships.
+  xorriso -osirrox on -indev "$INSTALLER_ISO" -extract /ks.cfg "$BUNDLE_DIR/ks.cfg" \
+    >/dev/null 2>&1 || { echo "cannot read /ks.cfg back out of $INSTALLER_ISO" >&2; exit 1; }
 fi
+
+# The crypto policy the kickstart intends to leave the host in, taken from the
+# rule's own header comment ("... policy: STIG (FIPS:STIG)"). The ARF cannot
+# show whether %post achieved it — oscap runs BEFORE the rule %post — so the
+# smoke check asserts the live state against this instead (#66). Read after
+# step 4 so a reused ISO's own ks.cfg is what it is taken from.
+EXPECTED_CRYPTO_POLICY="$(sed -n 's/^# Apply system-wide crypto policy: .*(\(.*\))$/\1/p' \
+  "$BUNDLE_DIR/ks.cfg" | head -1)"
+echo "expected crypto policy: ${EXPECTED_CRYPTO_POLICY:-<none found>}"
 
 # ---- step 5: disk + EFI nvram --------------------------------------------
 [[ -f "$DISK" ]]      && rm "$DISK"
@@ -234,6 +269,15 @@ qemu-img create -f raw "$DATA_DISK" 1G >/dev/null
 printf '%s' "$DATA_DISK_MARKER" \
   | dd of="$DATA_DISK" bs=1 conv=notrunc status=none
 cp "$OVMF_VARS_TEMPLATE" "$NVRAM"
+# A fresh stick per run. The guest sees the ISO's bytes exactly as `dd` would
+# write them, and the image is hybrid (MBR/GPT + EFI System partition, kept by
+# xorriso's `-boot_image any replay`), so OVMF boots it as a removable disk.
+# A qcow2 overlay rather than a copy: a DVD ISO is ~10 GiB, and any guest
+# writes land in the overlay, leaving installer.iso untouched.
+rm -f "$USB_IMG" "$BUILD/usb-stick.raw"
+if [[ "$MEDIA" == usb ]]; then
+  qemu-img create -q -f qcow2 -F raw -b "$INSTALLER_ISO" "$USB_IMG"
+fi
 
 # ---- step 6: boot QEMU ----------------------------------------------------
 # Use KVM where /dev/kvm is readable; fall back to TCG (~3x slower).
@@ -245,6 +289,18 @@ ACCEL=()
 # Boot: leave EFI to decide. anaconda's `reboot --eject` will eject the CD on
 #       success; OVMF's BootOrder gets written by anaconda's efibootmgr to
 #       prefer the installed HD, so the second boot picks up the new system.
+#       The USB stick gets no bootindex for the same reason: a bootindex is
+#       re-applied by QEMU on every boot and would put the stick back in front
+#       of the installed system, reinstalling forever. The stick is never
+#       ejected, so that preference is all that stops the loop.
+if [[ "$MEDIA" == usb ]]; then
+  # shellcheck disable=SC2054  # commas separate QEMU sub-options, not elements
+  MEDIA_ARGS=(-device qemu-xhci,id=xhci
+              -drive if=none,id=usbstick,format=qcow2,file="$USB_IMG"
+              -device usb-storage,bus=xhci.0,drive=usbstick,removable=on)
+else
+  MEDIA_ARGS=(-cdrom "$INSTALLER_ISO")
+fi
 qemu-system-x86_64 \
   "${ACCEL[@]}" \
   -smp 2 -m 4096 \
@@ -253,7 +309,7 @@ qemu-system-x86_64 \
   -drive if=pflash,format=raw,file="$NVRAM" \
   -drive file="$DISK",if=virtio,format=qcow2 \
   -drive file="$DATA_DISK",if=virtio,format=raw \
-  -cdrom "$INSTALLER_ISO" \
+  "${MEDIA_ARGS[@]}" \
   -netdev user,id=n0,hostfwd=tcp:127.0.0.1:$SSH_HOST_PORT-:22 \
   -device virtio-net-pci,netdev=n0 \
   -nographic \
@@ -382,4 +438,4 @@ else
 fi
 
 echo
-echo "install-regression PASS — install completed end-to-end + smoke check green"
+echo "install-regression PASS (MEDIA=$MEDIA) — install completed end-to-end + smoke check green"

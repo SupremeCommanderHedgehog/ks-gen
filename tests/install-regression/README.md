@@ -21,6 +21,46 @@ KVM. Everything it writes goes to `$BUILD`
 
 ## How to run
 
+To validate a change to the install pipeline, run **both media modes**:
+
+```bash
+wsl -- bash -c "cd \"$(git rev-parse --show-toplevel)\" && tests/install-regression/run-all.sh"
+```
+
+`run-all.sh` runs the CD variant, then the USB variant against the same
+`installer.iso` (reused only if the CD run finished building it), and exits
+non-zero if either failed. Per mode, `$BUILD/run-all/` keeps that run's
+`serial.log`/`qemu.log` and the installed disk's `qemu-img info`, and the
+summary prints each disk's size — trap 2 below applies to both. Expect
+roughly twice a single run's wall-clock. `FORCE_ISO_REBUILD=1` rebuilds the
+ISO even if `SKIP_ISO_BUILD` is set.
+
+**CD-mode alone is no longer sufficient** (#26). `MEDIA=cd` (the default for
+`run.sh`) attaches the ISO as `/dev/sr0`, where anaconda auto-detects its
+install source. Operators boot a `dd`/Rufus-DD **USB stick**, which is a disk
+(`/dev/sda`) with no such auto-detection — PR #73's two bugs (no
+`inst.repo=hd:LABEL=...`, no top-level `user` directive) passed CD and failed
+only there. `MEDIA=usb` reproduces that path:
+
+```bash
+MEDIA=usb tests/install-regression/run.sh
+```
+
+It attaches the ISO as xHCI USB mass storage through a fresh copy-on-write
+overlay (`$BUILD/usb-stick.qcow2`), so the guest sees exactly the bytes `dd`
+would write without a multi-GiB copy, with no `bootindex` (which QEMU re-applies every boot
+and would reinstall forever, since a stick is never ejected). Not covered by
+either mode: Rufus's *ISO* mode, which copies files onto a FAT32 stick instead
+of writing the image.
+
+A full USB run needs the same install source as a CD run. A fixture that
+installs from the ISO itself (the default `install.source`) needs a DVD
+`SRC_ISO`; a network-install fixture such as `al10-omit-dnf-automatic` works
+from a boot ISO. A boot ISO with an install-from-ISO fixture stops at
+anaconda's "Installation source" error in either mode.
+
+To run a single mode with `run.sh`:
+
 ```bash
 wsl -- bash -c "cd \"$(git rev-parse --show-toplevel)\" && tests/install-regression/run.sh"
 ```
@@ -72,6 +112,8 @@ an 800G virtual disk, and a guest that really did fill it would fill the host.
 
 ## Files
 
+- `run-all.sh` — runs `run.sh` with `MEDIA=cd` then `MEDIA=usb`; the
+  invocation to use when validating an install-pipeline change (#26).
 - `run.sh` — orchestrator. Generates an SSH keypair, renders the
   fixture with the public key inlined, runs `ks-gen gen`, runs
   `ks-gen iso` twice (locks in PR #55's idempotency fix), boots
