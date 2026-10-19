@@ -32,6 +32,7 @@ def test_build_iso_calls_xorriso(tmp_path):
                     encoding="utf-8",
                 )
         result = MagicMock()
+        result.stdout = "Volume Id    : VENDOR\n"
         result.returncode = 0
         result.stderr = ""
         return result
@@ -42,8 +43,9 @@ def test_build_iso_calls_xorriso(tmp_path):
     ):
         build_iso(src, ks, tail, out, volid="ALMA9")
 
-    # Three xorriso passes: extract isolinux, extract grub, final author
-    assert run.call_count == 3
+    # Four xorriso passes: extract isolinux, extract grub, report El Torito
+    # (no EFI image in this stub, so no ESP patch), final author
+    assert run.call_count == 4
     extract_calls = [c for c in run.call_args_list if "-extract" in c.args[0]]
     author_calls = [c for c in run.call_args_list if "replay" in c.args[0]]
     assert len(extract_calls) == 2
@@ -83,6 +85,7 @@ def test_build_iso_overwrites_existing_out(tmp_path):
             # builder must unlink it first.
             assert not out.exists(), "builder must unlink -outdev target before xorriso runs"
         result = MagicMock()
+        result.stdout = "Volume Id    : VENDOR\n"
         result.returncode = 0
         result.stderr = ""
         return result
@@ -122,6 +125,7 @@ def test_build_iso_extract_fails_raises(tmp_path):
 
     def fake_run(args, **kwargs):
         result = MagicMock()
+        result.stdout = "Volume Id    : VENDOR\n"
         if "-extract" in args:
             result.returncode = 1
             result.stderr = "isofs: file not found"
@@ -154,6 +158,7 @@ def test_build_iso_rewrite_error_raises(tmp_path):
             # Write content that has no `label` / `menuentry` keyword
             dest.write_text("timeout 600\n", encoding="utf-8")
         result = MagicMock()
+        result.stdout = "Volume Id    : VENDOR\n"
         result.returncode = 0
         result.stderr = ""
         return result
@@ -187,6 +192,7 @@ def test_build_iso_forwards_network_install(tmp_path):
                     encoding="utf-8",
                 )
         result = MagicMock()
+        result.stdout = "Volume Id    : VENDOR\n"
         result.returncode = 0
         result.stderr = ""
         return result
@@ -218,6 +224,7 @@ def _make_fake_run(missing=()):
 
     def fake_run(args, **kwargs):
         result = MagicMock()
+        result.stdout = "Volume Id    : VENDOR\n"
         result.returncode = 0
         result.stderr = ""
         if "-extract" in args:

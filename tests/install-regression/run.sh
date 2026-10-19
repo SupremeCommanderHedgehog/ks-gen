@@ -137,7 +137,7 @@ QEMU_LOG="$BUILD/qemu.log"
 SSH_HOST_PORT=2222
 
 # ---- preflight ------------------------------------------------------------
-for bin in qemu-system-x86_64 qemu-img xorriso ssh-keygen ssh "$KS_GEN" "$KS_GEN_PY"; do
+for bin in qemu-system-x86_64 qemu-img xorriso mcopy ssh-keygen ssh "$KS_GEN" "$KS_GEN_PY"; do
   command -v "$bin" >/dev/null 2>&1 || { echo "missing: $bin" >&2; exit 1; }
 done
 [[ -r "$OVMF_CODE"          ]] || { echo "missing: $OVMF_CODE (apt install ovmf)"      >&2; exit 1; }

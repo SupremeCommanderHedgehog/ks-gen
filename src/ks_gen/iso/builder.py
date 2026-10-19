@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
+import re
 import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from ks_gen.iso.bootloader import (
@@ -20,6 +23,15 @@ ISOLINUX_CFG = "/isolinux/isolinux.cfg"
 # EL10 dropped /isolinux — BIOS boot is grub2 there.
 GRUB_BIOS_CFG = "/boot/grub2/grub.cfg"
 GRUB_EFI_CFG = "/EFI/BOOT/grub.cfg"
+# The same config inside the EFI system partition image. GRUB booted from a
+# USB stick reads this one, not the ISO9660 tree's (#116).
+ESP_GRUB_CFG = "::/EFI/BOOT/grub.cfg"
+
+_VOLID_RE = re.compile(r"^Volume Id\s*: (.*)$", re.MULTILINE)
+_EFI_PATH_RE = re.compile(r"^-boot_image any efi_path='(.*)'$", re.MULTILINE)
+_APPENDED_EFI_RE = re.compile(r"^--interval:appended_partition_(\d+)_")
+# xorriso's "d" unit is a 512-byte block, and the range is inclusive.
+_BLOCK = 512
 
 
 def build_iso(
@@ -32,7 +44,8 @@ def build_iso(
     network_install: bool = False,
 ) -> list[str]:
     """Repack `src_iso` with ks.cfg + tailoring.xml and an unattended boot
-    entry. Returns the ISO paths of the bootloader configs that were patched.
+    entry. Returns the ISO paths of the bootloader configs that were patched;
+    the EFI partition's copy is reported as `<image>:/EFI/BOOT/grub.cfg`.
     """
     if shutil.which("xorriso") is None:
         raise IsoBuildError(
@@ -42,6 +55,8 @@ def build_iso(
     with tempfile.TemporaryDirectory(prefix="ks-gen-iso-") as tmp:
         tmp_path = Path(tmp)
         staged: list[tuple[Path, str]] = []
+        report = _report_boot(src_iso)
+        vendor_volid = _vendor_volid(report)
 
         # BIOS: isolinux on EL8/EL9, grub2 on EL10. Neither is fatal on its
         # own — media may legitimately be EFI-only.
@@ -56,26 +71,187 @@ def build_iso(
         _extract(src_iso, GRUB_EFI_CFG, efi_grub)
         staged.append((efi_grub, GRUB_EFI_CFG))
 
-        try:
-            for local, iso_path in staged:
-                local.chmod(0o644)
-                text = local.read_text(encoding="utf-8")
-                if iso_path == ISOLINUX_CFG:
-                    patched = rewrite_isolinux(text, volid=volid, network_install=network_install)
-                else:
-                    patched = rewrite_grub(
-                        text,
-                        volid=volid,
-                        network_install=network_install,
-                        bios=iso_path == GRUB_BIOS_CFG,
-                    )
-                local.write_text(patched, encoding="utf-8")
-        except BootloaderRewriteError as e:
-            raise IsoBuildError(f"bootloader rewrite aborted: {e}") from e
+        for local, iso_path in staged:
+            local.chmod(0o644)
+            _rewrite_cfg(
+                local, iso_path, iso_path,
+                volid=volid, vendor_volid=vendor_volid, network_install=network_install,
+            )  # fmt: skip
 
-        _author(src_iso, out_iso, volid, ks_cfg, tailoring_xml, staged)
+        esp = _extract_esp(src_iso, report, tmp_path)
+        if esp is not None:
+            _patch_esp(
+                esp, tmp_path, volid=volid, vendor_volid=vendor_volid,
+                network_install=network_install,
+            )  # fmt: skip
 
-    return [iso_path for _, iso_path in staged]
+        _author(src_iso, out_iso, volid, ks_cfg, tailoring_xml, staged, esp)
+
+    reported = [iso_path for _, iso_path in staged]
+    if esp is not None:
+        reported.append(f"{esp.label}:{GRUB_EFI_CFG}")
+    return reported
+
+
+def _report_boot(src_iso: Path) -> str:
+    """The source's primary volume descriptor plus xorriso's replayable
+    description of its boot setup: El Torito entries, appended partitions."""
+    result = subprocess.run(
+        ["xorriso", "-indev", str(src_iso), "-pvd_info", "-report_el_torito", "cmd"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise IsoBuildError(f"xorriso -report_el_torito failed: {result.stderr.strip()}")
+    return result.stdout
+
+
+def _vendor_volid(report: str) -> str:
+    """The source's volume ID, which its bootloader configs search for."""
+    found = _VOLID_RE.search(report)
+    if found is None or not found.group(1).strip():
+        raise IsoBuildError("xorriso -pvd_info printed no Volume Id for the source ISO")
+    return found.group(1).strip()
+
+
+def _retarget(text: str, vendor_volid: str, volid: str) -> str:
+    """Point the vendor entries' `search -l` / `hd:LABEL=` at the renamed
+    volume, so the fallback entries kept below ours still boot. Whole labels
+    only, quoted or not — never a longer label that merely starts with it."""
+    if vendor_volid == volid:
+        return text
+    return re.sub(rf"(?<![\w.-]){re.escape(vendor_volid)}(?![\w.-])", lambda _: volid, text)
+
+
+def _rewrite_cfg(
+    local: Path,
+    iso_path: str,
+    where: str,
+    *,
+    volid: str,
+    vendor_volid: str,
+    network_install: bool,
+) -> None:
+    """Retarget and add the unattended entry to one bootloader config, in place.
+    `where` names it in errors — the ESP copy and the tree copy share a path."""
+    text = _retarget(local.read_text(encoding="utf-8"), vendor_volid, volid)
+    try:
+        if iso_path == ISOLINUX_CFG:
+            patched = rewrite_isolinux(text, volid=volid, network_install=network_install)
+        else:
+            patched = rewrite_grub(
+                text,
+                volid=volid,
+                network_install=network_install,
+                bios=iso_path == GRUB_BIOS_CFG,
+            )
+    except BootloaderRewriteError as e:
+        raise IsoBuildError(f"bootloader rewrite aborted in {where}: {e}") from e
+    local.write_text(patched, encoding="utf-8")
+
+
+@dataclass(frozen=True)
+class _Esp:
+    """A local copy of the source ISO's EFI system partition image.
+
+    `author_args` put the patched copy back where `-boot_image any replay`
+    would otherwise reinstate the vendor's original. `iso_path` is set when
+    the image is a file in the ISO9660 tree.
+    """
+
+    image: Path
+    label: str
+    author_args: list[str]
+    iso_path: str | None = None
+
+
+def _extract_esp(src_iso: Path, report: str, tmp_path: Path) -> _Esp | None:
+    """Copy out the EFI El Torito image, or None if the media has none.
+
+    EL8/EL9 keep it as a file in the tree (/images/efiboot.img). EL10 keeps it
+    as a GPT partition appended after the ISO9660 data, which replay copies
+    byte-for-byte from the source ISO.
+    """
+    efi_paths = _EFI_PATH_RE.findall(report)
+    if not efi_paths:
+        return None
+    if len(efi_paths) > 1:
+        # Patching one would leave firmware that picks another on the stale
+        # vendor menu; no AlmaLinux media does this today.
+        raise IsoBuildError(f"source ISO has {len(efi_paths)} EFI boot images; expected one")
+    efi_path = efi_paths[0]
+    dest = tmp_path / "esp.img"
+
+    appended = _APPENDED_EFI_RE.match(efi_path)
+    if appended is None:
+        if efi_path.startswith("--"):
+            raise IsoBuildError(f"unsupported EFI boot image source: {efi_path!r}")
+        failed = _run_extract(src_iso, efi_path, dest)
+        if failed is not None:
+            raise IsoBuildError(f"extracting EFI boot image {efi_path} failed ({failed})")
+        dest.chmod(0o644)
+        return _Esp(dest, efi_path, ["-map", str(dest), efi_path], iso_path=efi_path)
+
+    number = appended.group(1)
+    part = re.search(
+        rf"^-append_partition {number} (\S+) --interval:imported_iso:(\d+)d-(\d+)d::",
+        report,
+        flags=re.MULTILINE,
+    )
+    if part is None:
+        raise IsoBuildError(
+            f"EFI boot image is appended partition {number}, but xorriso reports no "
+            "source interval for it"
+        )
+    type_code, first, last = part.group(1), int(part.group(2)), int(part.group(3))
+    size = (last - first + 1) * _BLOCK
+    with src_iso.open("rb") as f, dest.open("wb") as out:
+        f.seek(first * _BLOCK)
+        remaining = size
+        while remaining:
+            chunk = f.read(min(remaining, 1 << 20))
+            if not chunk:
+                raise IsoBuildError(f"source ISO truncated inside EFI partition {number}")
+            out.write(chunk)
+            remaining -= len(chunk)
+    return _Esp(
+        dest, f"EFI partition {number}", ["-append_partition", number, type_code, str(dest)]
+    )
+
+
+def _mtools(args: list[str]) -> subprocess.CompletedProcess[str]:
+    # El Torito EFI images are bare FAT filesystems with no partition table or
+    # BIOS geometry, which mtools rejects unless told not to check.
+    env = {**os.environ, "MTOOLS_SKIP_CHECK": "1"}
+    return subprocess.run(args, capture_output=True, text=True, env=env)
+
+
+def _patch_esp(
+    esp: _Esp, tmp_path: Path, *, volid: str, vendor_volid: str, network_install: bool
+) -> None:
+    """Rewrite the ESP image's grub.cfg in place.
+
+    Every failure is fatal: an ISO whose ESP still holds the vendor menu
+    installs from CD but not from a USB stick (#116), and nothing short of a
+    USB boot would reveal it.
+    """
+    if shutil.which("mcopy") is None:
+        raise IsoBuildError(
+            "mcopy not on PATH — needed to patch the EFI partition's grub.cfg "
+            "(install: dnf install mtools / apt install mtools / brew install mtools)"
+        )
+    where = f"{esp.label}:{GRUB_EFI_CFG}"
+    cfg = tmp_path / "esp-grub.cfg"
+    read = _mtools(["mcopy", "-n", "-i", str(esp.image), ESP_GRUB_CFG, str(cfg)])
+    if read.returncode != 0:
+        raise IsoBuildError(f"reading {where} failed: {read.stderr.strip()}")
+    _rewrite_cfg(
+        cfg, GRUB_EFI_CFG, where,
+        volid=volid, vendor_volid=vendor_volid, network_install=network_install,
+    )  # fmt: skip
+    write = _mtools(["mcopy", "-o", "-i", str(esp.image), str(cfg), ESP_GRUB_CFG])
+    if write.returncode != 0:
+        raise IsoBuildError(f"writing {where} failed: {write.stderr.strip()}")
 
 
 def _run_extract(src_iso: Path, iso_path: str, dest: Path) -> str | None:
@@ -118,6 +294,7 @@ def _author(
     ks_cfg: Path,
     tailoring_xml: Path,
     bootloader_cfgs: list[tuple[Path, str]],
+    esp: _Esp | None = None,
 ) -> None:
     # xorriso refuses `-outdev` against a non-empty file when it differs from
     # `-indev`. We treat `--out` as a writable target, so unlink any prior ISO
@@ -136,9 +313,15 @@ def _author(
         "-volid",
         volid,
     ]
+    # After replay, so the patched ESP overrides the one replay reinstates.
+    if esp is not None:
+        args += esp.author_args
     for local, iso_path in mapped:
         args += ["-map", str(local), iso_path]
-    args += ["-chmod", "0444", *[iso_path for _, iso_path in mapped], "--"]
+    read_only = [iso_path for _, iso_path in mapped]
+    if esp is not None and esp.iso_path is not None:
+        read_only.append(esp.iso_path)
+    args += ["-chmod", "0444", *read_only, "--"]
     result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode != 0:
         raise IsoBuildError(f"xorriso failed: {result.stderr}")
