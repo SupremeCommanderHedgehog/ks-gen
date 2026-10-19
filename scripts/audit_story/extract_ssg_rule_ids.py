@@ -17,7 +17,9 @@ For each ``--datastream <label>=<path>`` pair, writes
 ``<out-dir>/<label>-stig-selected.txt`` (the subset the ``stig`` profile
 actually selects), ``<out-dir>/<label>-stig-refine-values.txt`` and
 ``<out-dir>/<label>-fips-candidates.txt`` (stig-selected rules whose check or
-remediation touches FIPS). With 2+ datastreams, also writes
+remediation touches FIPS) and ``<out-dir>/<label>-stig-value-readers.txt``
+(each XCCDF Value mapped to the stig-selected rules whose check or fix reads
+it). With 2+ datastreams, also writes
 ``<out-dir>/cross-distro-rule-id-diff.md`` with set ops (all-in-all, pairwise
 intersections, distro-only sets).
 
@@ -243,6 +245,35 @@ def extract_fips_candidates(datastream_path: Path, selected: set[str]) -> dict[s
     return candidates
 
 
+def extract_stig_value_readers(datastream_path: Path, selected: set[str]) -> dict[str, set[str]]:
+    """Map each XCCDF Value to the stig-selected rules that read it.
+
+    A rule reads a Value through its check (`<check-export value-id=...>`) or
+    through its fix (`<sub idref=...>`). A `set_value` ks-gen emits for a Value
+    no selected rule reads is inert tailoring — it implies a coverage no scan
+    provides (#68). Values with no selected reader are omitted.
+    """
+    tree = ET.parse(datastream_path)
+    readers: dict[str, set[str]] = {}
+    for rule in tree.iter(f"{{{XCCDF_NS}}}Rule"):
+        rule_id = rule.get("id")
+        if not rule_id or rule_id not in selected:
+            continue
+        value_ids = {e.get("value-id") for e in rule.iter(f"{{{XCCDF_NS}}}check-export")}
+        value_ids |= {e.get("idref") for e in rule.iter(f"{{{XCCDF_NS}}}sub")}
+        for vid in value_ids:
+            if vid and vid.startswith("xccdf_org.ssgproject.content_value_"):
+                readers.setdefault(vid, set()).add(rule_id)
+    return readers
+
+
+def write_value_readers(readers: dict[str, set[str]], out_path: Path) -> None:
+    """One ``<value-id>\t<rule-id> <rule-id>...`` per line, sorted."""
+    lines = [f"{k}\t{' '.join(sorted(v))}" for k, v in sorted(readers.items())]
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 _NO_FIPS_CANDIDATES = "# no fips candidates"
 
 
@@ -364,6 +395,11 @@ def main(argv: list[str] | None = None) -> int:
         val_out = args.out_dir / f"{label}-stig-refine-values.txt"
         write_refine_values(refined, val_out)
         print(f"{label}: {len(refined)} stig refine-values -> {val_out}")
+
+        readers = extract_stig_value_readers(path, selected)
+        readers_out = args.out_dir / f"{label}-stig-value-readers.txt"
+        write_value_readers(readers, readers_out)
+        print(f"{label}: {len(readers)} values read by stig rules -> {readers_out}")
 
     if len(per_distro) >= 2:
         diff_out = args.out_dir / "cross-distro-rule-id-diff.md"

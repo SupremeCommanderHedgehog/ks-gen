@@ -102,6 +102,18 @@ _TOGGLES: list[dict] = [
     {"crypto": {"policy": "FUTURE"}},
     {"crypto": {"policy": "STIG"}},
     {"overrides": {"faillock": {"even_deny_root": False}}},
+    # The auditd action that fails alma9's hardcoded `_stig` checks changes
+    # with the choice: the default SUSPEND fails the disk ones, keep_logs the
+    # max_log_file one (#68).
+    {
+        "overrides": {
+            "auditd": {
+                "disk_full_action": "HALT",
+                "disk_error_action": "HALT",
+                "max_log_file_action": "keep_logs",
+            }
+        }
+    },
 ]
 
 
@@ -200,4 +212,53 @@ def test_set_value_ops_target_values_not_rules(distro, minimal_cfg):
                 assert not op.rule_id.startswith(_RULE_PREFIX), (
                     f"{distro}/{rule.id}: set_value targets a Rule ID ({op.rule_id}); "
                     f"it must target an xccdf Value ID"
+                )
+
+
+def _stig_value_readers(distro: str) -> dict[str, set[str]]:
+    path = _DOCS / f"{distro}-stig-value-readers.txt"
+    # Not pytest.skip, for the same reason as _stig_selected.
+    assert path.is_file(), (
+        f"missing {path.name}: re-run scripts/audit_story/extract_ssg_rule_ids.py "
+        f"(see docs/audit-story/SSG-VERSIONS.md)."
+    )
+    readers: dict[str, set[str]] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line:
+            continue
+        value_id, _, rules = line.partition("\t")
+        readers[value_id] = set(rules.split())
+    return readers
+
+
+@pytest.mark.parametrize("distro", _DISTROS)
+def test_every_set_value_is_read_by_a_stig_selected_rule(distro, minimal_cfg):
+    """#68: a set_value no stig-selected rule reads is inert tailoring.
+
+    It changes no scan result and steers no remediation, yet tailoring.xml and
+    exceptions.md imply a coverage the host never gets. A reader the same
+    tailoring deselects does not count. A rule reads a Value
+    through its check (`check-export`) or its fix (`sub`); either counts, since
+    a fix-only reader still makes oscap's remediation follow the choice.
+
+    Checked against the current pin only: the media floors record selection,
+    not readers. An ID selected only by a floor is still caught by the
+    selection guards above.
+    """
+    readers = _stig_value_readers(distro)
+    for update in _TOGGLES:
+        cfg = _for_distro(minimal_cfg, distro, **update)
+        rules = [r for r in load_rules(distro) if r.applies(cfg)]
+        ops = [op for r in rules for op in r.emit_tailoring(cfg)]
+        # A reader this same tailoring deselects runs neither check nor fix.
+        disabled = {op.rule_id for op in ops if op.action == "disable"}
+        for rule in rules:
+            for op in rule.emit_tailoring(cfg):
+                if op.action != "set_value":
+                    continue
+                live = readers.get(op.rule_id, set()) - disabled
+                assert live, (
+                    f"{distro}/{rule.id} under {update or 'defaults'} sets {op.rule_id}, "
+                    f"but no enabled stig-selected rule reads it: drop the set_value, or "
+                    f"select a rule that does and say why."
                 )

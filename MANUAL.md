@@ -779,7 +779,7 @@ overrides:
   auditd:
     disk_full_action: SUSPEND      # STIG default HALT
     disk_error_action: SUSPEND
-    max_log_file_action: ROTATE    # STIG default keep_logs
+    max_log_file_action: ROTATE    # AL9 STIG accepts rotate|single; AL8 refines syslog
   ssh_keep_open:
     ensure_firewalld_port: true
     ensure_selinux_port: true
@@ -1051,7 +1051,7 @@ exact XCCDF IDs.
 
 | Rule | What it does |
 |---|---|
-| `auditd_actions` | Sets `disk_full_action` / `disk_error_action` / `max_log_file_action` to operator-chosen values (defaults `SUSPEND`/`SUSPEND`/`ROTATE` instead of STIG's `HALT`/`HALT`/`keep_logs`). |
+| `auditd_actions` | Sets `disk_full_action` / `disk_error_action` / `max_log_file_action` to operator-chosen values (defaults `SUSPEND`/`SUSPEND`/`ROTATE`). What STIG asks for differs per distro, and tailoring follows each distro's stig profile (#68): on AL8 the selected disk rules check the operator's value, so it verifies; on AL9 the selected `_stig` rules accept only `SYSLOG`/`SINGLE`/`HALT` and `rotate`/`single`, so any other choice disables and names them in `exceptions.md`; AL8 also refines `max_log_file_action` to `syslog`, which no selected rule checks, so other choices are documented but not tailored; AL10 selects none of them, so the values are asserted by `%post` alone. |
 | `usbguard` | Per `overrides.usbguard.enable`: either selects the USBGuard install + service oscap rules, or disables them. |
 | `kernel_module_blacklist` | Writes `/etc/modprobe.d/ks-gen-blacklist.conf` with `install <mod> /bin/true` lines for each configured module. |
 | `package_purge` | `dnf -y remove <packages.excluded>` after install completes — catches transitive pulls from group installs. |

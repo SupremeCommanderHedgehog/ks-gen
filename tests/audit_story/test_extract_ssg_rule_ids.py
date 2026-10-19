@@ -256,3 +256,61 @@ def test_write_fips_candidates_sorts_and_keeps_markers(tmp_path):
     out = tmp_path / "dist-fips-candidates.txt"
     extract_ssg_rule_ids.write_fips_candidates({"b": "check:fips", "a": "fix:fips=1"}, out)
     assert out.read_text(encoding="utf-8") == "a\tfix:fips=1\nb\tcheck:fips\n"
+
+
+# ---------------- stig value readers (#68) ----------------
+#
+# The reader map is what tests/test_rule_ids_selected_by_stig.py checks every
+# emitted set_value against, so a reader the extractor misses would fail a
+# valid set_value, and a non-reader it counts would pass an inert one.
+
+_V = "xccdf_org.ssgproject.content_value_"
+
+
+def _write_readers_ds(tmp_path: Path) -> Path:
+    body = f"""<?xml version="1.0" encoding="UTF-8"?>
+<xccdf:Benchmark xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" id="xccdf_x">
+  <xccdf:Rule id="r_check">
+    <xccdf:check system="oval">
+      <xccdf:check-export value-id="{_V}via_check" export-name="e"/>
+    </xccdf:check>
+  </xccdf:Rule>
+  <xccdf:Rule id="r_fix">
+    <xccdf:fix system="urn:xccdf:fix:script:sh">
+      x='<xccdf:sub idref="{_V}via_fix" use="legacy"/>'
+    </xccdf:fix>
+  </xccdf:Rule>
+  <xccdf:Rule id="r_unselected">
+    <xccdf:check system="oval">
+      <xccdf:check-export value-id="{_V}only_unselected" export-name="e"/>
+    </xccdf:check>
+  </xccdf:Rule>
+  <xccdf:Rule id="r_both">
+    <xccdf:check system="oval">
+      <xccdf:check-export value-id="{_V}via_check" export-name="e"/>
+    </xccdf:check>
+    <xccdf:fix system="urn:xccdf:fix:script:sh">
+      <xccdf:sub idref="xccdf_x_not_a_value"/>
+    </xccdf:fix>
+  </xccdf:Rule>
+</xccdf:Benchmark>
+"""
+    p = tmp_path / "ds.xml"
+    p.write_text(body, encoding="utf-8")
+    return p
+
+
+def test_value_readers_count_check_exports_and_fix_subs_of_selected_rules(tmp_path):
+    readers = extract_ssg_rule_ids.extract_stig_value_readers(
+        _write_readers_ds(tmp_path), {"r_check", "r_fix", "r_both"}
+    )
+    assert readers == {
+        f"{_V}via_check": {"r_check", "r_both"},
+        f"{_V}via_fix": {"r_fix"},
+    }
+
+
+def test_write_value_readers_sorts_values_and_rules(tmp_path):
+    out = tmp_path / "readers.txt"
+    extract_ssg_rule_ids.write_value_readers({"v_b": {"r2", "r1"}, "v_a": {"r3"}}, out)
+    assert out.read_text(encoding="utf-8") == "v_a\tr3\nv_b\tr1 r2\n"
