@@ -20,6 +20,7 @@ concurrency:
 #   - objects.githubusercontent.com : setup-python binary download
 #   - pypi.org / files.pythonhosted.org : pip install
 #   - results-receiver.actions.githubusercontent.com : actions cache + upload-artifact
+#   - release-assets.githubusercontent.com : actionlint release tarball (ruff job)
 # If a step fails because a host isn't allowlisted, add it here.
 # codeql.yml and release-please.yml still run in audit mode — they have
 # wider network needs and can be tightened separately.
@@ -47,6 +48,7 @@ jobs:
             prod.app-api.stepsecurity.io:443
             pypi.org:443
             results-receiver.actions.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -60,6 +62,22 @@ jobs:
         run: ruff check src tests
       - name: ruff format --check
         run: ruff format --check src tests
+      # Workflow files are only validated by GitHub when it tries to run them,
+      # and a rejected file fails silently: ssg-drift.yml never ran once
+      # between #92 and #109. Lint them here so that fails a PR instead.
+      # Pinned tarball + sha256 rather than actionlint-py, which ships no
+      # wheel and fetches the binary at build time.
+      - name: actionlint
+        env:
+          ACTIONLINT_VERSION: "1.7.12"
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$tarball" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/$tarball"
+          echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/$tarball" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color
 
   test:
     runs-on: ubuntu-latest

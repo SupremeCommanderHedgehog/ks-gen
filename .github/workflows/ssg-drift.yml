@@ -20,9 +20,6 @@ jobs:
   drift:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      DS_DIR: ${{ runner.temp }}/ssg-datastreams
-      EXTRACT_DIR: ${{ runner.temp }}/ssg-extract
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
@@ -33,6 +30,15 @@ jobs:
           # a drift check gets ignored.
           egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Not a job-level `env:` block: the `runner` context is unavailable
+      # there, and using it made GitHub reject this whole file, so the job
+      # never ran once between #92 and #109. $RUNNER_TEMP is a plain env var
+      # inside steps, so derive the paths here and hand them on.
+      - name: Set scratch paths
+        run: |
+          echo "DS_DIR=$RUNNER_TEMP/ssg-datastreams" >> "$GITHUB_ENV"
+          echo "EXTRACT_DIR=$RUNNER_TEMP/ssg-extract" >> "$GITHUB_ENV"
 
       - name: Install extraction prerequisites
         run: |
@@ -95,6 +101,7 @@ jobs:
             tracked="docs/audit-story/$name"
             if [ ! -f "$tracked" ]; then
               drift=true
+              # shellcheck disable=SC2016  # literal Markdown backticks
               printf '## %s\n\nNot checked in — the extractor produces an output `docs/audit-story/` lacks.\n\n' \
                 "$name" >> "$report"
               continue
