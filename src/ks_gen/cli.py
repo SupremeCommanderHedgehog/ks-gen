@@ -8,7 +8,12 @@ from pathlib import Path
 
 import typer
 
-from ks_gen.config import HostConfig
+from ks_gen.config import (
+    REMOVED_DISTROS,
+    SUPPORTED_DISTROS,
+    HostConfig,
+    removed_distro_message,
+)
 from ks_gen.iso import GRUB_BIOS_CFG, ISOLINUX_CFG, IsoBuildError, build_iso
 from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
@@ -42,7 +47,7 @@ from ks_gen.writer import build_bundle, write_bundle
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="ks-gen — DISA STIG kickstart/autoinstall generator (AlmaLinux 8/9/10, Ubuntu 24.04)",
+    help="ks-gen — DISA STIG kickstart generator (AlmaLinux 8/9/10)",
 )
 
 
@@ -63,15 +68,11 @@ def gen(
         raise typer.Exit(code=int(e.exit_code)) from None
     bundle = build_bundle(cfg)
     write_bundle(bundle, out)
-    # lint_kickstart validates ks.cfg invariants; skip for ubuntu2404 until
-    # phase 4 introduces a user-data lint. alma8/alma10 produce a ks.cfg with
-    # the same shape as alma9, so the same lint applies.
-    if bundle.distro in ("alma9", "alma8", "alma10"):
-        report = lint_kickstart(out / "ks.cfg")
-        if not report.ok:
-            for f in report.failures:
-                typer.echo(f"lint FAIL: {f}", err=True)
-            raise typer.Exit(code=int(ExitCode.LINT_FAIL))
+    report = lint_kickstart(out / "ks.cfg")
+    if not report.ok:
+        for f in report.failures:
+            typer.echo(f"lint FAIL: {f}", err=True)
+        raise typer.Exit(code=int(ExitCode.LINT_FAIL))
     typer.echo(f"Wrote bundle to {out}")
 
 
@@ -94,6 +95,15 @@ def rules_cmd(
     format_: str = typer.Option("table", "--format", help="table | json"),
     distro: str = typer.Option("alma9", "--distro", help="Distro to list rules for."),
 ) -> None:
+    # Checked here, not left to load_rules: an unknown package name quietly
+    # yields an empty catalog, which a script would read as "no rules".
+    if distro not in SUPPORTED_DISTROS:
+        if distro in REMOVED_DISTROS:
+            msg = removed_distro_message(distro)
+        else:
+            msg = f"unknown distro: {distro} (choose from {', '.join(SUPPORTED_DISTROS)})"
+        typer.echo(msg, err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE))
     catalog = load_rules(distro)
     if id_:
         match = next((r for r in catalog if r.id == id_), None)
@@ -142,15 +152,11 @@ def new_cmd(
     host_dir = write_initial(out, cfg, yaml_text)
     bundle = build_bundle(cfg)
     write_bundle(bundle, host_dir)
-    # lint_kickstart validates ks.cfg invariants; skip for ubuntu2404 until
-    # phase 4 introduces a user-data lint. alma8/alma10 produce a ks.cfg with
-    # the same shape as alma9, so the same lint applies.
-    if bundle.distro in ("alma9", "alma8", "alma10"):
-        report = lint_kickstart(host_dir / "ks.cfg")
-        if not report.ok:
-            for f in report.failures:
-                typer.echo(f"lint FAIL: {f}", err=True)
-            raise typer.Exit(code=int(ExitCode.LINT_FAIL))
+    report = lint_kickstart(host_dir / "ks.cfg")
+    if not report.ok:
+        for f in report.failures:
+            typer.echo(f"lint FAIL: {f}", err=True)
+        raise typer.Exit(code=int(ExitCode.LINT_FAIL))
     typer.echo(f"Wrote bundle to {host_dir}")
 
 

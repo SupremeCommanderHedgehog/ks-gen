@@ -16,7 +16,7 @@ def test_tailoring_returns_empty_after_drift_cleanup(minimal_cfg):
     # ssg-almalinux9-ds.xml (0.1.80). No equivalent rule to disable on
     # current AL9 SSG, so emit_tailoring returns []. The exception_entry
     # still records the operator's opt-out for the audit trail (with
-    # empty stig_rules_disabled — same shape as ubuntu2404's port).
+    # empty stig_rules_disabled).
     assert RULE.emit_tailoring(minimal_cfg) == []
 
 

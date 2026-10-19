@@ -36,16 +36,15 @@ from ks_gen.config import Crypto, CryptoPolicy
 from ks_gen.registry import load_rules
 
 _DOCS = Path(__file__).resolve().parent.parent / "docs" / "audit-story"
-_DISTROS = ["alma8", "alma9", "alma10", "ubuntu2404"]
-_RHEL_FAMILY = ["alma8", "alma9", "alma10"]
+_DISTROS = ["alma8", "alma9", "alma10"]
 _RULE_PREFIX = "xccdf_org.ssgproject.content_rule_"
 
 
 def _floor_selected(distro: str) -> set[str]:
     """Rules selected by the media floors — older content a host can still run.
 
-    No assertion that a floor exists: ubuntu2404 has none, and a distro whose
-    only supported install source is the network legitimately has none either.
+    No assertion that a floor exists: a distro whose only supported install
+    source is the network legitimately has none.
     """
     ids: set[str] = set()
     for path in sorted((_DOCS / "floors").glob(f"{distro}-*-stig-selected.txt")):
@@ -132,7 +131,7 @@ def test_every_emitted_disable_is_declared_and_stig_selected(distro, minimal_cfg
     assert selected, f"{distro} stig-selected list unexpectedly empty"
 
 
-@pytest.mark.parametrize("distro", _RHEL_FAMILY)
+@pytest.mark.parametrize("distro", _DISTROS)
 @pytest.mark.parametrize("policy", [CryptoPolicy.MODERN, CryptoPolicy.FUTURE])
 def test_crypto_policy_only_disables_stig_selected_rules(distro, policy, minimal_cfg):
     """The #61 regression, checked against emitted ops rather than the declared list."""
@@ -148,7 +147,7 @@ def test_crypto_policy_only_disables_stig_selected_rules(distro, policy, minimal
     )
 
 
-@pytest.mark.parametrize("distro", _RHEL_FAMILY)
+@pytest.mark.parametrize("distro", _DISTROS)
 @pytest.mark.parametrize(
     ("policy", "expected"),
     [(CryptoPolicy.MODERN, "DEFAULT"), (CryptoPolicy.FUTURE, "FUTURE")],
@@ -170,7 +169,7 @@ def test_crypto_policy_set_value_matches_the_policy_post_applies(
     assert f"update-crypto-policies --set {expected}" in crypto.emit_post(cfg)
 
 
-@pytest.mark.parametrize("distro", _RHEL_FAMILY)
+@pytest.mark.parametrize("distro", _DISTROS)
 def test_crypto_policy_retunes_the_policy_variable_instead_of_disabling_it(distro, minimal_cfg):
     """configure_crypto_policy is variable-driven, so it can pass rather than be skipped."""
     cfg = minimal_cfg.model_copy(

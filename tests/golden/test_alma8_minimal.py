@@ -18,10 +18,6 @@ def test_alma8_minimal(snapshot):
     yaml_path = Path(__file__).parent / "alma8-minimal.host.yaml"
     cfg = load_host_config(yaml_path, sets=[])
     bundle = build_bundle(cfg)
-    # alma8 bundle shape matches alma9: ks_cfg required, no user_data / meta_data.
-    assert bundle.ks_cfg is not None
-    assert bundle.user_data is None
-    assert bundle.meta_data is None
     assert _normalize(bundle.ks_cfg) == snapshot(name="ks.cfg")
     assert _normalize(bundle.tailoring_xml) == snapshot(name="tailoring.xml")
     assert _normalize(bundle.exceptions_md) == snapshot(name="exceptions.md")

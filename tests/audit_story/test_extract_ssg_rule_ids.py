@@ -80,7 +80,7 @@ def test_cross_distro_diff_emits_intersections_and_only_sets(tmp_path):
     per_distro = {
         "alma9": {"shared", "alma9_only"},
         "alma8": {"shared", "alma8_only"},
-        "ubuntu2404": {"shared", "ubuntu_only"},
+        "alma10": {"shared", "alma10_only"},
     }
     out = tmp_path / "diff.md"
     extract_ssg_rule_ids.write_cross_distro_diff(per_distro, out)
@@ -88,13 +88,13 @@ def test_cross_distro_diff_emits_intersections_and_only_sets(tmp_path):
     # Totals
     assert "`alma9`: 2 rules" in text
     assert "`alma8`: 2 rules" in text
-    assert "`ubuntu2404`: 2 rules" in text
+    assert "`alma10`: 2 rules" in text
     # All-three intersection
     assert "1 rules shared across" in text
     # Per-distro-only callouts
     assert "`alma9_only`" in text
     assert "`alma8_only`" in text
-    assert "`ubuntu_only`" in text
+    assert "`alma10_only`" in text
 
 
 def test_cli_writes_per_distro_files_and_diff(tmp_path):

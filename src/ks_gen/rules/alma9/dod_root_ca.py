@@ -14,8 +14,7 @@ if TYPE_CHECKING:
 # ssg-almalinux9-ds.xml (0.1.80). The closest hits today
 # (install_smartcard_packages, only_allow_dod_certs) check different
 # things. emit_tailoring returns []; exception_entry still records the
-# operator opt-out for the audit trail (mirror ubuntu2404's shape from
-# #127 PR A).
+# operator opt-out for the audit trail.
 
 
 @dataclass(frozen=True)

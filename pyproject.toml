@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "ks-gen"
 version = "0.36.0"
 requires-python = ">=3.11"
-description = "Remote-safe DISA STIG kickstart generator for AlmaLinux 8/9/10 and Ubuntu 24.04."
+description = "Remote-safe DISA STIG kickstart generator for AlmaLinux 8/9/10."
 authors = [{ name = "Patrick Connallon" }]
 license = { file = "LICENSE" }
 dependencies = [

@@ -9,8 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 
-# Ordered as sshd's PubkeyAcceptedAlgorithms preference list so
-# rules/ubuntu2404/crypto_policy.py's STIG string can be pinned against it.
+# Ordered as sshd's PubkeyAcceptedAlgorithms preference list.
 FIPS_USABLE: tuple[str, ...] = (
     "ssh-rsa",
     "rsa-sha2-512",
@@ -26,9 +25,10 @@ FIPS_USABLE: tuple[str, ...] = (
 # Only FIPS_USABLE can let a config through, which is why that one is pinned.
 #
 # Certificate types (`*-cert-v01@openssh.com`) are deliberately absent from
-# both: the STIG PubkeyAcceptedAlgorithms list ks-gen writes on Ubuntu has no
-# cert forms, so a cert-only key list cannot authenticate there. The ordinary
-# `cert-authority ssh-rsa AAAA...` form parses as ssh-rsa and is unaffected.
+# both, so a cert-only key list is rejected rather than trusted to survive the
+# installed policy: with no console fallback, guessing wrong is a lockout. The
+# ordinary `cert-authority ssh-rsa AAAA...` form parses as ssh-rsa and is
+# unaffected.
 FIPS_STRIPPED: tuple[str, ...] = (
     "ssh-ed25519",
     "sk-ssh-ed25519@openssh.com",

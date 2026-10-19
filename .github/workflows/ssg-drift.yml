@@ -27,7 +27,7 @@ jobs:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           # audit, not block: this job pulls from distro package mirrors
-          # (repo.almalinux.org, archive.ubuntu.com, the runner's apt mirror),
+          # (repo.almalinux.org, the runner's apt mirror),
           # whose endpoints move. A blocked fetch would surface as a failure
           # nobody can distinguish from a real outage, and false alarms are how
           # a drift check gets ignored.
@@ -58,7 +58,6 @@ jobs:
             --datastream alma8="$DS_DIR/ssg-almalinux8-ds.xml" \
             --datastream alma9="$DS_DIR/ssg-almalinux9-ds.xml" \
             --datastream alma10="$DS_DIR/ssg-almalinux10-ds.xml" \
-            --datastream ubuntu2404="$DS_DIR/ssg-ubuntu2404-ds.xml" \
             --out-dir "$EXTRACT_DIR"; then
             echo "::error title=SSG extraction failed::extract_ssg_rule_ids.py failed on the freshly fetched datastreams. This is an extraction failure, NOT content drift."
             exit 1
