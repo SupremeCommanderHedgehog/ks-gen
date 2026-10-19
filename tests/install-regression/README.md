@@ -15,7 +15,7 @@ Short version: when `src/ks_gen/{iso,rules,writer,config}.py`,
 `src/ks_gen/templates/**`, or anything else that affects what
 anaconda actually does has changed.
 
-Requires WSL (or Linux) with `qemu-system-x86_64`, `xorriso`, OVMF, and
+Requires WSL (or Linux) with `qemu-system-x86_64`, `xorriso`, mtools, OVMF, and
 KVM. Everything it writes goes to `$BUILD`
 (default `~/.cache/ks-gen-install-regression`), never into the repo.
 

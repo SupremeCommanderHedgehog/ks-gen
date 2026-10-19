@@ -956,7 +956,15 @@ ks-gen iso \
 (ks-gen)" entry, set it as the default, and shorten the timeout to
 5 seconds. The original "Install AlmaLinux 9" entry is preserved
 below as a fallback — arrow-down to recover the interactive flow.
-Both BIOS (isolinux) and UEFI (grub) paths are rewritten.
+Both BIOS (isolinux) and UEFI (grub) paths are rewritten, and so is the
+copy of `EFI/BOOT/grub.cfg` inside the EFI system partition image
+(`/images/efiboot.img` on EL8/EL9, an appended partition on EL10).
+GRUB reads that copy when the ISO is written to a USB stick, so
+without it a stick would boot the vendor menu instead (#116); `iso`
+fails rather than write media whose EFI partition it couldn't patch.
+The volume is relabelled, so the vendor entries' `search -l` and
+`hd:LABEL=` arguments are retargeted at the new label too — that is
+what keeps the fallback entries bootable.
 
 **How `tailoring.xml` gets to oscap:** the generated `ks.cfg` opens
 with a `%post --nochroot` block that runs in the Anaconda installer
@@ -969,7 +977,9 @@ against it. The same `--nochroot` block handles HTTP delivery via
 `curl`; the transport is auto-detected from `/proc/cmdline`. No HTTP
 server is needed for the ISO path.
 
-`xorriso` must be on `PATH`. If it isn't, `iso` exits 5 with a
+`xorriso` must be on `PATH`, and so must `mcopy` (from mtools) when
+the source ISO has an EFI system partition image to patch — every
+AlmaLinux install ISO does. If one is missing, `iso` exits 5 with a
 clear error.
 
 ### 5.5 `ks-gen rules`
