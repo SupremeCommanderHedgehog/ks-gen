@@ -1,7 +1,7 @@
 # SSG datastream versions pinned for audit-story analysis
 
 The per-distro rule-ID lists under this directory were extracted from these
-specific downstream `scap-security-guide` / `ssg-debderived` package versions.
+specific downstream `scap-security-guide` package versions.
 **These were the versions installed on a freshly-built ks-gen host as of
 2026-08-14** — i.e., what `oscap` saw at install time on that date.
 
@@ -21,7 +21,6 @@ specific downstream `scap-security-guide` / `ssg-debderived` package versions.
 | AlmaLinux 8.10 | `alma8` | `scap-security-guide` | `0.1.81-1.el8_10.alma.1` | https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el8_10.alma.1.noarch.rpm |
 | AlmaLinux 9 (latest) | `alma9` | `scap-security-guide` | `0.1.81-1.el9_8.alma.1` | https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el9_8.alma.1.noarch.rpm |
 | AlmaLinux 10 (latest) | `alma10` | `scap-security-guide` | `0.1.81-1.el10_2.alma.1` | https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el10_2.alma.1.noarch.rpm |
-| Ubuntu 24.04 (noble) | `ubuntu2404` | `ssg-debderived` | `0.1.80-1` | http://archive.ubuntu.com/ubuntu/pool/universe/s/scap-security-guide/ssg-debderived_0.1.80-1_all.deb |
 
 > **AlmaLinux install media is far behind these.** The versions above are what
 > the *repos* ship. The AlmaLinux 8.10 DVD carries `scap-security-guide`
@@ -29,13 +28,6 @@ specific downstream `scap-security-guide` / `ssg-debderived` package versions.
 > oscap remediates against media content unless the `%post` upgrade reaches the
 > network — which is why the kickstart upgrades the package before remediating,
 > and why the FIPS disable set is a union rather than one pin (#90).
-
-> **Ubuntu 24.04 cannot supply its own content.** `noble` ships `ssg-debderived`
-> **0.1.71-1** (and nothing newer in `-updates` or `-security`), which contains
-> datastreams for 16.04–22.04 **only** — no `ssg-ubuntu2404-ds.xml`. The 24.04
-> datastream first appears in 0.1.76, which only later Ubuntu releases carry.
-> The version in the table is therefore where ks-gen's extracts came from, not
-> something a stock 24.04 host can have. See #86.
 
 ## Media floors
 
@@ -61,19 +53,19 @@ fails if this table and that module disagree — so update **both** on a bump.
 
 ## Re-extraction recipe (reproducibility for SSG version bumps)
 
-Tools needed: `curl`, `rpm2cpio`, `cpio`, `dpkg-deb`, `gzip`. On Ubuntu WSL:
+Tools needed: `curl`, `rpm2cpio`, `cpio`, `gzip`. On a Debian-family WSL:
 `sudo apt install rpm2cpio cpio` (the rest are preinstalled).
 
 `scripts/audit_story/fetch_shipping_datastreams.sh` downloads whatever each
 distro ships *right now* — it resolves the highest `scap-security-guide` RPM in
-each AlmaLinux AppStream repo and the highest `ssg-debderived` deb in noble's
-universe pool, so it does not need updating when a version moves. `ssg-drift.yml`
+each AlmaLinux AppStream repo, so it does not need updating when a version
+moves. `ssg-drift.yml`
 runs this same script; keeping one copy is the point.
 
 ```bash
 WORK=/tmp/ssg-extract
 
-# Downloads the 4 datastreams and prints "<label> package: <exact filename>"
+# Downloads the 3 datastreams and prints "<label> package: <exact filename>"
 # for each (also written to $WORK/shipping-versions.txt).
 scripts/audit_story/fetch_shipping_datastreams.sh "$WORK"
 
@@ -82,7 +74,6 @@ python3 scripts/audit_story/extract_ssg_rule_ids.py \
   --datastream alma8="$WORK/ssg-almalinux8-ds.xml" \
   --datastream alma9="$WORK/ssg-almalinux9-ds.xml" \
   --datastream alma10="$WORK/ssg-almalinux10-ds.xml" \
-  --datastream ubuntu2404="$WORK/ssg-ubuntu2404-ds.xml" \
   --out-dir docs/audit-story/
 ```
 
@@ -110,8 +101,7 @@ fine off FIPS. See `tests/test_fips_dependent_rules.py` (#67).
 - AlmaLinux 9: **1532** rules
 - AlmaLinux 10: **1061** rules (added 2026-08-11 for #58; the EL10 content is
   younger than EL9's, and its `stig` profile selects **508** of them)
-- Ubuntu 24.04: **642** rules
-- Shared across all 4: **427** rules (universal STIG floor)
+- Shared across all 3: **931** rules
 - AL9 ∩ AL10: **992** rules (65% of AL9) — the alma10 re-export gambit holds
   for 13 of 15 rules; the 2 that diverge are documented in their rule modules
 - AL8 ∩ AL9: **1468** rules (86% of AL8, 96% of AL9) — confirms the alma8
@@ -121,7 +111,7 @@ fine off FIPS. See `tests/test_fips_dependent_rules.py` (#67).
 Full distro-only sets and pairwise breakdowns: `cross-distro-rule-id-diff.md`.
 
 The extractor rewrites that file from whatever `--datastream` set it is given,
-so always re-run it with **all four** at once — a partial run silently drops
+so always re-run it with **all three** at once — a partial run silently drops
 the distros you left out.
 
 Three mechanical guards run off these lists:
@@ -147,13 +137,12 @@ Three mechanical guards run off these lists:
   now refines `var_system_crypto_policy` to `FIPS:STIG` (#90)
 - AlmaLinux 9: **488** of 1532
 - AlmaLinux 10: **508** of 1061
-- Ubuntu 24.04: **230** of 642
 
 ## Why pin downstream versions, not upstream
 
 `oscap xccdf eval` at install time loads
 `/usr/share/xml/scap/ssg/content/ssg-<distro>-ds.xml` from the
-**installed `scap-security-guide` RPM / `ssg-debderived` deb** on the target
+**installed `scap-security-guide` RPM** on the target
 host — whichever version that distro shipped. ks-gen's `emit_tailoring`
 references rule IDs that need to exist in **that** datastream, not in the
 latest upstream release. So we pin against what's actually deployable today.

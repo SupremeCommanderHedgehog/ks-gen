@@ -9,7 +9,7 @@ Usage:
     python3 scripts/audit_story/extract_ssg_rule_ids.py \\
         --datastream alma8=/tmp/ssg-extract/.../ssg-almalinux8-ds.xml \\
         --datastream alma9=/tmp/ssg-extract/.../ssg-almalinux9-ds.xml \\
-        --datastream ubuntu2404=/tmp/ssg-extract/.../ssg-ubuntu2404-ds.xml \\
+        --datastream alma10=/tmp/ssg-extract/.../ssg-almalinux10-ds.xml \\
         --out-dir docs/audit-story/
 
 For each ``--datastream <label>=<path>`` pair, writes

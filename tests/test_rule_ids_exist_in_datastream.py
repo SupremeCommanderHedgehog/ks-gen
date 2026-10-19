@@ -20,7 +20,7 @@ import pytest
 from ks_gen.registry import load_rules
 
 _DOCS = Path(__file__).resolve().parent.parent / "docs" / "audit-story"
-_DISTROS = ["alma8", "alma9", "alma10", "ubuntu2404"]
+_DISTROS = ["alma8", "alma9", "alma10"]
 
 
 def _known_ids(distro: str) -> set[str]:

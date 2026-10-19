@@ -33,13 +33,6 @@ def test_rhel_family_queries_rpm() -> None:
         assert "scap-security-guide" in cmd
 
 
-def test_ubuntu_queries_dpkg_for_the_deb_derived_package() -> None:
-    cmd = ssg_version_command("ubuntu2404")
-    assert cmd is not None
-    assert cmd.startswith("dpkg-query ")
-    assert "ssg-debderived" in cmd
-
-
 def test_unknown_distro_has_no_query() -> None:
     assert ssg_version_command("plan9") is None
 
