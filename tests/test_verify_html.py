@@ -147,13 +147,13 @@ def test_no_drift_section_when_drift_report_empty() -> None:
 
 
 def test_ssg_content_note_renders_on_drift_and_stays_out_of_the_verdict() -> None:
-    from ks_gen.verify.ssg_version import build_ssg_version_report
+    from ks_gen.verify.ssg_version import EXPECTED_SSG_VERSIONS, build_ssg_version_report
 
     ssg = build_ssg_version_report(distro="alma8", installed="0.1.74-1.el8.alma.1")
     doc = render_html(_report((CLEAN_ROW,), ssg_version=ssg))
     assert "SSG content" in doc
     assert "0.1.74-1.el8.alma.1" in doc
-    assert "0.1.81-1.el8_10.alma.1" in doc
+    assert EXPECTED_SSG_VERSIONS["alma8"].version in doc
     # Content drift is an explanation, not a failure: the badge stays CLEAN.
     assert ">CLEAN<" in doc
     assert_well_formed(doc)

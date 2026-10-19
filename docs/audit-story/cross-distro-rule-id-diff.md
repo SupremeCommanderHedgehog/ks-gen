@@ -2,23 +2,23 @@
 
 ## Totals per distro
 
-- `alma10`: 1061 rules
-- `alma8`: 1699 rules
-- `alma9`: 1532 rules
+- `alma10`: 1073 rules
+- `alma8`: 1701 rules
+- `alma9`: 1540 rules
 
 ## In all 3 distros
 
-- 931 rules shared across `alma10`, `alma8`, `alma9`
+- 937 rules shared across `alma10`, `alma8`, `alma9`
 
 ## Pairwise intersections
 
-- `alma10` ∩ `alma8`: 971 rules
-- `alma10` ∩ `alma9`: 992 rules
-- `alma8` ∩ `alma9`: 1468 rules
+- `alma10` ∩ `alma8`: 976 rules
+- `alma10` ∩ `alma9`: 1001 rules
+- `alma8` ∩ `alma9`: 1472 rules
 
 ## Distro-only sets
 
-### `alma10` only (29 rules)
+### `alma10` only (33 rules)
 
 - `xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_fchmodat2`
 - `xccdf_org.ssgproject.content_rule_audit_rules_file_deletion_events_renameat2`
@@ -37,20 +37,24 @@
 - `xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_unix2_chkpwd`
 - `xccdf_org.ssgproject.content_rule_chrony_set_nts`
 - `xccdf_org.ssgproject.content_rule_chronyd_configure_pool_and_server`
-- `xccdf_org.ssgproject.content_rule_ensure_journald_and_rsyslog_not_active_together`
 - `xccdf_org.ssgproject.content_rule_file_groupowner_boot_grub2`
 - `xccdf_org.ssgproject.content_rule_file_owner_boot_grub2`
 - `xccdf_org.ssgproject.content_rule_file_permissions_boot_grub2`
+- `xccdf_org.ssgproject.content_rule_file_permissions_sshd_config_not_modified`
 - `xccdf_org.ssgproject.content_rule_package_kea_removed`
 - `xccdf_org.ssgproject.content_rule_package_libdnf-plugin-subscription-manager_installed`
 - `xccdf_org.ssgproject.content_rule_package_pcsc-lite-ccid_installed`
 - `xccdf_org.ssgproject.content_rule_package_sequoia-sq_installed`
 - `xccdf_org.ssgproject.content_rule_package_unbound_removed`
+- `xccdf_org.ssgproject.content_rule_rsyslog_omfwd_authmode`
+- `xccdf_org.ssgproject.content_rule_rsyslog_omfwd_streamdriver`
+- `xccdf_org.ssgproject.content_rule_rsyslog_omfwd_tls`
 - `xccdf_org.ssgproject.content_rule_secure_boot_enabled`
 - `xccdf_org.ssgproject.content_rule_set_password_hashing_yescrypt_cost_factor_logindefs`
+- `xccdf_org.ssgproject.content_rule_socket_pcscd_enabled`
 - `xccdf_org.ssgproject.content_rule_system_booted_in_fips_mode`
 
-### `alma8` only (191 rules)
+### `alma8` only (190 rules)
 
 - `xccdf_org.ssgproject.content_rule_accounts_user_interactive_home_directory_on_separate_partition`
 - `xccdf_org.ssgproject.content_rule_accounts_users_netrc_file_permissions`
@@ -79,7 +83,6 @@
 - `xccdf_org.ssgproject.content_rule_dovecot_configure_ssl_key`
 - `xccdf_org.ssgproject.content_rule_dovecot_disable_plaintext_auth`
 - `xccdf_org.ssgproject.content_rule_dovecot_enable_ssl`
-- `xccdf_org.ssgproject.content_rule_enable_gpgcheck_for_all_repositories`
 - `xccdf_org.ssgproject.content_rule_file_groupowner_etc_sysconfig_sshd`
 - `xccdf_org.ssgproject.content_rule_file_owner_etc_sysconfig_sshd`
 - `xccdf_org.ssgproject.content_rule_file_permissions_etc_sysconfig_sshd`
@@ -244,8 +247,9 @@
 - `xccdf_org.ssgproject.content_rule_umask_for_daemons`
 - `xccdf_org.ssgproject.content_rule_use_root_squashing_all_exports`
 
-### `alma9` only (3 rules)
+### `alma9` only (4 rules)
 
+- `xccdf_org.ssgproject.content_rule_audit_rules_cron_execution`
 - `xccdf_org.ssgproject.content_rule_no_dirs_unowned_by_root`
 - `xccdf_org.ssgproject.content_rule_root_path_all_dirs`
 - `xccdf_org.ssgproject.content_rule_ssh_private_keys_have_passcode`

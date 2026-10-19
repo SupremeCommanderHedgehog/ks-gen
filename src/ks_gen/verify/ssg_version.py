@@ -30,9 +30,9 @@ class ExpectedSsg:
 # Machine-readable twin of the table in docs/audit-story/SSG-VERSIONS.md.
 # tests/test_verify_ssg_version.py fails if the two disagree.
 EXPECTED_SSG_VERSIONS: dict[str, ExpectedSsg] = {
-    "alma8": ExpectedSsg("scap-security-guide", "0.1.81-1.el8_10.alma.1"),
-    "alma9": ExpectedSsg("scap-security-guide", "0.1.81-1.el9_8.alma.1"),
-    "alma10": ExpectedSsg("scap-security-guide", "0.1.81-1.el10_2.alma.1"),
+    "alma8": ExpectedSsg("scap-security-guide", "0.1.82-1.el8_10.alma.1"),
+    "alma9": ExpectedSsg("scap-security-guide", "0.1.82-2.el9_8.alma.1"),
+    "alma10": ExpectedSsg("scap-security-guide", "0.1.82-2.el10_2.alma.1"),
 }
 
 
@@ -99,7 +99,7 @@ def build_ssg_version_report(
 ) -> SsgVersionReport | None:
     """Compare `installed` against the pin. None when `distro` has no pin.
 
-    A match is upstream-release equality (`0.1.81`), not raw string equality:
+    A match is upstream-release equality (`0.1.82`), not raw string equality:
     the downstream build suffix (`-1.el8_10.alma.1`) is a rebuild of the same
     rule content, and nagging every host over `.alma.1` -> `.alma.2` would bury
     the signal. Content movement *within* one upstream release is what

@@ -72,8 +72,9 @@ def test_exact_match_is_quiet() -> None:
 
 
 def test_downstream_rebuild_of_the_same_content_release_is_a_match() -> None:
-    """`0.1.81-2.el8_10.alma.2` carries the same upstream rule content."""
-    report = build_ssg_version_report(distro="alma8", installed="0.1.81-2.el8_10.alma.2")
+    """A new downstream suffix on the pinned upstream release is the same rule content."""
+    upstream = EXPECTED_SSG_VERSIONS["alma8"].version.split("-", 1)[0]
+    report = build_ssg_version_report(distro="alma8", installed=f"{upstream}-9.el8_10.alma.9")
     assert report is not None
     assert report.status == "match"
     assert render_ssg_version_section(report) == ""

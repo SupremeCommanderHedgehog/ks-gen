@@ -1459,13 +1459,13 @@ existed.
 A match prints nothing. A difference prints:
 
 ````
-SSG content drift: this alma8 host runs scap-security-guide 0.1.74-1.el8.alma.1; ks-gen expects 0.1.81-1.el8_10.alma.1 (host is older).
+SSG content drift: this alma8 host runs scap-security-guide 0.1.74-1.el8.alma.1; ks-gen expects 0.1.82-1.el8_10.alma.1 (host is older).
   Older is the dangerous direction: ks-gen may be disabling rules this version still selects, or naming rules it does not ship.
   Reported only — this does not affect the exit code.
 ````
 
-**What counts as a match.** The upstream release (`0.1.81`), not the whole
-downstream string: `0.1.81-2.el8_10.alma.2` is a rebuild of the same rule
+**What counts as a match.** The upstream release (`0.1.82`), not the whole
+downstream string: `0.1.82-2.el8_10.alma.2` is a rebuild of the same rule
 content and is not worth reporting. Older content is called out more
 strongly than newer — ks-gen may be disabling rules an older datastream
 still selects, which is how #90 broke every AlmaLinux 8 STIG install.
