@@ -87,6 +87,18 @@ policy — a mismatch does not fail fast, it burns the whole
 `DEADLINE_SECONDS` budget and then reports "SSH never came up", which reads
 as a product failure. Override only to contradict the fixture.
 
+On that timeout the harness prints the last ssh error. "Connection refused"
+or a timeout means sshd never started; an authentication error means the
+guest is up and the problem is the key, user or `KEY_TYPE`. The harness
+runs ssh with `-F /dev/null -o IdentitiesOnly=yes`. Do the same when you
+SSH in by hand, or the keys in a loaded ssh-agent exhaust the STIG sshd's
+`MaxAuthTries` (default 4) before `-i` is tried, and the guest refuses you
+with "Too many authentication failures":
+
+```bash
+ssh -F /dev/null -o IdentitiesOnly=yes -i build/keys/id_ed25519 -p 2222 opsadmin@127.0.0.1
+```
+
 | Var | Default | Notes |
 |---|---|---|
 | `ADMIN_USER` | fixture's `user.admin.name` (else `opsadmin`) | who the harness SSHes in as |

@@ -340,12 +340,22 @@ trap cleanup EXIT
 # logging to console; bump STAGNATION_BUDGET=1800 to absorb that.
 DEADLINE=$(( $(date +%s) + ${DEADLINE_SECONDS:-5400} ))
 STAGNATION_BUDGET="${STAGNATION_BUDGET:-600}"
-SSH_OPTS=(-i "$KEY"
-          -o StrictHostKeyChecking=no
-          -o UserKnownHostsFile=/dev/null
-          -o ConnectTimeout=5
-          -o LogLevel=ERROR
-          -p "$SSH_HOST_PORT")
+# Isolate the harness key. Without IdentitiesOnly, ssh offers every ssh-agent
+# key before -i; -F /dev/null does the same for IdentityFile lines (and any
+# User/ProxyJump/ControlMaster) in ~/.ssh/config. The STIG sshd disconnects
+# after ssh.max_auth_tries failures (config.py default 4) with "Too many
+# authentication failures", before the harness key is ever tried, and the run
+# then waits out DEADLINE against a host that installed fine.
+# Shared by ssh and scp; only the port flag differs (-p vs -P).
+COMMON_SSH_OPTS=(-F /dev/null
+                 -i "$KEY"
+                 -o IdentitiesOnly=yes
+                 -o StrictHostKeyChecking=no
+                 -o UserKnownHostsFile=/dev/null
+                 -o ConnectTimeout=5
+                 -o LogLevel=ERROR)
+SSH_OPTS=("${COMMON_SSH_OPTS[@]}" -p "$SSH_HOST_PORT")
+SSH_ERR="$BUILD/ssh-wait.err"
 
 while (( $(date +%s) < DEADLINE )); do
   if ! kill -0 "$QEMU_PID" 2>/dev/null; then
@@ -369,15 +379,19 @@ while (( $(date +%s) < DEADLINE )); do
       exit 1
     fi
   fi
-  if ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 true 2>/dev/null; then
+  if ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 true 2>"$SSH_ERR"; then
     break
   fi
   sleep 20
 done
 
-if ! ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 true 2>/dev/null; then
+if ! ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 true 2>"$SSH_ERR"; then
   echo "SSH never came up within ${DEADLINE_SECONDS:-5400}s as $ADMIN_USER" >&2
   echo "(if the fixture's admin is not '$ADMIN_USER', set ADMIN_USER)" >&2
+  # A refused or timed-out connect means sshd never started; an auth error
+  # means the guest is up and the problem is the key, user or KEY_TYPE.
+  echo "--- last ssh error ---" >&2
+  cat "$SSH_ERR" >&2 || true
   exit 1
 fi
 
@@ -419,10 +433,7 @@ if [[ -n "$ADMIN_SUDO_PASSWORD" ]]; then
   fi
 fi
 
-scp -P "$SSH_HOST_PORT" \
-    -i "$KEY" \
-    -o StrictHostKeyChecking=no \
-    -o UserKnownHostsFile=/dev/null \
+scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_HOST_PORT" \
     "$HERE/smoke-check.sh" "$ADMIN_USER"@127.0.0.1:/tmp/smoke-check.sh
 
 SMOKE_ENV="DATA_DISK_MARKER='$DATA_DISK_MARKER' EXPECTED_CRYPTO_POLICY='$EXPECTED_CRYPTO_POLICY'"
