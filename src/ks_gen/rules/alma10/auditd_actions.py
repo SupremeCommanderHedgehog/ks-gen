@@ -1,16 +1,22 @@
-"""alma10 auditd_actions — re-exports the alma9 implementation.
+"""alma10 auditd_actions — the alma9 implementation with no governing rules.
 
-Verified portable against ssg-almalinux10-ds.xml (scap-security-guide
-0.1.81) and AlmaLinux 10 BaseOS/AppStream repodata: every SSG rule ID
-this rule references still exists and is selected by the stig profile,
-and every package it installs is still packaged for AL10.
-
-If AL10 ever diverges here, replace this re-export with a real
-implementation and add the rule to _DIVERGENT in tests/test_registry.py.
+ssg-almalinux10 0.1.82's stig profile selects none of the auditd action rules
+and refines none of their Values, so every set_value would be inert tailoring
+and there is no STIG requirement to deviate from (#68). `emit_post` still
+writes the operator's choices into /etc/audit/auditd.conf.
 """
 
 from __future__ import annotations
 
-from ks_gen.rules.alma9.auditd_actions import RULE
+from typing import cast
 
-__all__ = ["RULE"]
+from ks_gen.rules._types import Rule
+from ks_gen.rules.alma9.auditd_actions import AuditdActions, Setting
+
+SETTINGS: tuple[Setting, ...] = (
+    Setting("disk_full_action"),
+    Setting("disk_error_action"),
+    Setting("max_log_file_action"),
+)
+
+RULE: Rule = cast(Rule, AuditdActions(SETTINGS))

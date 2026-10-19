@@ -114,7 +114,7 @@ The extractor rewrites that file from whatever `--datastream` set it is given,
 so always re-run it with **all three** at once — a partial run silently drops
 the distros you left out.
 
-Three mechanical guards run off these lists:
+Four mechanical guards run off these lists:
 
 - `tests/test_rule_ids_exist_in_datastream.py` asserts every SSG rule ID
   referenced by a rule **exists** in its distro's list, so a stale pin or an
@@ -130,6 +130,12 @@ Three mechanical guards run off these lists:
   rules that cannot pass off FIPS stayed enabled, and one of them
   (`enable_dracut_fips_module`, then stig-selected on AL8) remediated a
   non-FIPS host into FIPS. AL8 stopped selecting it in 0.1.81.
+- `tests/test_rule_ids_selected_by_stig.py` also asserts every `set_value`
+  ks-gen emits targets a Value that **some stig-selected rule reads**, through
+  its check (`check-export`) or its fix (`sub`), per
+  `<distro>-stig-value-readers.txt`. #68 was the gap: `auditd_actions` set
+  three Values on every distro, but no selected rule read any of them on
+  alma10, nor `var_auditd_max_log_file_action` on alma8.
 
 ## stig-selected counts (snapshot of 2026-10-19, SSG 0.1.82)
 

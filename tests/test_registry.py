@@ -57,6 +57,10 @@ def test_registry_alma8_re_exports_same_rule_instances_as_alma9():
         # of the FIPS-only rules alma9's does, so alma8's emit_tailoring
         # disables 1 ID against alma9's 6 (#90).
         "crypto_policy",
+        # auditd_actions: ssg-almalinux8 selects the plain disk_{full,error}
+        # rules, whose checks read the Values; alma9 selects the `_stig`
+        # variants, whose checks hardcode the accepted values (#68).
+        "auditd_actions",
     }
 
     alma9_rules = {r.id: r for r in load_rules("alma9")}
@@ -96,6 +100,9 @@ def test_registry_alma10_re_exports_same_rule_instances_as_alma9():
         # system_booted_in_fips_mode on top of AL9's, so its FIPS-only disable
         # set differs (#67, re-derived for #90).
         "crypto_policy",
+        # AL10's stig profile selects none of the auditd action rules, so it
+        # emits no set_value and has no STIG requirement to deviate from (#68).
+        "auditd_actions",
         # banner_text was divergent until #61: alma9 was referencing IDs its
         # own stig profile never selected, and dropping them left both distros
         # emitting identical tailoring.
