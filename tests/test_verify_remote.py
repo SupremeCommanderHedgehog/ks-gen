@@ -85,7 +85,7 @@ def test_collect_arfs_runs_oscap_pulls_current_and_install(tmp_path: Path) -> No
         if cmd.startswith("sudo -n rm"):
             return SshResult("", "", 0)
         if "rpm -q" in cmd:
-            return SshResult("0.1.81-1.el9_8.alma.1\n", "", 0)
+            return SshResult(EXPECTED_SSG_VERSIONS["alma9"].version + "\n", "", 0)
         raise AssertionError(f"unexpected ssh cmd: {cmd}")
 
     def fake_read(host: str, user: str, remote: str, **kw: object) -> bytes:

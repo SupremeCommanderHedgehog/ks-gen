@@ -2,8 +2,8 @@
 
 The per-distro rule-ID lists under this directory were extracted from these
 specific downstream `scap-security-guide` package versions.
-**These were the versions installed on a freshly-built ks-gen host as of
-2026-08-14** — i.e., what `oscap` saw at install time on that date.
+**These were the versions the AlmaLinux AppStream repos shipped as of
+2026-10-19** — i.e., what `oscap` saw at install time on that date.
 
 > **These lists are a snapshot**, so treat the date above as the age of
 > everything in this directory. Drift from them used to go unnoticed
@@ -18,9 +18,9 @@ specific downstream `scap-security-guide` package versions.
 
 | Distro | distro key | Package | Version | Source URL |
 |---|---|---|---|---|
-| AlmaLinux 8.10 | `alma8` | `scap-security-guide` | `0.1.81-1.el8_10.alma.1` | https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el8_10.alma.1.noarch.rpm |
-| AlmaLinux 9 (latest) | `alma9` | `scap-security-guide` | `0.1.81-1.el9_8.alma.1` | https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el9_8.alma.1.noarch.rpm |
-| AlmaLinux 10 (latest) | `alma10` | `scap-security-guide` | `0.1.81-1.el10_2.alma.1` | https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.81-1.el10_2.alma.1.noarch.rpm |
+| AlmaLinux 8.10 | `alma8` | `scap-security-guide` | `0.1.82-1.el8_10.alma.1` | https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/scap-security-guide-0.1.82-1.el8_10.alma.1.noarch.rpm |
+| AlmaLinux 9 (latest) | `alma9` | `scap-security-guide` | `0.1.82-2.el9_8.alma.1` | https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/scap-security-guide-0.1.82-2.el9_8.alma.1.noarch.rpm |
+| AlmaLinux 10 (latest) | `alma10` | `scap-security-guide` | `0.1.82-2.el10_2.alma.1` | https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/scap-security-guide-0.1.82-2.el10_2.alma.1.noarch.rpm |
 
 > **AlmaLinux install media is far behind these.** The versions above are what
 > the *repos* ship. The AlmaLinux 8.10 DVD carries `scap-security-guide`
@@ -95,16 +95,16 @@ deliberately over-inclusive: a candidate is a rule someone must judge, not a
 rule that must be disabled — `aide_use_fips_hashes` is on the list and passes
 fine off FIPS. See `tests/test_fips_dependent_rules.py` (#67).
 
-## Headline numbers (snapshot of 2026-08-14)
+## Headline numbers (snapshot of 2026-10-19, SSG 0.1.82)
 
-- AlmaLinux 8: **1699** rules
-- AlmaLinux 9: **1532** rules
-- AlmaLinux 10: **1061** rules (added 2026-08-11 for #58; the EL10 content is
-  younger than EL9's, and its `stig` profile selects **508** of them)
-- Shared across all 3: **931** rules
-- AL9 ∩ AL10: **992** rules (65% of AL9) — the alma10 re-export gambit holds
+- AlmaLinux 8: **1701** rules
+- AlmaLinux 9: **1540** rules
+- AlmaLinux 10: **1073** rules (added 2026-08-11 for #58; the EL10 content is
+  younger than EL9's, and its `stig` profile selects **473** of them)
+- Shared across all 3: **937** rules
+- AL9 ∩ AL10: **1001** rules (65% of AL9) — the alma10 re-export gambit holds
   for 13 of 15 rules; the 2 that diverge are documented in their rule modules
-- AL8 ∩ AL9: **1468** rules (86% of AL8, 96% of AL9) — confirms the alma8
+- AL8 ∩ AL9: **1472** rules (87% of AL8, 96% of AL9) — confirms the alma8
   re-export gambit from #121 phase 2: the alma9 `emit_tailoring` output
   is mostly directly valid on alma8
 
@@ -131,12 +131,18 @@ Three mechanical guards run off these lists:
   (`enable_dracut_fips_module`, then stig-selected on AL8) remediated a
   non-FIPS host into FIPS. AL8 stopped selecting it in 0.1.81.
 
-## stig-selected counts (snapshot of 2026-08-14)
+## stig-selected counts (snapshot of 2026-10-19, SSG 0.1.82)
 
-- AlmaLinux 8: **392** of 1699 — down from 411 under 0.1.74, and the profile
-  now refines `var_system_crypto_policy` to `FIPS:STIG` (#90)
-- AlmaLinux 9: **488** of 1532
-- AlmaLinux 10: **508** of 1061
+- AlmaLinux 8: **397** of 1701 — 392 under 0.1.81, 411 under 0.1.74; the
+  profile refines `var_system_crypto_policy` to `FIPS:STIG` since 0.1.81 (#90)
+- AlmaLinux 9: **481** of 1540 (488 under 0.1.81)
+- AlmaLinux 10: **473** of 1073 (508 under 0.1.81)
+
+0.1.82 (#112) left every crypto-policy target unchanged and moved no rule ID
+ks-gen references. It newly stig-selects `crypto_policy_not_overridden` on
+AL9/AL10, classified in `tests/test_fips_dependent_rules.py`: its check is
+SCE-only and the AlmaLinux package ships no SCE scripts, so it reports
+`notchecked` under any policy.
 
 ## Why pin downstream versions, not upstream
 

@@ -50,6 +50,14 @@ _PASSES_ANYWAY: dict[str, dict[str, str]] = {
         ),
     },
     "alma9": {
+        "crypto_policy_not_overridden": (
+            "newly stig-selected in ssg 0.1.82 (#112); flagged only because its fix calls "
+            "update-crypto-policies. The fix sets var_system_crypto_policy, which ks-gen "
+            "retunes to the chosen policy (#61), so it never moves the host towards FIPS. "
+            "The check is SCE-only and AlmaLinux's package ships no SCE scripts (nor does "
+            "ks-gen install openscap-engine-sce), so it reports notchecked, never fail, "
+            "under any policy"
+        ),
         "configure_crypto_policy": (
             "variable-driven: var_system_crypto_policy is retuned to the chosen "
             "policy, so the rule evaluates and passes rather than being suppressed (#61)"
@@ -66,6 +74,14 @@ _PASSES_ANYWAY: dict[str, dict[str, str]] = {
         ),
     },
     "alma10": {
+        "crypto_policy_not_overridden": (
+            "newly stig-selected in ssg 0.1.82 (#112); flagged only because its fix calls "
+            "update-crypto-policies. The fix sets var_system_crypto_policy, which ks-gen "
+            "retunes to the chosen policy (#61), so it never moves the host towards FIPS. "
+            "The check is SCE-only and AlmaLinux's package ships no SCE scripts (nor does "
+            "ks-gen install openscap-engine-sce), so it reports notchecked, never fail, "
+            "under any policy"
+        ),
         "configure_crypto_policy": (
             "variable-driven: var_system_crypto_policy is retuned to the chosen "
             "policy, so the rule evaluates and passes rather than being suppressed (#61)"
