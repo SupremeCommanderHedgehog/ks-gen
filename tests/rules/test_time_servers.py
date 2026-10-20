@@ -119,3 +119,139 @@ def test_declares_the_chronyd_rules_it_satisfies():
         "chronyd_or_ntpd_set_maxpoll",
         "chronyd_server_directive",
     ]
+
+
+# --- #125: NTS ---------------------------------------------------------------
+
+_NTS_SERVERS = ["time.cloudflare.com", "nts.netnod.se"]
+
+
+def _nts(minimal_cfg, *, nts: bool, distro: str = "alma10"):
+    from ks_gen.config import HostConfig
+
+    data = minimal_cfg.model_dump(exclude={"meta", "install"})
+    data["distro"] = distro
+    data["time"] = {"servers": _NTS_SERVERS, "nts": nts}
+    return HostConfig.model_validate(data)
+
+
+def test_nts_on_authenticates_every_server(minimal_cfg):
+    conf = _chrony_conf(RULE.emit_post(_nts(minimal_cfg, nts=True)))
+    # chrony_set_nts's OVAL: every source line's options contain `nts`.
+    sources = re.findall(r"^(?:server|pool|peer)[\s]+[\S]+[\s]+(.*)", conf, re.MULTILINE)
+    assert len(sources) == 2 and all(re.search("nts", rest) for rest in sources)
+    assert "ntsdumpdir /var/lib/chrony" in conf.splitlines()
+    # The other stig directives are unaffected.
+    assert "maxpoll 16 nts" in conf and "cmdport 0" in conf.splitlines()
+
+
+def test_nts_off_writes_no_nts(minimal_cfg):
+    conf = _chrony_conf(RULE.emit_post(_with(minimal_cfg)))
+    assert " nts" not in conf and "ntsdumpdir" not in conf
+
+
+@pytest.mark.parametrize("server", ["pool.ntp.org", "2.pool.ntp.org", "europe.pool.ntp.org"])
+def test_nts_rejects_pool_ntp_org(server):
+    """chrony never falls back to plain NTP for an `nts` source, so the
+    default pool would leave the host with no working time source."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="offers no NTS"):
+        Time(servers=["time.cloudflare.com", server], nts=True)
+    Time(servers=[server], nts=False)  # fine without NTS
+
+
+def test_alma10_waives_chrony_set_nts_only_while_nts_is_off(minimal_cfg):
+    from ks_gen.rules.alma10.time_servers import RULE as AL10
+
+    off = _nts(minimal_cfg, nts=False)
+    ops = AL10.emit_tailoring(off)
+    assert [(o.rule_id, o.action) for o in ops] == [(f"{_P}chrony_set_nts", "disable")]
+    entry = AL10.exception_entry(off)
+    assert entry is not None and entry.stig_rules_disabled == [f"{_P}chrony_set_nts"]
+
+    on = _nts(minimal_cfg, nts=True)
+    assert AL10.emit_tailoring(on) == [] and AL10.exception_entry(on) is None
+    assert f"{_P}chrony_set_nts" in AL10.stig_rules_affected
+
+
+@pytest.mark.parametrize("distro", ["alma8", "alma9"])
+def test_no_nts_rule_outside_alma10(minimal_cfg, distro):
+    """AL8/AL9 select no NTS rule, so time.nts off is not a deviation there."""
+    from ks_gen.registry import load_rules
+
+    rule = {r.id: r for r in load_rules(distro)}["time_servers"]
+    cfg = _nts(minimal_cfg, nts=False, distro=distro)
+    assert rule.emit_tailoring(cfg) == [] and rule.exception_entry(cfg) is None
+
+
+def test_nts_tolerates_a_bad_rtc_at_first_sync(minimal_cfg):
+    conf = _chrony_conf(RULE.emit_post(_nts(minimal_cfg, nts=True)))
+    assert "nocerttimecheck 1" in conf.splitlines()
+
+
+@pytest.mark.parametrize("server", ["Pool.NTP.org", "pool.ntp.org.", "2.POOL.ntp.org."])
+def test_nts_pool_check_ignores_case_and_trailing_dot(server):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="offers no NTS"):
+        Time(servers=[server], nts=True)
+
+
+def test_nts_on_with_chrony_set_nts_waived_is_rejected(minimal_cfg):
+    """Contradictory: the exception would be inert, or nts silently ignored."""
+    from pydantic import ValidationError
+
+    from ks_gen.config import HostConfig
+
+    data = minimal_cfg.model_dump(exclude={"meta", "install"})
+    data |= {
+        "distro": "alma10",
+        "time": {"servers": _NTS_SERVERS, "nts": True},
+        "exceptions": [{"id": "x", "reason": "r", "stig_rules_disabled": [f"{_P}chrony_set_nts"]}],
+    }
+    with pytest.raises(ValidationError, match="waives chrony_set_nts"):
+        HostConfig.model_validate(data)
+
+
+def test_operator_waiver_is_not_declared_twice(minimal_cfg):
+    from ks_gen.config import HostConfig
+    from ks_gen.rules.alma10.time_servers import RULE as AL10
+
+    data = minimal_cfg.model_dump(exclude={"meta", "install"})
+    data |= {
+        "distro": "alma10",
+        "exceptions": [{"id": "x", "reason": "r", "stig_rules_disabled": [f"{_P}chrony_set_nts"]}],
+    }
+    cfg = HostConfig.model_validate(data)
+    assert AL10.emit_tailoring(cfg) == [] and AL10.exception_entry(cfg) is None
+
+
+def test_nts_is_rejected_on_a_fips_host(minimal_cfg):
+    """#125, found by an install run: under FIPS, NTS-KE succeeds but gnutls
+    refuses the AES-SIV AEAD for NTP packets, so chrony never syncs."""
+    from pydantic import ValidationError
+
+    from ks_gen.config import HostConfig
+
+    data = minimal_cfg.model_dump(exclude={"meta", "install"})
+    data |= {
+        "distro": "alma10",
+        "crypto": {"policy": "STIG"},
+        "time": {"servers": _NTS_SERVERS, "nts": True},
+    }
+    data["user"]["admin"]["authorized_keys"] = ["ssh-ed25519 A a@b", "ssh-rsa B a@b"]
+    with pytest.raises(ValidationError, match="kernel FIPS mode"):
+        HostConfig.model_validate(data)
+
+
+def test_alma10_stig_exception_explains_fips(minimal_cfg):
+    from ks_gen.config import HostConfig
+    from ks_gen.rules.alma10.time_servers import RULE as AL10
+
+    data = minimal_cfg.model_dump(exclude={"meta", "install"})
+    data |= {"distro": "alma10", "crypto": {"policy": "STIG"}}
+    data["user"]["admin"]["authorized_keys"] = ["ssh-ed25519 A a@b", "ssh-rsa B a@b"]
+    entry = AL10.exception_entry(HostConfig.model_validate(data))
+    assert entry is not None and "FIPS" in entry.reason
+    assert "FIPS" not in AL10.exception_entry(_nts(minimal_cfg, nts=False)).reason

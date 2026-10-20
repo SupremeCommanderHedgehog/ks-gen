@@ -1,0 +1,13 @@
+# AL10 under STIG: kernel FIPS mode, so time.nts must stay off and
+# chrony_set_nts is declared with the FIPS reason (#125).
+distro: alma10
+system:
+  hostname: a10-stig
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "ssh-rsa AAAA a@b"
+    sudo: nopasswd_yes
+crypto:
+  policy: STIG

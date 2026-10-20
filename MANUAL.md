@@ -629,7 +629,35 @@ files get the banner. `gdm` only matters with a GUI installed.
 time:
   servers: [pool.ntp.org]          # not USNO/DoD by default
   chrony_makestep_threshold: 1.0
+  nts: false                       # authenticate every server with NTS
 ```
+
+`nts: true` appends `nts` to every `server` line and keeps NTS cookies in
+`ntsdumpdir /var/lib/chrony`. Every server must support NTS: chrony never
+falls back to plain NTP for an `nts` source, so a server without it gives
+the host no time at all. For that reason `pool.ntp.org` (the default) is
+rejected when `nts` is on; list NTS-capable servers instead. The host also
+needs outbound TCP 4460 for NTS key exchange. ks-gen adds
+`nocerttimecheck 1`, so a host whose hardware clock is far off at first
+boot can still validate the servers' certificates once and sync; after
+that, certificate dates are checked normally.
+
+AlmaLinux 10's stig profile requires NTS (`chrony_set_nts`). With
+`nts: false` on alma10, `time_servers` tailors that rule out and declares
+it in `exceptions.md`, so the deviation is documented instead of an
+unexplained failure. AL8/AL9 don't select an NTS rule (#125). Turning
+`nts` on while an `exceptions:` entry waives `chrony_set_nts` is rejected
+as contradictory.
+
+**NTS doesn't work in FIPS mode, so `nts: true` is rejected with
+`crypto.policy: STIG`.** NTS key exchange runs over TLS and succeeds, but
+NTS protects each NTP packet with an AES-SIV cipher, and the FIPS crypto
+policy disables both AES-SIV variants chrony can use. Every source then
+stays unreachable and the host never gets time (seen on a real AL10 STIG
+install: chrony 4.8, gnutls 3.8.10). An AL10 STIG host therefore always
+has `chrony_set_nts` tailored out: ks-gen declares it with a reason that
+explains FIPS, unless you declared it yourself in `exceptions:`, in which
+case your reason is the one shown. Use NTS with `MODERN` or `FUTURE`.
 
 ### 4.9 `crypto`
 
@@ -1069,7 +1097,7 @@ exact XCCDF IDs.
 | Rule | What it does |
 |---|---|
 | `banner_text` | Disables the XCCDF rules that would set DoD banner content; `%post` writes civilian text to `/etc/issue`, `/etc/issue.net`, `/etc/motd`, and the GDM banner file if present. |
-| `time_servers` | Writes `/etc/chrony.conf` from `cfg.time.servers` (defaults to `pool.ntp.org`, not USNO). The file replaces oscap's remediated one, so it carries the STIG chronyd hardening itself (#50): `maxpoll 16` on every `server` line, `port 0` (client only) and `cmdport 0` (no `chronyc` over the network; root still reaches it over the local socket). It also writes `/etc/systemd/system/chrony-wait.service` without `-h 127.0.0.1,::1`, since that can't connect once `cmdport` is 0 and SSG has no bash fix for it. Together these satisfy `chronyd_or_ntpd_set_maxpoll`, `chronyd_client_only`, `chronyd_no_chronyc_network`, `chronyd_server_directive` and (AL8/AL9) `chronyd_configure_local_socket`. Declaring an exception for one of them drops its directive rather than leaving it applied. AL10's `chrony_set_nts` still fails unless every server supports NTS, which `pool.ntp.org` doesn't. |
+| `time_servers` | Writes `/etc/chrony.conf` from `cfg.time.servers` (defaults to `pool.ntp.org`, not USNO). The file replaces oscap's remediated one, so it carries the STIG chronyd hardening itself (#50): `maxpoll 16` on every `server` line, `port 0` (client only) and `cmdport 0` (no `chronyc` over the network; root still reaches it over the local socket). It also writes `/etc/systemd/system/chrony-wait.service` without `-h 127.0.0.1,::1`, since that can't connect once `cmdport` is 0 and SSG has no bash fix for it. Together these satisfy `chronyd_or_ntpd_set_maxpoll`, `chronyd_client_only`, `chronyd_no_chronyc_network`, `chronyd_server_directive` and (AL8/AL9) `chronyd_configure_local_socket`. Declaring an exception for one of them drops its directive rather than leaving it applied. On AL10 it also satisfies `chrony_set_nts` when `time.nts` is on, and declares it as an exception when off (§4.8, #125). |
 | `dod_root_ca` | When `overrides.dod_root_ca.install: false`, disables the XCCDF rule that mandates installing the DoD root/intermediate CA bundle. |
 
 ### Environment knobs

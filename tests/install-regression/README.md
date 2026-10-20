@@ -19,6 +19,13 @@ Requires WSL (or Linux) with `qemu-system-x86_64`, `xorriso`, mtools, OVMF, and
 KVM. Everything it writes goes to `$BUILD`
 (default `~/.cache/ks-gen-install-regression`), never into the repo.
 
+The VM needs outbound network through QEMU's user-mode NAT: network-install
+fixtures fetch packages, and smoke-check waits for chrony to actually sync
+(`chronyc waitsync`, up to 150s), so outbound UDP 123 must be open (#50). The
+`al10-nts` fixture also needs outbound TCP 4460 for NTS key exchange (#125).
+A "chrony never synced" failure on a host that blocks NTP is the environment,
+not the install.
+
 ## How to run
 
 To validate a change to the install pipeline, run **both media modes**:

@@ -8,7 +8,7 @@
   
   ## Summary
   - Applied rules: 13
-  - Tailored XCCDF rules: 15
+  - Tailored XCCDF rules: 16
   - Declared exceptions: 0
   
   ## Applied rules
@@ -41,6 +41,7 @@
   | `xccdf_org.ssgproject.content_rule_sysctl_crypto_fips_enabled` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_system_booted_in_fips_mode` | `crypto_policy` |
   | `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root` | `faillock_safety` |
+  | `xccdf_org.ssgproject.content_rule_chrony_set_nts` | `time_servers` |
   | `xccdf_org.ssgproject.content_rule_package_usbguard_installed` | `usbguard` |
   | `xccdf_org.ssgproject.content_rule_service_usbguard_enabled` | `usbguard` |
   | `xccdf_org.ssgproject.content_rule_configure_usbguard_auditbackend` | `usbguard` |
@@ -79,6 +80,13 @@
   
   Disabled XCCDF rules:
   - `xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root`
+  
+  ### `time_servers` — chrony time sources are not authenticated with NTS.
+  
+  _Reason:_ time.nts is off: the configured time servers are used over plain NTP, so chrony_set_nts cannot pass. Set time.nts: true with NTS-capable servers to comply.
+  
+  Disabled XCCDF rules:
+  - `xccdf_org.ssgproject.content_rule_chrony_set_nts`
   
   ### `usbguard` — USBGuard not installed/enabled.
   
@@ -165,6 +173,7 @@
     servers:
     - pool.ntp.org
     chrony_makestep_threshold: 1.0
+    nts: false
   crypto:
     policy: MODERN
   packages:
@@ -649,6 +658,7 @@
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time">900</xccdf:set-value>
       <xccdf:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_deny">3</xccdf:set-value>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_accounts_passwords_pam_faillock_deny_root" selected="false"/>
+      <xccdf:select idref="xccdf_org.ssgproject.content_rule_chrony_set_nts" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_package_usbguard_installed" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_service_usbguard_enabled" selected="false"/>
       <xccdf:select idref="xccdf_org.ssgproject.content_rule_configure_usbguard_auditbackend" selected="false"/>

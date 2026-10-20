@@ -1,16 +1,22 @@
-"""alma10 time_servers — re-exports the alma9 implementation.
+"""alma10 time_servers — the alma9 implementation plus chrony_set_nts.
 
-Verified portable against ssg-almalinux10-ds.xml (scap-security-guide
-0.1.81) and AlmaLinux 10 BaseOS/AppStream repodata: every SSG rule ID
-this rule references still exists and is selected by the stig profile,
-and every package it installs is still packaged for AL10.
-
-If AL10 ever diverges here, replace this re-export with a real
-implementation and add the rule to _DIVERGENT in tests/test_registry.py.
+AL10's stig profile (SSG 0.1.82 and the 0.1.78 media floor) also selects
+chrony_set_nts, whose check wants `nts` on every server/pool/peer line. With
+time.nts on, the shared %post emits it; with it off (the default, since
+pool.ntp.org offers no NTS) the rule is tailored out and declared as an
+exception, not left failing unexplained (#125). AL8/AL9 select no NTS rule.
 """
 
 from __future__ import annotations
 
-from ks_gen.rules.alma9.time_servers import RULE
+from typing import cast
 
-__all__ = ["RULE"]
+from ks_gen.rules._types import Rule
+from ks_gen.rules.alma9.time_servers import CHRONY_RULES, TimeServers
+from ks_gen.ssg_ids import RULE_PREFIX
+
+_NTS_RULE = f"{RULE_PREFIX}chrony_set_nts"
+
+RULE: Rule = cast(
+    Rule, TimeServers(stig_rules_affected=[*CHRONY_RULES, _NTS_RULE], nts_rule=_NTS_RULE)
+)
