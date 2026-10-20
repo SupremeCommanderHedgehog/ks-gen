@@ -1,0 +1,41 @@
+# AlmaLinux 10 container host that actually provisions a rootless user, so
+# create-rootless-user.sh runs in %post. The stock AL10 fixtures use
+# users: [] and never invoke it. smoke-check asserts the user's skel init
+# files end up at 0740 or stricter, plus a live scan of the STIG init-file
+# rule (file_permission_user_init_files on AL10) (#49).
+#
+# Network install: AL10 boot media carries no package payload. The original
+# container-users fixture installs from an AL9 DVD.
+system:
+  hostname: regression.local
+distro: alma10
+install:
+  source: network
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "__SSH_PUBKEY__"
+    sudo: nopasswd_yes
+disk:
+  target: vda
+packages:
+  required:
+    - scap-security-guide
+    - openscap-scanner
+    - aide
+    - audit
+    - rsyslog
+    - chrony
+    - firewalld
+    - sudo
+    - policycoreutils-python-utils
+containers:
+  enabled: true
+  users:
+    - name: webapp
+      gecos: "Regression container user"
+      authorized_keys:
+        - "__SSH_PUBKEY__"
+  volume:
+    size: "5G"

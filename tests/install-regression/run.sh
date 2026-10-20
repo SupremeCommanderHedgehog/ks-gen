@@ -244,6 +244,14 @@ EXPECTED_CRYPTO_POLICY="$(sed -n 's/^# Apply system-wide crypto policy: .*(\(.*\
   "$BUNDLE_DIR/ks.cfg" | head -1)"
 echo "expected crypto policy: ${EXPECTED_CRYPTO_POLICY:-<none found>}"
 
+# The containers.users[] the kickstart provisions, from container_host's
+# per-user header comment. Empty means the fixture's users list is empty, and
+# smoke-check asserts no container user was created (#49).
+EXPECTED_CONTAINER_USERS="$(sed -n 's/^# Provision container user: \([a-z_][a-z0-9_-]*\)$/\1/p' \
+  "$BUNDLE_DIR/ks.cfg" | tr '\n' ' ')"
+EXPECTED_CONTAINER_USERS="${EXPECTED_CONTAINER_USERS% }"
+echo "expected container users: ${EXPECTED_CONTAINER_USERS:-<none>}"
+
 # ---- step 5: disk + EFI nvram --------------------------------------------
 [[ -f "$DISK" ]]      && rm "$DISK"
 [[ -f "$DATA_DISK" ]] && rm "$DATA_DISK"
@@ -437,6 +445,7 @@ scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_HOST_PORT" \
     "$HERE/smoke-check.sh" "$ADMIN_USER"@127.0.0.1:/tmp/smoke-check.sh
 
 SMOKE_ENV="DATA_DISK_MARKER='$DATA_DISK_MARKER' EXPECTED_CRYPTO_POLICY='$EXPECTED_CRYPTO_POLICY'"
+SMOKE_ENV+=" EXPECTED_CONTAINER_USERS='$EXPECTED_CONTAINER_USERS'"
 if [[ -n "$ADMIN_SUDO_PASSWORD" ]]; then
   # -S reads the password from stdin, -p '' drops the prompt. Fed over ssh
   # stdin so it never appears in the guest's process list.
