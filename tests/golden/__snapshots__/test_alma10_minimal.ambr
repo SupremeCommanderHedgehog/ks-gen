@@ -7,11 +7,12 @@
   Host: `a10-min`
   
   ## Summary
-  - Applied rules: 13
+  - Applied rules: 14
   - Tailored XCCDF rules: 16
   - Declared exceptions: 0
   
   ## Applied rules
+  - `skel_init_files` — Tighten /etc/skel's init files to 0740 so every new user's home is STIG-compliant.
   - `admin_user_and_keys` — Create wheel admin, drop authorized_keys, sudoers fragment.
   - `auditd_actions` — auditd disk_full/disk_error/max_log_file actions (SUSPEND/ROTATE default).
   - `banner_text` — Write civilian-equivalent login banner; suppress DoD-text oscap rules.
@@ -379,6 +380,17 @@
   
   %post --erroronfail --log=/root/ks-post.log
   set -euxo pipefail
+  
+  # ===== skel_init_files =====
+  # Tighten /etc/skel's init files to 0740 or stricter, before any home is
+  # created from it here (STIG var_user_initialization_files_regex) (#131)
+  # Never fatal: admin_user_and_keys runs after this, and must.
+  if [ -d /etc/skel ]; then
+    LC_ALL=C find /etc/skel/ -maxdepth 1 -type f -regextype posix-extended \
+      -regex '.*/\.[[:alnum:]_ -]+' -perm /7037 \
+      -exec chmod u-s,g-wxs,o-rwxt {} + \
+      || echo 'ks-gen: warning: could not tighten /etc/skel init files' >&2
+  fi
   
   # ===== admin_user_and_keys =====
   # Create admin user (idempotent)

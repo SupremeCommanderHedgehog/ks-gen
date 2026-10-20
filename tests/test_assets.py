@@ -71,7 +71,7 @@ def test_init_files_tightened_to_stig_0740(tmp_path, existing):
     outside = tmp_path / "outside"
     privdrop = tmp_path / "setpriv.args"
     skel = {".bashrc": 0o644, ".bash_profile": 0o664, ".bash_logout": 0o644,
-            ".cshrc": 0o777, ".tcshrc": 0o600}  # fmt: skip
+            ".cshrc": 0o777, ".tcshrc": 0o600, ".suidrc": 0o4740}  # fmt: skip
     # The home as useradd leaves it, plus three files that are not init files
     # and must keep their 0644: one a level down, one not a dotfile, and one
     # outside the home that a dotfile symlinks to. chmod follows symlinks, so
@@ -122,7 +122,7 @@ def test_init_files_tightened_to_stig_0740(tmp_path, existing):
     modes = {name: stat.S_IMODE((home / name).stat().st_mode) for name in skel}
     # Only group-write/exec and other bits are stripped; owner bits survive.
     assert modes == {".bashrc": 0o640, ".bash_profile": 0o640, ".bash_logout": 0o640,
-                     ".cshrc": 0o740, ".tcshrc": 0o600}  # fmt: skip
+                     ".cshrc": 0o740, ".tcshrc": 0o600, ".suidrc": 0o740}  # fmt: skip
     for untouched in (home / ".config" / "app.conf", home / "notes.txt", outside):
         assert stat.S_IMODE(untouched.stat().st_mode) == 0o644, untouched
     # Root must not chmod in a home the user controls: find (and its chmod)

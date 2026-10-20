@@ -7,11 +7,12 @@
   Host: `a10-stig`
   
   ## Summary
-  - Applied rules: 13
+  - Applied rules: 14
   - Tailored XCCDF rules: 8
   - Declared exceptions: 0
   
   ## Applied rules
+  - `skel_init_files` — Tighten /etc/skel's init files to 0740 so every new user's home is STIG-compliant.
   - `admin_user_and_keys` — Create wheel admin, drop authorized_keys, sudoers fragment.
   - `auditd_actions` — auditd disk_full/disk_error/max_log_file actions (SUSPEND/ROTATE default).
   - `banner_text` — Write civilian-equivalent login banner; suppress DoD-text oscap rules.

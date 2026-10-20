@@ -9,4 +9,6 @@ from __future__ import annotations
 
 ID = "container_host"
 SUMMARY = "Install rootless-container helper, storage.conf, and per-user setup on /srv/containers."
-DEPENDS_ON: list[str] = []
+# skel_init_files tightens /etc/skel before this rule's %post creates a home
+# from it (#131).
+DEPENDS_ON: list[str] = ["skel_init_files"]

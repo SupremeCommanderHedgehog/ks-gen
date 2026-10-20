@@ -117,13 +117,17 @@ else
 fi
 
 # --- tighten init-file permissions (STIG) ---------------------------------
-# useradd copies /etc/skel's dotfiles in at 0644, but the STIG rule
-# file_permission_user_init_files_root needs every user's init files at 0740
-# or stricter (#49). Despite the `_root` suffix, its OVAL checks every user.
+# The STIG init-file rule (file_permission_user_init_files_root on AL8/AL9,
+# file_permission_user_init_files on AL10) needs every user's init files at
+# 0740 or stricter (#49). Despite the `_root` suffix, its OVAL checks every user.
+# ks-gen's skel_init_files rule tightens /etc/skel at install (#131), so a new
+# account starts compliant. This pass repairs accounts made before that, and
+# any skel changed since; re-running the script is how an operator does it.
 # The name pattern is the STIG's var_user_initialization_files_regex,
 # ^\.[\w\- ]+$, applied to regular files directly in $HOME. Strip only the
-# offending bits, so owner bits are left alone. Runs for existing accounts
-# too, since re-running the script is how an operator repairs one.
+# offending bits (group w/x, other, setuid/setgid/sticky), so owner bits are
+# left alone. The same match is in skel_init_files and the harness's
+# smoke-check.sh; keep the three in step.
 #
 # The user can rewrite their own home while this runs, so root must never
 # chmod in it: a dotfile swapped for a symlink between find's check and the
@@ -144,14 +148,14 @@ if [ -n "$home" ] && [ -d "$home" ]; then
     (cd / && LC_ALL=C setpriv --reuid "$(id -u "$user")" --regid "$(id -g "$user")" \
         --init-groups -- \
         find "$home/" -maxdepth 1 -type f -user "$user" -regextype posix-extended \
-        -regex '.*/\.[[:alnum:]_ -]+' -perm /0037 \
-        -exec chmod g-wx,o-rwx {} \; -printf '%p\n') |
+        -regex '.*/\.[[:alnum:]_ -]+' -perm /7037 \
+        -exec chmod u-s,g-wxs,o-rwxt {} \; -printf '%p\n') |
         while IFS= read -r f; do info "tightened $f"; done \
         || warn "could not tighten init-file permissions in $home"
     # A failed chmod doesn't fail find, and files the user doesn't own were
     # skipped, so look again. Read-only and root is fine here.
     loose=$(LC_ALL=C find "$home/" -maxdepth 1 -type f -regextype posix-extended \
-        -regex '.*/\.[[:alnum:]_ -]+' -perm /0037 -printf '%f ' 2>/dev/null) || true
+        -regex '.*/\.[[:alnum:]_ -]+' -perm /7037 -printf '%f ' 2>/dev/null) || true
     [ -z "$loose" ] || warn "init files in $home still looser than 0740 (STIG): $loose"
 else
     warn "home dir for '$user' not found; init-file permissions not tightened"
