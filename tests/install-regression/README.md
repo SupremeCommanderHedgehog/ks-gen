@@ -155,6 +155,14 @@ an 800G virtual disk, and a guest that really did fill it would fill the host.
   crypto policy to `FIPS:STIG`, AL10's to plain `FIPS`. `run.sh` reads
   `policy: STIG` out of the fixture and switches to an RSA key by itself,
   since ed25519 cannot authenticate to a FIPS host (#73).
+- `fixtures/al10-container-users.host.yaml.tmpl` — the only boot-ISO fixture
+  with a non-empty `containers.users`, so the only one whose `%post` actually
+  runs `create-rootless-user.sh` (`container-users` does too, but installs from
+  an AL9 DVD). `run.sh` reads the provisioned users out of `ks.cfg`
+  (`# Provision container user:`) into `EXPECTED_CONTAINER_USERS`.
+  smoke-check then asserts each user's home, storage, linger, and init files
+  at 0740 or stricter. The live scan of whichever STIG init-file rule the
+  profile selects runs on every fixture (#49).
 - `keys/` — generated keypair (runtime; on WSL ext4 because
   OpenSSH refuses the 0777 perms that /mnt/c forces).
 - `build/` — symlink to `~/.cache/ks-gen-install-regression/` (on
@@ -186,6 +194,17 @@ Note the `configure_crypto_policy` line above predates the live-re-scan change
 
 ## Other runs
 
+- **2026-10-20, AlmaLinux 10.2 / container user** (`al10-container-users`, x86_64
+  boot ISO, network install). `run-all.sh` green on CD (`4.01 GiB`) and USB
+  (`3.91 GiB`). The #49 run: `webapp`'s skel `.bashrc` came out `640`, and
+  AL10's stig rule `file_permission_user_init_files` passes a live re-scan
+  covering `webapp`, the admin user and root. So `create-rootless-user.sh`'s
+  `setpriv`-dropped `find` works inside anaconda's `%post`. AL10 does not
+  select the `_root` variant (AL8/AL9 do). Note that `oscap --rule` evaluates a
+  rule whether or not the profile selects it, so smoke-check reads selection
+  from the ARF instead. The same invocation was also checked by hand
+  in `almalinux:8` and `almalinux:9` containers (util-linux 2.32 / 2.37), from
+  `/root` as `%post` runs it.
 - **2026-08-14, AlmaLinux 10.2 / `MODERN`** (`al10-omit-dnf-automatic`,
   network install) — green end-to-end, `disk size: 4.24 GiB`. First AL10
   install this project has completed. The #67 block shows the per-distro
