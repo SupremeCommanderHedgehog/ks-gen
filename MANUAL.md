@@ -1069,7 +1069,7 @@ exact XCCDF IDs.
 | Rule | What it does |
 |---|---|
 | `banner_text` | Disables the XCCDF rules that would set DoD banner content; `%post` writes civilian text to `/etc/issue`, `/etc/issue.net`, `/etc/motd`, and the GDM banner file if present. |
-| `time_servers` | Writes `/etc/chrony.conf` from `cfg.time.servers` (defaults to `pool.ntp.org`, not USNO). |
+| `time_servers` | Writes `/etc/chrony.conf` from `cfg.time.servers` (defaults to `pool.ntp.org`, not USNO). The file replaces oscap's remediated one, so it carries the STIG chronyd hardening itself (#50): `maxpoll 16` on every `server` line, `port 0` (client only) and `cmdport 0` (no `chronyc` over the network; root still reaches it over the local socket). It also writes `/etc/systemd/system/chrony-wait.service` without `-h 127.0.0.1,::1`, since that can't connect once `cmdport` is 0 and SSG has no bash fix for it. Together these satisfy `chronyd_or_ntpd_set_maxpoll`, `chronyd_client_only`, `chronyd_no_chronyc_network`, `chronyd_server_directive` and (AL8/AL9) `chronyd_configure_local_socket`. Declaring an exception for one of them drops its directive rather than leaving it applied. AL10's `chrony_set_nts` still fails unless every server supports NTS, which `pool.ntp.org` doesn't. |
 | `dod_root_ca` | When `overrides.dod_root_ca.install: false`, disables the XCCDF rule that mandates installing the DoD root/intermediate CA bundle. |
 
 ### Environment knobs
