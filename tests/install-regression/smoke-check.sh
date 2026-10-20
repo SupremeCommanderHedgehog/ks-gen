@@ -6,6 +6,13 @@ set -euo pipefail
 fail() { echo "FAIL: $*" >&2; exit 1; }
 ok()   { echo "ok:   $*"; }
 
+# Init files in $1 looser than the STIG's 0740, as "path=mode " pairs: regular
+# files directly in it matching var_user_initialization_files_regex (#49).
+loose_init_files() {
+  LC_ALL=C find "$1/" -maxdepth 1 -type f -regextype posix-extended \
+    -regex '.*/\.[[:alnum:]_ -]+' -perm /0037 -printf '%p=%m ' 2>/dev/null || true
+}
+
 # --- Core services kickstart says it enables (#57 acceptance: "install
 #     completed and reachable"; sshd is implicit since we got here).
 for svc in sshd chronyd firewalld auditd rsyslog; do
@@ -336,10 +343,64 @@ if [[ "$(rpm -E %rhel 2>/dev/null || echo 0)" -ge 10 ]]; then
   ok "podman-plugins correctly absent on EL10"
 fi
 
-# When users=[] no webapp is created, no /srv/containers/webapp/, and the script
-# was never invoked so the equivalence rule isn't added yet. Spot-check no webapp.
-getent passwd webapp >/dev/null && fail "webapp user exists but containers.users was []"
-ok "no webapp user (containers.users was empty)"
+# --- containers.users[]: EXPECTED_CONTAINER_USERS is what the kickstart
+#     provisioned (run.sh reads it from ks.cfg). Empty: the script was never
+#     invoked, so spot-check that no webapp user appeared.
+if [[ -z "${EXPECTED_CONTAINER_USERS:-}" ]]; then
+  getent passwd webapp >/dev/null && fail "webapp user exists but containers.users was []"
+  ok "no webapp user (containers.users was empty)"
+else
+  for u in $EXPECTED_CONTAINER_USERS; do
+    home=$(getent passwd "$u" | cut -d: -f6 || true)
+    [[ -n "$home" && -d "$home" ]] || fail "container user $u missing or has no home dir"
+    [[ "$(stat -c %U "/srv/containers/$u/storage" 2>/dev/null)" == "$u" ]] \
+      || fail "/srv/containers/$u/storage missing or not owned by $u"
+    [[ -f "/var/lib/systemd/linger/$u" ]] || fail "linger not enabled for $u"
+    ok "container user $u provisioned (home, storage on /srv/containers, linger)"
+    # #49: useradd's skel dotfiles land at 0644; the script must leave every
+    # init file (STIG var_user_initialization_files_regex) at 0740 or stricter.
+    loose=$(loose_init_files "$home")
+    [[ -z "$loose" ]] || fail "$u has init files looser than 0740: $loose(#49)"
+    [[ -f "$home/.bashrc" ]] || fail "$u has no .bashrc — skel was not copied, nothing was tested"
+    ok "$u init files are 0740 or stricter ($(stat -c '%n=%a' "$home/.bashrc"))"
+  done
+fi
+
+# --- #49: the STIG init-file rule, live. It checks every user's init files,
+#     so this covers the admin user and root on every fixture, and any
+#     container users above. AL8/AL9's stig selects the _root variant, AL10's
+#     the plain one (same var_user_initialization_files_regex). Selection comes
+#     from the ARF, where an unselected rule reads notselected: `--rule`
+#     evaluates a rule whether or not the profile selects it, so a live scan
+#     of the unselected variant would assert something the profile doesn't.
+init_rules=()
+for rid in file_permission_user_init_files_root file_permission_user_init_files; do
+  full_rid="xccdf_org.ssgproject.content_rule_${rid}"
+  sel=$(grep -aA 5 "rule-result idref=\"${full_rid}\"" /root/oscap-remediation-results.xml \
+    | grep -ao '<result>[a-z]*</result>' | head -1 || true)
+  if [[ -z "$sel" ]]; then
+    ok "${rid}: absent from the ARF"; continue
+  elif [[ "$sel" == "<result>notselected</result>" ]]; then
+    ok "${rid}: not selected"; continue
+  fi
+  init_rules+=(--rule "$full_rid")
+done
+[[ ${#init_rules[@]} -gt 0 ]] \
+  || fail "no init-file permission rule is selected — the stig profile always has one (#49)"
+# `|| true`: oscap exits 2 when a rule fails. Output is "Rule <id>" then
+# "Result <r>" per rule; pair them up.
+init_live=$(oscap xccdf eval --profile xccdf_ks-gen_profile_tailored \
+  --tailoring-file /root/tailoring.xml "${init_rules[@]}" "$ds" 2>/dev/null \
+  | awk '/^Rule/{r=$2} /^Result/{sub(/^xccdf_org.ssgproject.content_rule_/, "", r); print r "=" $2}' \
+  || true)
+[[ $(grep -c . <<<"$init_live") -eq $(( ${#init_rules[@]} / 2 )) ]] \
+  || fail "live init-file scan returned '${init_live:-nothing}' for ${#init_rules[@]}/2 rules — broken scan (#49)"
+if grep -qv '=pass$' <<<"$init_live"; then
+  offenders=$(getent passwd | awk -F: '$3 == 0 || $3 >= 1000 {print $6}' | sort -u \
+    | while read -r d; do [[ -d "$d" ]] && loose_init_files "$d"; done || true)
+  fail "live init-file scan: $(tr '\n' ' ' <<<"$init_live")— loose init files: ${offenders:-none found} (#49)"
+fi
+while read -r line; do ok "${line%=pass}: pass (live re-scan)"; done <<<"$init_live"
 
 # Operator can still run the script post-install — verify by dry-firing it.
 sudo /root/create-rootless-user.sh -h >/dev/null 2>&1 \

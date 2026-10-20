@@ -148,6 +148,11 @@ if [ -n "$home" ] && [ -d "$home" ]; then
         -exec chmod g-wx,o-rwx {} \; -printf '%p\n') |
         while IFS= read -r f; do info "tightened $f"; done \
         || warn "could not tighten init-file permissions in $home"
+    # A failed chmod doesn't fail find, and files the user doesn't own were
+    # skipped, so look again. Read-only and root is fine here.
+    loose=$(LC_ALL=C find "$home/" -maxdepth 1 -type f -regextype posix-extended \
+        -regex '.*/\.[[:alnum:]_ -]+' -perm /0037 -printf '%f ' 2>/dev/null) || true
+    [ -z "$loose" ] || warn "init files in $home still looser than 0740 (STIG): $loose"
 else
     warn "home dir for '$user' not found; init-file permissions not tightened"
 fi
