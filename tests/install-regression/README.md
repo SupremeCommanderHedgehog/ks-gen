@@ -273,6 +273,17 @@ Note the `configure_crypto_policy` line above predates the live-re-scan change
 
 ## Other runs
 
+- **2026-10-20, the network-install boot entry, first booted** (#136, AL10.2
+  x86_64 boot ISO, every AL10 network fixture). `run-all.sh` green on all
+  three media for each, booting `inst.stage2=hd:LABEL=KS-AL10-2
+  inst.ks=hd:LABEL=KS-AL10-2:/ks.cfg` with no `inst.repo=`, the entry
+  `ks-gen iso` ships for a `url` kickstart. Both boot-entry checks passed
+  in every mode, and Rufus's RH8 rewrite did not fire on the usb-iso sticks.
+  Installed disk sizes (cd / usb / usb-iso, GiB):
+  `al10-omit-dnf-automatic` 3.92 / 3.90 / 3.93 (re-run on the final code),
+  `al10-stig-crypto` 3.95 / 3.86 / 4.06,
+  `al10-nts` 3.83 / 3.90 / 3.92,
+  `al10-container-users` 3.95 / 3.99 / 3.92.
 - **2026-10-20, all three media incl. emulated Rufus ISO mode** (#134,
   `al10-omit-dnf-automatic`, AL10.2 x86_64 boot ISO, network install).
   `run-all.sh` green on `cd` (`3.89 GiB`), `usb` (`3.93 GiB`) and `usb-iso`

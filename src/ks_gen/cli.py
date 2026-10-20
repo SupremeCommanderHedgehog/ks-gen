@@ -207,11 +207,8 @@ def iso_cmd(
         "detected from whether the kickstart has a `url` install source.",
     ),
 ) -> None:
-    try:
-        ks_is_network = kickstart_is_network(ks.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError) as e:
-        typer.echo(f"cannot read {ks}: {e}", err=True)
-        raise typer.Exit(code=int(ExitCode.USAGE)) from None
+    # Only ASCII keywords matter; ks.cfg is copied onto the media as is.
+    ks_is_network = kickstart_is_network(ks.read_text(encoding="utf-8", errors="replace"))
     if network_install is None:
         network_install = ks_is_network
     elif network_install != ks_is_network:

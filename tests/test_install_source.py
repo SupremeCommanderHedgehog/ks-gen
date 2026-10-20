@@ -214,6 +214,10 @@ def test_kickstart_is_network_matches_what_the_bundle_renders(distro, source):
         ("urls --url=https://m/\n", False),
         ("%pre-install --log=/tmp/x\nurl --url=https://m/\n%end\n", False),
         ("%include /tmp/part.ks\nurl --url=https://m/\n", True),
+        ("%ksappend /tmp/part.ks\nurl --url=https://m/\n", True),
+        ("%end\nurl --url=https://m/\n", True),  # a stray %end opens nothing
+        # Any other % header opens a section, listed anywhere or not.
+        ("%certificate --filename=c.pem\nurl --url=https://m/\n%end\n", False),
         ('repo --name=AppStream --baseurl="https://m/"\n', False),
         ("cdrom\n", False),
     ],

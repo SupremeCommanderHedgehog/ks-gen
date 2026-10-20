@@ -42,7 +42,8 @@ _FAT32_LABEL_RE = re.compile(r"^[A-Z0-9_-]{1,11}$")
 _ALMA_VOLID_RE = re.compile(r"^AlmaLinux-(\d+)-(\d+)-")
 # Top-level `%` commands; any other `%` line opens a section that runs to
 # %end, and a `url` line inside one (a %post heredoc, say) isn't the source.
-_KS_PERCENT_COMMANDS = frozenset({"%include", "%ksappend"})
+# A stray %end outside a section opens nothing.
+_KS_PERCENT_COMMANDS = frozenset({"%include", "%ksappend", "%end"})
 _EFI_PATH_RE = re.compile(r"^-boot_image any efi_path='(.*)'$", re.MULTILINE)
 _APPENDED_EFI_RE = re.compile(r"^--interval:appended_partition_(\d+)_")
 # xorriso's "d" unit is a 512-byte block, and the range is inclusive.
@@ -69,8 +70,10 @@ def build_iso(
         validate_volid(volid)
     if network_install is None:
         try:
-            ks_text = ks_cfg.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as e:
+            # Detection needs only ASCII keywords; the file itself is copied
+            # onto the media byte for byte.
+            ks_text = ks_cfg.read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
             raise IsoBuildError(f"cannot read {ks_cfg}: {e}") from e
         network_install = kickstart_is_network(ks_text)
     if shutil.which("xorriso") is None:

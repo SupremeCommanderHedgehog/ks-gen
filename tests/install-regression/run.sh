@@ -447,12 +447,12 @@ SSH_ERR="$BUILD/ssh-wait.err"
 # been written to its newline: a half-written one isn't the whole entry.
 boot_checked=""
 check_booted_entry() {
-  local found n line
-  found="$(grep -a -n -m1 'Command line: .*inst\.ks=' "$SERIAL_LOG" 2>/dev/null || true)"
-  [[ -n "$found" ]] || return 0
-  n="${found%%:*}"
-  (( n <= $(wc -l < "$SERIAL_LOG") )) || return 0
-  line="${found#*:}"
+  local lines line
+  # Count the finished lines first and search only those: counted after the
+  # grep, a line still being written could finish in between and pass.
+  lines="$( { wc -l < "$SERIAL_LOG"; } 2>/dev/null)" || return 0
+  line="$(head -n "$lines" "$SERIAL_LOG" | grep -a -m1 'Command line: .*inst\.ks=' || true)"
+  [[ -n "$line" ]] || return 0
   line="${line%$'\r'}"
   echo "installer kernel ${line#*] }"
   check_boot_entry "the booted kernel command line" "$line" || return 1

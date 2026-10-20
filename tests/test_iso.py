@@ -220,11 +220,8 @@ def test_build_iso_forwards_network_install(tmp_path, network_install, ks_text, 
     assert rg.call_args.kwargs["network_install"] is expected
 
 
-@pytest.mark.parametrize("bad", ["missing", "latin-1"])
-def test_build_iso_reports_an_unreadable_ks_cfg(tmp_path, bad):
+def test_build_iso_reports_a_missing_ks_cfg(tmp_path):
     ks = tmp_path / "ks.cfg"
-    if bad == "latin-1":
-        ks.write_bytes("# caf\xe9\n".encode("latin-1"))
     with pytest.raises(IsoBuildError, match="cannot read"):
         build_iso(tmp_path / "src.iso", ks, tmp_path / "t.xml", tmp_path / "o.iso")
 
@@ -511,10 +508,11 @@ def test_iso_cmd_rejects_network_install_flag_when_ks_has_no_url(tmp_path):
     mock_build.assert_not_called()
 
 
-def test_iso_cmd_reports_a_non_utf8_ks_cfg(tmp_path):
-    src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=False)
-    ks.write_bytes("# caf\xe9\n".encode("latin-1"))
-    with patch("ks_gen.cli.build_iso") as mock_build:
+def test_iso_cmd_accepts_a_non_utf8_ks_cfg(tmp_path):
+    """Detection reads ASCII keywords only; a Latin-1 comment is no error."""
+    src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=True)
+    ks.write_bytes("# caf\xe9\n".encode("latin-1") + ks.read_bytes())
+    with patch("ks_gen.cli.build_iso", return_value=_built()) as mock_build:
         result = runner.invoke(
             app,
             [
@@ -529,9 +527,8 @@ def test_iso_cmd_reports_a_non_utf8_ks_cfg(tmp_path):
                 str(out),
             ],
         )
-    assert result.exit_code == int(ExitCode.USAGE), result.output
-    assert "cannot read" in result.output
-    mock_build.assert_not_called()
+    assert result.exit_code == 0, result.output
+    assert mock_build.call_args.kwargs["network_install"] is True
 
 
 # --- #128: the volume ID is derived from the source, not hardcoded ALMA9 ----
