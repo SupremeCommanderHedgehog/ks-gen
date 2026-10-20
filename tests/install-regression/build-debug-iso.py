@@ -19,6 +19,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -66,6 +67,9 @@ def main() -> int:
         ks_cfg=(bundle / "ks.cfg"),
         tailoring_xml=(bundle / "tailoring.xml"),
         out_iso=out_iso,
+        # Default: KS-AL<major>-<minor> from the source. VOLID overrides it,
+        # e.g. to make MEDIA=usb-iso exercise Rufus's label rewrite (#134).
+        volid=os.environ.get("VOLID") or None,
     )
     return 0
 

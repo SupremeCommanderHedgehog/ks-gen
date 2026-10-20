@@ -5,7 +5,8 @@
 # pipeline:
 #   1. ks-gen gen + ks-gen iso (twice — exercises #52 idempotency)
 #   2. boot the ISO in QEMU/OVMF (KVM if available, else TCG), as a CD or
-#      as a USB stick (MEDIA=cd|usb; run-all.sh runs both)
+#      as a USB stick, or as an emulated Rufus ISO-mode stick
+#      (MEDIA=cd|usb|usb-iso; run-all.sh runs all three)
 #   3. wait for anaconda to install + reboot + sshd to come up
 #   4. SSH in and run smoke-check.sh
 #
@@ -105,11 +106,14 @@ DISK_SIZE="${DISK_SIZE:-60G}"
 # storage (/dev/sda) — what an operator gets from `dd` or Rufus's DD mode.
 # That path has no CD auto-detection, so it needs inst.repo=hd:LABEL=... and
 # a top-level `user` directive; both shipped broken in v0.11.0 (PR #73) and
-# only the USB path shows it. Rufus's *ISO* mode (files copied onto FAT32)
-# is a third path neither variant covers.
+# only the USB path shows it. `usb-iso` emulates Rufus's *ISO* Image mode,
+# which MANUAL §8.6 recommends: an MBR stick with one FAT32 partition, the
+# ISO tree copied onto it with Rufus's config rewrites, so UEFI boots the
+# tree's /EFI/BOOT/grub.cfg rather than the EFI image's (#134). See
+# rufus-iso-stick.py for what it does and doesn't reproduce.
 MEDIA="${MEDIA:-cd}"
-[[ "$MEDIA" == cd || "$MEDIA" == usb ]] || {
-  echo "MEDIA must be cd or usb (got: $MEDIA)" >&2; exit 1; }
+[[ "$MEDIA" == cd || "$MEDIA" == usb || "$MEDIA" == usb-iso ]] || {
+  echo "MEDIA must be cd, usb or usb-iso (got: $MEDIA)" >&2; exit 1; }
 echo "install media: $MEDIA"
 
 # Ubuntu's ovmf package. As of 26.04 the legacy plain-name files
@@ -120,6 +124,7 @@ OVMF_VARS_TEMPLATE="${OVMF_VARS_TEMPLATE:-/usr/share/OVMF/OVMF_VARS_4M.fd}"
 
 INSTALLER_ISO="$BUILD/installer.iso"
 USB_IMG="$BUILD/usb-stick.qcow2"
+USB_ISO_IMG="$BUILD/usb-iso-stick.raw"
 # Written only after both ISO builds succeed, so a reuser can tell a finished
 # image from one a failed build left half-written (run-all.sh keys on it).
 ISO_OK="$INSTALLER_ISO.ok"
@@ -143,13 +148,17 @@ done
 [[ -r "$OVMF_CODE"          ]] || { echo "missing: $OVMF_CODE (apt install ovmf)"      >&2; exit 1; }
 [[ -r "$OVMF_VARS_TEMPLATE" ]] || { echo "missing: $OVMF_VARS_TEMPLATE (apt install ovmf)" >&2; exit 1; }
 [[ -r "$SRC_ISO"            ]] || { echo "missing: $SRC_ISO"                              >&2; exit 1; }
-if [[ "$MEDIA" == usb ]]; then
+if [[ "$MEDIA" == usb-iso ]]; then
+  command -v mkfs.fat >/dev/null 2>&1 \
+    || { echo "missing: mkfs.fat (dosfstools; needed for MEDIA=usb-iso)" >&2; exit 1; }
+fi
+if [[ "$MEDIA" == usb* ]]; then
   # Captured, not piped into `grep -q`: grep exits on the first match, qemu
   # takes SIGPIPE, and pipefail would report a device that is there as missing.
   qemu_devices="$(qemu-system-x86_64 -device help 2>/dev/null)"
   for dev in qemu-xhci usb-storage; do
     [[ "$qemu_devices" == *"\"$dev\""* ]] \
-      || { echo "missing: QEMU device $dev (needed for MEDIA=usb)" >&2; exit 1; }
+      || { echo "missing: QEMU device $dev (needed for MEDIA=$MEDIA)" >&2; exit 1; }
   done
 fi
 
@@ -282,9 +291,13 @@ cp "$OVMF_VARS_TEMPLATE" "$NVRAM"
 # xorriso's `-boot_image any replay`), so OVMF boots it as a removable disk.
 # A qcow2 overlay rather than a copy: a DVD ISO is ~10 GiB, and any guest
 # writes land in the overlay, leaving installer.iso untouched.
-rm -f "$USB_IMG" "$BUILD/usb-stick.raw"
+rm -f "$USB_IMG" "$BUILD/usb-stick.raw" "$USB_ISO_IMG"
 if [[ "$MEDIA" == usb ]]; then
   qemu-img create -q -f qcow2 -F raw -b "$INSTALLER_ISO" "$USB_IMG"
+elif [[ "$MEDIA" == usb-iso ]]; then
+  # A real copy, not an overlay: the files are rewritten onto a new FAT32
+  # filesystem, the way Rufus does. ~ISO size; a DVD stick is ~11 GiB.
+  "$KS_GEN_PY" "$HERE/rufus-iso-stick.py" "$INSTALLER_ISO" "$USB_ISO_IMG"
 fi
 
 # ---- step 6: boot QEMU ----------------------------------------------------
@@ -305,6 +318,11 @@ if [[ "$MEDIA" == usb ]]; then
   # shellcheck disable=SC2054  # commas separate QEMU sub-options, not elements
   MEDIA_ARGS=(-device qemu-xhci,id=xhci
               -drive if=none,id=usbstick,format=qcow2,file="$USB_IMG"
+              -device usb-storage,bus=xhci.0,drive=usbstick,removable=on)
+elif [[ "$MEDIA" == usb-iso ]]; then
+  # shellcheck disable=SC2054
+  MEDIA_ARGS=(-device qemu-xhci,id=xhci
+              -drive if=none,id=usbstick,format=raw,file="$USB_ISO_IMG"
               -device usb-storage,bus=xhci.0,drive=usbstick,removable=on)
 else
   MEDIA_ARGS=(-cdrom "$INSTALLER_ISO")
@@ -333,6 +351,9 @@ cleanup() {
     sleep 1
     kill -9 "$QEMU_PID" 2>/dev/null || true
   fi
+  # A usb-iso stick is a full copy of the ISO (~11 GiB for a DVD); nothing
+  # reads it after the run. KEEP_USB_ISO=1 keeps it for inspection.
+  [[ -n "${KEEP_USB_ISO:-}" ]] || rm -f "$USB_ISO_IMG"
 }
 trap cleanup EXIT
 

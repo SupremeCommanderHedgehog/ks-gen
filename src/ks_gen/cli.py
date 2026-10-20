@@ -234,9 +234,10 @@ def iso_cmd(
     )
     if not is_fat32_safe(built.volid):
         typer.echo(
-            f"warning: volume ID {built.volid!r} won't survive Rufus's ISO Image mode "
-            "(FAT32 labels are at most 11 characters, upper-case); the stick's label "
-            "would not match the boot entries. Write it in DD mode, or pick another --volid.",
+            f"note: volume ID {built.volid!r} isn't a valid FAT32 label (at most 11 "
+            "characters, upper-case), so Rufus's ISO Image mode will relabel the stick "
+            "and rewrite the boot entries to match. That path is tested only in emulation "
+            "(#134). For a stick labelled exactly as printed, pick a FAT32-safe --volid.",
             err=True,
         )
     if not any(p in (ISOLINUX_CFG, GRUB_BIOS_CFG) for p in built.patched):

@@ -1000,8 +1000,10 @@ source ISO's own label (`AlmaLinux-9-8-x86_64-dvd` → `KS-AL9-8`,
 `AlmaLinux-10-2-x86_64-dvd` → `KS-AL10-2`), and prints it. That label names
 the release, differs from the stock vendor media's (so a vendor stick
 plugged in alongside can't answer the lookup), and fits a FAT32 label
-(11 characters, upper-case), which Rufus's ISO Image mode needs (§8.6). An
-explicit `--volid` that won't fit FAT32 gets a warning; one with spaces or
+(11 characters, upper-case), so Rufus's ISO Image mode writes it to the
+stick unchanged (§8.6). An
+explicit `--volid` that won't fit FAT32 gets a note (Rufus will relabel
+the stick and rewrite the boot entries to match; see §8.6); one with spaces or
 over 32 characters is rejected.
 
 **Unattended boot:** the wrapper rewrites `isolinux/isolinux.cfg` and
@@ -1864,6 +1866,21 @@ drive's number wipes your OS.
 Eject the USB cleanly from Explorer when Rufus finishes. Plug it
 into the target, boot, pick the USB in the firmware boot menu.
 The ks-gen menu entry runs by default after a 5-second timeout.
+
+**What's tested.** ks-gen's install-regression harness emulates this
+ISO Image-mode write (Rufus v4.15: FAT32 label, config rewrites,
+copied tree) and installs from it under **UEFI**. It has not been run
+on real Windows/Rufus. **BIOS/CSM boot is not tested on any media**: the
+harness boots UEFI firmware only. Prefer UEFI on the target.
+
+If a custom `--volid` isn't a valid FAT32 label (over 11 characters,
+lower-case, or containing `.`), Rufus writes a sanitised label (e.g.
+`ks-al10-2x` → `KS-AL10-2X`) and rewrites the `hd:LABEL=` /
+`search -l` references in the copied boot configs to match. The
+emulated install passes that way too. `ks-gen iso` prints a note when
+this will happen. Step 5's "must read exactly" check then expects
+Rufus's sanitised form. The default volume ID is already FAT32-safe,
+so Rufus changes nothing.
 
 #### When this isn't enough
 
