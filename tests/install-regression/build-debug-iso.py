@@ -25,7 +25,7 @@ from pathlib import Path
 
 # Import bootloader FIRST so the names exist in its namespace.
 from ks_gen.iso import bootloader  # noqa: E402
-from ks_gen.iso.builder import build_iso  # noqa: E402
+from ks_gen.iso.builder import build_iso, kickstart_is_network  # noqa: E402
 
 # inst.text       — TUI installer, no GUI
 # inst.notmux     — don't wrap the UI in a tmux session; write straight to the
@@ -61,10 +61,16 @@ def main() -> int:
     src_iso = Path(sys.argv[1])
     bundle = Path(sys.argv[2])
     out_iso = Path(sys.argv[3])
+    ks_cfg = bundle / "ks.cfg"
+    # build_iso decides it from ks.cfg when unset, as for `ks-gen iso`, so a
+    # network fixture boots the entry without inst.repo=hd:LABEL= (#136).
+    # Printed for the log only; run.sh checks the built entry itself.
+    network = kickstart_is_network(ks_cfg.read_text(encoding="utf-8"))
+    print(f"build-debug-iso: network_install={network}")
 
     build_iso(
         src_iso=src_iso,
-        ks_cfg=(bundle / "ks.cfg"),
+        ks_cfg=ks_cfg,
         tailoring_xml=(bundle / "tailoring.xml"),
         out_iso=out_iso,
         # Default: KS-AL<major>-<minor> from the source. VOLID overrides it,

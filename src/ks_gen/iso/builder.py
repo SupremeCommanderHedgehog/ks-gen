@@ -40,6 +40,8 @@ _VOLID_OK_RE = re.compile(r"^[A-Za-z0-9_.-]{1,32}$")
 # copies the label over: at most 11 characters, which Windows upper-cases.
 _FAT32_LABEL_RE = re.compile(r"^[A-Z0-9_-]{1,11}$")
 _ALMA_VOLID_RE = re.compile(r"^AlmaLinux-(\d+)-(\d+)-")
+# The install source ks.cfg.j2 writes for install.source: network.
+_URL_SOURCE_RE = re.compile(r"(?m)^url\s+--url=")
 _EFI_PATH_RE = re.compile(r"^-boot_image any efi_path='(.*)'$", re.MULTILINE)
 _APPENDED_EFI_RE = re.compile(r"^--interval:appended_partition_(\d+)_")
 # xorriso's "d" unit is a 512-byte block, and the range is inclusive.
@@ -53,14 +55,19 @@ def build_iso(
     out_iso: Path,
     *,
     volid: str | None = None,
-    network_install: bool = False,
+    network_install: bool | None = None,
 ) -> IsoBuild:
     """Repack `src_iso` with ks.cfg + tailoring.xml and an unattended boot
     entry, labelled `volid` or, by default, `default_volid` of the source's
-    own volume ID.
+    own volume ID. `network_install` drops `inst.repo=hd:LABEL=` from the
+    entry; by default it follows `kickstart_is_network` of ks.cfg, so a
+    caller can't ship media entries for a network kickstart by omission
+    (#136).
     """
     if volid is not None:
         validate_volid(volid)
+    if network_install is None:
+        network_install = kickstart_is_network(ks_cfg.read_text(encoding="utf-8"))
     if shutil.which("xorriso") is None:
         raise IsoBuildError(
             "xorriso not on PATH (install: dnf install xorriso / brew install xorriso)"
@@ -137,6 +144,14 @@ def validate_volid(volid: str) -> None:
     32 bytes, or with characters `hd:LABEL=` would need escaped."""
     if not _VOLID_OK_RE.match(volid):
         raise VolidError(f"invalid volume ID {volid!r}: use 1-32 characters from A-Z a-z 0-9 _ . -")
+
+
+def kickstart_is_network(ks_text: str) -> bool:
+    """Whether a kickstart installs from a `url` source, so its boot entries
+    should drop `inst.repo=hd:LABEL=` (`build_iso`'s `network_install`).
+    Shared by `ks-gen iso` and the install-regression harness, which must
+    boot the same entries operators get (#136)."""
+    return _URL_SOURCE_RE.search(ks_text) is not None
 
 
 def is_fat32_safe(volid: str) -> bool:

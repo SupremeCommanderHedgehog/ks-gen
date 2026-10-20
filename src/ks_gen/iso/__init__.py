@@ -9,6 +9,7 @@ from ks_gen.iso.builder import (
     VolidError,
     build_iso,
     is_fat32_safe,
+    kickstart_is_network,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "VolidError",
     "build_iso",
     "is_fat32_safe",
+    "kickstart_is_network",
 ]

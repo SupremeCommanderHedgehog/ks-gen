@@ -172,11 +172,21 @@ def test_build_iso_rewrite_error_raises(tmp_path):
         build_iso(src, ks, tail, out, volid="ALMA9")
 
 
-def test_build_iso_forwards_network_install(tmp_path):
+@pytest.mark.parametrize(
+    ("network_install", "ks_text", "expected"),
+    [
+        (True, "text\n", True),
+        (False, 'url --url="https://m/"\n', False),
+        # Unset: follows the kickstart, so a caller can't forget it (#136).
+        (None, 'url --url="https://m/"\n', True),
+        (None, "text\n", False),
+    ],
+)
+def test_build_iso_forwards_network_install(tmp_path, network_install, ks_text, expected):
     src = tmp_path / "src.iso"
     src.write_bytes(b"\0" * 1024)
     ks = tmp_path / "ks.cfg"
-    ks.write_text("text\n", encoding="utf-8")
+    ks.write_text(ks_text, encoding="utf-8")
     tail = tmp_path / "tailoring.xml"
     tail.write_text("<x/>", encoding="utf-8")
     out = tmp_path / "out.iso"
@@ -204,10 +214,10 @@ def test_build_iso_forwards_network_install(tmp_path):
         patch("ks_gen.iso.builder.rewrite_isolinux", return_value="x") as ri,
         patch("ks_gen.iso.builder.rewrite_grub", return_value="x") as rg,
     ):
-        build_iso(src, ks, tail, out, volid="DEV0", network_install=True)
+        build_iso(src, ks, tail, out, volid="DEV0", network_install=network_install)
 
-    assert ri.call_args.kwargs["network_install"] is True
-    assert rg.call_args.kwargs["network_install"] is True
+    assert ri.call_args.kwargs["network_install"] is expected
+    assert rg.call_args.kwargs["network_install"] is expected
 
 
 # ---------------- alma10 (#58) ----------------

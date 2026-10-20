@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json as _json
-import re
 import shlex
 import tempfile
 from pathlib import Path
@@ -22,6 +21,7 @@ from ks_gen.iso import (
     VolidError,
     build_iso,
     is_fat32_safe,
+    kickstart_is_network,
 )
 from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
@@ -207,8 +207,7 @@ def iso_cmd(
         "detected from whether the kickstart has a `url` install source.",
     ),
 ) -> None:
-    ks_text = ks.read_text(encoding="utf-8")
-    ks_is_network = re.search(r"(?m)^url\s+--url=", ks_text) is not None
+    ks_is_network = kickstart_is_network(ks.read_text(encoding="utf-8"))
     if network_install is None:
         network_install = ks_is_network
     elif network_install != ks_is_network:

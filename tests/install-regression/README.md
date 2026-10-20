@@ -126,6 +126,20 @@ installs from the ISO itself (the default `install.source`) needs a DVD
 from a boot ISO. A boot ISO with an install-from-ISO fixture stops at
 anaconda's "Installation source" error in either mode.
 
+The harness ISO carries the boot entries `ks-gen iso` would build for the
+same bundle (#136). `build_iso` decides `network_install` from `ks.cfg`
+when it isn't given (`ks_gen.iso.kickstart_is_network`: a `url --url=`
+line), so a network fixture's entry has no `inst.repo=hd:LABEL=`. `run.sh`
+checks it twice: in the built ISO's `/EFI/BOOT/grub.cfg` before QEMU starts,
+and in the installer kernel's command line in `serial.log` as soon as it is
+logged. Either fails the run if `inst.repo=` is present for a network
+install, missing for a media install, or names a different label from
+`inst.ks=`. The usb-iso exception: when Rufus's RH8+
+`inst.stage2` → `inst.repo` rewrite fires (above), `inst.repo=` is expected
+either way. Every run recorded below from before #136 booted network
+fixtures *with* `inst.repo=hd:LABEL=`, so none of them covers the entry
+network-install operators get.
+
 To run a single mode with `run.sh`:
 
 ```bash
@@ -207,6 +221,8 @@ an 800G virtual disk, and a guest that really did fill it would fill the host.
   that monkey-patches the menu-entry constants in
   `ks_gen.iso.bootloader` to inject `inst.text inst.notmux
   inst.console=ttyS0,115200n8 console=ttyS0,115200n8`. No source edit.
+  It leaves `network_install` to `build_iso`, which reads it off the
+  bundle's `ks.cfg` (#136).
 - `fixtures/omit-dnf-automatic.host.yaml.tmpl` — fixture template
   with `__SSH_PUBKEY__` placeholder. `packages.required` explicitly
   omits `dnf-automatic` and `dnf-utils` so the harness exercises the
