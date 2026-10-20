@@ -38,18 +38,19 @@ not the install.
 
 ## How to run
 
-To validate a change to the install pipeline, run **both media modes**:
+To validate a change to the install pipeline, run **every media mode**:
 
 ```bash
 wsl -- bash -c "cd \"$(git rev-parse --show-toplevel)\" && tests/install-regression/run-all.sh"
 ```
 
-`run-all.sh` runs the CD variant, then the USB variant against the same
-`installer.iso` (reused only if the CD run finished building it), and exits
-non-zero if either failed. Per mode, `$BUILD/run-all/` keeps that run's
-`serial.log`/`qemu.log` and the installed disk's `qemu-img info`, and the
-summary prints each disk's size — trap 2 below applies to both. Expect
-roughly twice a single run's wall-clock. `FORCE_ISO_REBUILD=1` rebuilds the
+`run-all.sh` runs the CD variant, then the USB variant, then the emulated
+Rufus ISO-mode variant (`usb-iso`, below) against the same `installer.iso`
+(reused only if the CD run finished building it), and exits non-zero if any
+failed. Per mode, `$BUILD/run-all/` keeps that run's `serial.log`/`qemu.log`
+and the installed disk's `qemu-img info`, and the summary prints each disk's
+size — trap 2 below applies to all of them. Expect roughly three times a
+single run's wall-clock. `FORCE_ISO_REBUILD=1` rebuilds the
 ISO even if `SKIP_ISO_BUILD` is set.
 
 **CD-mode alone is no longer sufficient** (#26). `MEDIA=cd` (the default for
@@ -66,9 +67,58 @@ MEDIA=usb tests/install-regression/run.sh
 It attaches the ISO as xHCI USB mass storage through a fresh copy-on-write
 overlay (`$BUILD/usb-stick.qcow2`), so the guest sees exactly the bytes `dd`
 would write without a multi-GiB copy, with no `bootindex` (which QEMU re-applies every boot
-and would reinstall forever, since a stick is never ejected). Not covered by
-either mode: Rufus's *ISO* mode, which copies files onto a FAT32 stick instead
-of writing the image.
+and would reinstall forever, since a stick is never ejected).
+
+### Rufus ISO Image mode (`MEDIA=usb-iso`, #134)
+
+MANUAL §8.6 tells Windows operators to use Rufus's **ISO Image mode**, not DD.
+That writes a different stick: an MBR disk with one FAT32-LBA partition, the
+ISO9660 *tree* copied onto it file by file, and Rufus's own edits to the
+boot configs. On UEFI that FAT32 partition is what firmware boots, so
+`/EFI/BOOT/BOOTX64.EFI` reads the **tree's** `/EFI/BOOT/grub.cfg`. The EFI
+image that the CD and `usb` modes boot from isn't involved. No Windows
+machine is available to the project, so `rufus-iso-stick.py` rebuilds that
+stick from Rufus's source:
+
+```bash
+MEDIA=usb-iso tests/install-regression/run.sh
+```
+
+What Rufus v4.15 does (github.com/pbatard/rufus, tag `v4.15`, `6d8fbf98`),
+and what the emulation mirrors:
+
+- **Label** (`format.c` `ToValidLabel`): the stick's FAT32 label is the ISO's
+  volume ID with `*?,;:/\|+=<>[]"` dropped, non-ASCII, tab and `.` turned into
+  `_`, upper-cased, and cut to 11 characters. A result that is mostly
+  underscores becomes the disk size, e.g. `8_0 GB`. ks-gen's default
+  `KS-AL<major>-<minor>` comes through unchanged
+  (`tests/test_rufus_iso_emulation.py` pins it).
+- **Label rewrite** (`iso.c` `fix_config`, `parser.c`
+  `replace_in_token_data`): in every `*.cfg` (plus the syslinux names and
+  `/loader/entries/*.conf`), on each line whose first word is `options`,
+  `append`, `linux`, `linuxefi`, `$linux`, `search` or `for` followed by
+  whitespace, it replaces the ISO label (spaces as `\x20`) with the stick's,
+  up to 4 times per line. So a label Rufus shortens or upper-cases is
+  patched to match, not broken. With ks-gen's default the two are equal and
+  nothing is rewritten. To exercise the rewrite, build with a label Rufus
+  must change: `VOLID=ks-al10-2x MEDIA=usb-iso run.sh` (`VOLID` is passed
+  to `build-debug-iso.py`; the stick comes out `KS-AL10-2X`). Note that **`ks.cfg` is a `*.cfg`**, so a `%post`
+  `for …` line that mentioned the label would be rewritten too. None does.
+- **`inst.stage2` → `inst.repo`** (same function): for media whose *volume
+  ID* matches `^AlmaLinux-[8-9].*` (or other RHEL 8/9 derivatives, `rufus.c`
+  `redhat8_derivative`), and whose file name lacks `netinst`, Rufus rewrites
+  `inst.stage2` to `inst.repo` on those lines. ks-gen's `KS-AL…` labels
+  never match, and nor did the old `ALMA9`, so it doesn't fire. That matters
+  for network installs: their entry deliberately has no `inst.repo`, and the
+  rewrite would point the install source at a boot ISO with no packages.
+- **Which `grub.cfg`**: Rufus copies the tree, and only unpacks the EFI image
+  when the tree has no usable `BOOTX64.EFI` (`iso.c`, `DumpFatDir`). AlmaLinux
+  media always have one.
+
+Not reproduced: Rufus's **BIOS/legacy bootloader** (it installs its own
+syslinux/GRUB for CSM boot). The harness boots OVMF, so no mode covers BIOS
+boot. Also Rufus releases after v4.15: re-check `fix_config` and
+`redhat8_derivative` when bumping the pinned version.
 
 A full USB run needs the same install source as a CD run. A fixture that
 installs from the ISO itself (the default `install.source`) needs a DVD
@@ -141,8 +191,11 @@ an 800G virtual disk, and a guest that really did fill it would fill the host.
 
 ## Files
 
-- `run-all.sh` — runs `run.sh` with `MEDIA=cd` then `MEDIA=usb`; the
-  invocation to use when validating an install-pipeline change (#26).
+- `run-all.sh` — runs `run.sh` with `MEDIA=cd`, `MEDIA=usb` and
+  `MEDIA=usb-iso`; the invocation to use when validating an install-pipeline
+  change (#26, #134).
+- `rufus-iso-stick.py` — builds the `MEDIA=usb-iso` stick: an emulated Rufus
+  v4.15 ISO Image-mode write of `installer.iso` (see above).
 - `run.sh` — orchestrator. Generates an SSH keypair, renders the
   fixture with the public key inlined, runs `ks-gen gen`, runs
   `ks-gen iso` twice (locks in PR #55's idempotency fix), boots
@@ -204,6 +257,21 @@ Note the `configure_crypto_policy` line above predates the live-re-scan change
 
 ## Other runs
 
+- **2026-10-20, all three media incl. emulated Rufus ISO mode** (#134,
+  `al10-omit-dnf-automatic`, AL10.2 x86_64 boot ISO, network install).
+  `run-all.sh` green on `cd` (`3.89 GiB`), `usb` (`3.93 GiB`) and `usb-iso`
+  (`3.96 GiB`), 40 smoke checks each. The `usb-iso` stick came out as FAT32
+  label `KS-AL10-2`, identical to the volume ID, so Rufus's label rewrite was
+  a no-op, and the RH8 `inst.stage2`→`inst.repo` rewrite did not fire. The
+  kernel booted from the copied tree's `grub.cfg` with
+  `inst.ks=hd:LABEL=KS-AL10-2:/ks.cfg`, found on `sda1`. First install from
+  anything resembling the stick MANUAL §8.6 tells operators to write.
+  Then `VOLID=ks-al10-2x MEDIA=usb-iso` to exercise Rufus's label rewrite:
+  the stick came out `KS-AL10-2X`, 8 lines each in the EFI and BIOS
+  `grub.cfg` were rewritten (6 `linux`/`linuxefi`, 2 `search`), and the
+  install passed (40 checks, `3.93 GiB`). The kernel booted with
+  `hd:LABEL=KS-AL10-2X`, and `ks.cfg`, which reads its label off the kernel
+  command line, followed.
 - **2026-10-20, AlmaLinux 10.2 / container user** (`al10-container-users`, x86_64
   boot ISO, network install). `run-all.sh` green on CD (`4.01 GiB`) and USB
   (`3.91 GiB`). The #49 run: `webapp`'s skel `.bashrc` came out `640`, and

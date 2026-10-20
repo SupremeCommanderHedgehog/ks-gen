@@ -101,5 +101,5 @@ a real bug class would slip through the unit tests, not as a tax.
 
 Don't run it yourself in a normal session — surface the recommendation
 and let the user decide. When recommending it, recommend `run-all.sh`
-(CD **and** USB media, #26), not bare `run.sh`: CD-mode alone missed
-PR #73's USB-only install bugs.
+(CD, USB **and** emulated Rufus ISO-mode media, #26/#134), not bare
+`run.sh`: CD-mode alone missed PR #73's USB-only install bugs.
