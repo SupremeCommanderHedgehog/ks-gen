@@ -879,3 +879,95 @@ def test_verify_local_allows_format_html(tmp_path: Path) -> None:
         result = runner.invoke(app, ["verify", "--local", "--config", str(cfg), "--format", "html"])
     assert result.exit_code == 0
     assert "<!DOCTYPE html>" in result.output
+
+
+# STIG needs a FIPS-usable key: Ed25519 alone is rejected (#73).
+STIG_YAML = (
+    VALID_YAML.replace('["ssh-ed25519 A a@b"]', '["ssh-ed25519 A a@b", "ssh-rsa B a@b"]')
+    + "crypto: {policy: STIG}\n"
+)
+_FIPS_RULE = "xccdf_org.ssgproject.content_rule_enable_fips_mode"
+
+
+def _fips_still_failing_report() -> VerifyReport:
+    """#87: a STIG host not actually in FIPS mode — fail at install and now."""
+    return VerifyReport(
+        host="h1",
+        user="ops",
+        timestamp_utc="2026-06-09T12:00:00Z",
+        rows=(
+            VerifyRow(_FIPS_RULE, "fail", "fail", False, "new_fail"),
+            VerifyRow("rule_d", "fail", "fail", False, "new_fail"),
+        ),
+        install_baseline_available=True,
+    )
+
+
+@pytest.mark.parametrize("extra", [[], ["--allow-regression"]])
+def test_verify_apply_never_waives_a_rule_ks_gen_enforces(tmp_path: Path, extra) -> None:
+    """#87: suggesting an exception for a failed FIPS rule would mask the very
+    signal it exists to give, and cannot change kernel_fips anyway."""
+    cfg = tmp_path / "host.yaml"
+    cfg.write_text(STIG_YAML, encoding="utf-8")
+    with (
+        patch("ks_gen.cli.check_tools"),
+        patch("ks_gen.cli.run_verify", return_value=_fips_still_failing_report()),
+    ):
+        result = CliRunner().invoke(
+            app, ["verify", "--host", "h1", "--config", str(cfg), "--apply", *extra]
+        )
+
+    assert result.exit_code == int(ExitCode.VERIFY_FAIL)
+    import yaml as _yaml
+
+    after = _yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    assert [e["id"] for e in after.get("exceptions", [])] == ["auto-new_fail-rule_d"]
+    assert f"auto-new_fail-{_FIPS_RULE}" not in result.stdout
+    assert "ks-gen enforces itself" in result.stderr
+    assert f"{_FIPS_RULE}  (enforced by crypto_policy)" in result.stderr
+
+
+def test_verify_suggests_fips_rule_when_policy_waives_fips(tmp_path: Path) -> None:
+    """Under MODERN ks-gen tailors the FIPS rules out itself, so they are not
+    managed; a failure there is the operator's to judge."""
+    cfg = tmp_path / "host.yaml"
+    cfg.write_text(VALID_YAML + "crypto: {policy: MODERN}\n", encoding="utf-8")
+    with (
+        patch("ks_gen.cli.check_tools"),
+        patch("ks_gen.cli.run_verify", return_value=_fips_still_failing_report()),
+    ):
+        result = CliRunner().invoke(
+            app, ["verify", "--host", "h1", "--config", str(cfg), "--suggest-exceptions"]
+        )
+    assert "ks-gen enforces itself" not in result.stderr
+    assert "auto-new_fail-rule_d" in result.stdout
+
+
+def test_verify_json_names_withheld_suggestions(tmp_path: Path) -> None:
+    """#87: stdout-only consumers must tell "withheld" from "nothing to suggest"."""
+    import json as _json
+
+    cfg = tmp_path / "host.yaml"
+    cfg.write_text(STIG_YAML, encoding="utf-8")
+    with (
+        patch("ks_gen.cli.check_tools"),
+        patch("ks_gen.cli.run_verify", return_value=_fips_still_failing_report()),
+    ):
+        result = CliRunner().invoke(
+            app,
+            [
+                "verify",
+                "--host",
+                "h1",
+                "--config",
+                str(cfg),
+                "--suggest-exceptions",
+                "--format",
+                "json",
+            ],
+        )
+    payload = _json.loads(result.stdout)
+    assert payload["withheld_suggestions"] == [
+        {"rule_id": _FIPS_RULE, "enforced_by": "crypto_policy"}
+    ]
+    assert [s["decl"]["id"] for s in payload["suggested_exceptions"]] == ["auto-new_fail-rule_d"]

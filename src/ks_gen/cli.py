@@ -14,6 +14,7 @@ from ks_gen.config import (
     HostConfig,
     removed_distro_message,
 )
+from ks_gen.exceptions_report import managed_rule_ids
 from ks_gen.iso import GRUB_BIOS_CFG, ISOLINUX_CFG, IsoBuildError, build_iso
 from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
@@ -40,7 +41,13 @@ from ks_gen.verify.report import (
     render_table,
 )
 from ks_gen.verify.ssh import check_tools
-from ks_gen.verify.suggest import AppendResult, Suggestion, apply_to_host_yaml, build_suggestions
+from ks_gen.verify.suggest import (
+    AppendResult,
+    Suggestion,
+    apply_to_host_yaml,
+    build_suggestions,
+    withheld_managed,
+)
 from ks_gen.verify.transport import LocalTransport
 from ks_gen.wizard import WizardError, run_wizard, write_initial
 from ks_gen.writer import build_bundle, write_bundle
@@ -259,12 +266,33 @@ def _write_html_report(html_out: Path, html_str: str) -> None:
         raise typer.Exit(code=int(ExitCode.USAGE)) from e
 
 
+def _suggest(
+    report: VerifyReport, cfg: HostConfig
+) -> tuple[list[Suggestion], list[tuple[str, str]]]:
+    """Build suggestions, withholding rules ks-gen enforces itself (#87) and
+    saying so on stderr: an exception would mask a failed enforcement.
+    Returns (suggestions, withheld (rule_id, ks-gen rule) pairs)."""
+    managed = managed_rule_ids(cfg)
+    withheld = withheld_managed(report, managed)
+    if withheld:
+        typer.echo(
+            f"ks-gen verify: not suggesting exceptions for {len(withheld)} failing rule(s) "
+            "ks-gen enforces itself — its enforcement never took or has since drifted; "
+            "fix the host (or that rule's config) instead:",
+            err=True,
+        )
+        for rule_id, ks_rule in withheld:
+            typer.echo(f"  {rule_id}  (enforced by {ks_rule})", err=True)
+    return build_suggestions(report, managed), withheld
+
+
 def _emit_single_host_report(
     *,
     report: VerifyReport,
     suggestions: list[Suggestion] | None,
     format_: str,
     html_out: Path | None,
+    withheld: list[tuple[str, str]] | None = None,
 ) -> None:
     """Render a single-host report to stdout per --format, and additionally
     write the HTML file when --html-out is set. The file write happens here
@@ -278,7 +306,7 @@ def _emit_single_host_report(
     if format_ == "html":
         typer.echo(html_str)
     elif format_ == "json":
-        typer.echo(render_json(report, suggestions=suggestions))
+        typer.echo(render_json(report, suggestions=suggestions, withheld=withheld))
     else:
         typer.echo(render_table(report, suggestions=suggestions))
     if html_out is not None:
@@ -422,10 +450,11 @@ def _run_local_cmd(
             typer.echo(f"ks-gen verify: transport failure: {label}: {e}", err=True)
             raise typer.Exit(code=int(e.exit_code)) from None
 
-        suggestions = build_suggestions(report) if suggest_exceptions else None
+        suggestions, withheld = _suggest(report, cfg) if suggest_exceptions else (None, None)
         _emit_single_host_report(
             report=report,
             suggestions=suggestions,
+            withheld=withheld,
             format_=format_,
             html_out=html_out,
         )
@@ -515,7 +544,10 @@ def verify_cmd(
     suggest_exceptions: bool = typer.Option(
         False,
         "--suggest-exceptions",
-        help="Render ready-to-paste ExceptionDecl YAML for new_fail and regression rules.",
+        help=(
+            "Render ready-to-paste ExceptionDecl YAML for new_fail and regression rules. "
+            "Rules ks-gen enforces itself (e.g. FIPS on a STIG host) are never suggested."
+        ),
     ),
     apply: bool = typer.Option(
         False,
@@ -719,10 +751,11 @@ def verify_cmd(
             raise typer.Exit(code=int(e.exit_code)) from None
 
         want_suggestions = suggest_exceptions or apply
-        suggestions = build_suggestions(report) if want_suggestions else None
+        suggestions, withheld = _suggest(report, cfg) if want_suggestions else (None, None)
         _emit_single_host_report(
             report=report,
             suggestions=suggestions,
+            withheld=withheld,
             format_=format_,
             html_out=html_out,
         )

@@ -34,6 +34,32 @@ def expected_failure_rule_ids(cfg: HostConfig) -> set[str]:
     return ids
 
 
+def managed_rule_ids(cfg: HostConfig) -> dict[str, str]:
+    """XCCDF rule ids ks-gen itself enforces on this host, mapped to the
+    ks-gen rule that does (#87).
+
+    Each applicable rule's stig_rules_affected, minus the ids tailored out as
+    expected failures. What remains is what ks-gen's config promises will pass
+    (the FIPS rules on a STIG host, the auditd actions, ...). A failure there
+    means that enforcement did not take, and an exception cannot fix it: on a
+    STIG host kernel_fips derives from crypto.policy, never from exceptions.
+    The knob is the host or the rule's own config, so verify never suggests
+    waiving one.
+    """
+    from ks_gen.registry import load_rules
+    from ks_gen.topo import topo_sort
+
+    expected = expected_failure_rule_ids(cfg)
+    managed: dict[str, str] = {}
+    for r in topo_sort(load_rules(cfg.distro)):
+        if not r.applies(cfg):
+            continue
+        for rid in r.stig_rules_affected:
+            if rid not in expected:
+                managed.setdefault(rid, r.id)
+    return managed
+
+
 def render_exceptions_md(cfg: HostConfig, rules: Iterable[Rule]) -> str:
     rules_list = list(rules)
     entries = [(r, r.exception_entry(cfg)) for r in rules_list]

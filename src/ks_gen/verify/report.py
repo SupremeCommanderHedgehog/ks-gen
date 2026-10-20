@@ -166,11 +166,21 @@ def _report_payload(report: VerifyReport) -> dict[str, object]:
     return payload
 
 
-def render_json(report: VerifyReport, *, suggestions: list[Suggestion] | None = None) -> str:
+def render_json(
+    report: VerifyReport,
+    *,
+    suggestions: list[Suggestion] | None = None,
+    withheld: list[tuple[str, str]] | None = None,
+) -> str:
     payload = _report_payload(report)
     if suggestions is not None:
         payload["suggested_exceptions"] = [
             {"category": s.category, "decl": s.decl.model_dump()} for s in suggestions
+        ]
+        # #87: failing rules ks-gen enforces, deliberately not suggested — so
+        # automation reading only stdout can tell "withheld" from "none".
+        payload["withheld_suggestions"] = [
+            {"rule_id": rule_id, "enforced_by": ks_rule} for rule_id, ks_rule in withheld or []
         ]
     return json.dumps(payload, indent=2)
 

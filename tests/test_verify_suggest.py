@@ -390,3 +390,28 @@ def test_apply_with_empty_host_yaml_file_treats_as_empty_mapping(tmp_path: Path)
             host_yaml_path=host_yaml,
             allow_regression=False,
         )
+
+
+def test_build_suggestions_withholds_managed_rules():
+    from ks_gen.verify.reconcile import VerifyReport, VerifyRow
+    from ks_gen.verify.suggest import build_suggestions, withheld_managed
+
+    report = VerifyReport(
+        host="h",
+        user="u",
+        timestamp_utc="2026-10-20T00:00:00Z",
+        rows=(
+            VerifyRow("managed_new", "fail", "fail", False, "new_fail"),
+            VerifyRow("managed_reg", "fail", "pass", False, "regression"),
+            VerifyRow("managed_clean", "pass", "pass", False, "clean"),
+            VerifyRow("free", "fail", "fail", False, "new_fail"),
+        ),
+        install_baseline_available=True,
+    )
+    managed = {"managed_new": "crypto_policy", "managed_reg": "auditd_actions"}
+    managed["managed_clean"] = "usbguard"
+    assert [s.decl.stig_rules_disabled for s in build_suggestions(report, managed)] == [["free"]]
+    assert withheld_managed(report, managed) == [
+        ("managed_new", "crypto_policy"),
+        ("managed_reg", "auditd_actions"),
+    ]

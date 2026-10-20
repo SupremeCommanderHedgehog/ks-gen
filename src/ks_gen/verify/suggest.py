@@ -8,6 +8,7 @@ for the validate-before-write invariant.
 from __future__ import annotations
 
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,14 @@ class Suggestion:
 _SUGGESTABLE: frozenset[Category] = frozenset({"new_fail", "regression"})
 
 
+def _withheld(rule_id: str, managed: Mapping[str, str]) -> bool:
+    """Rules ks-gen enforces are never suggested, whatever their category: a
+    failure means the enforcement never took (fail->fail, e.g. a STIG host not
+    really in FIPS mode) or has drifted (regression), and an exception would
+    only hide it (#87). The one predicate both functions below share."""
+    return rule_id in managed
+
+
 def _reason_for(
     row_host: str,
     row_date: str,
@@ -41,16 +50,21 @@ def _reason_for(
     )
 
 
-def build_suggestions(report: VerifyReport) -> list[Suggestion]:
+def build_suggestions(
+    report: VerifyReport, managed: Mapping[str, str] | None = None
+) -> list[Suggestion]:
     """Filter the report to rows worth suggesting an exception for.
 
-    Includes `new_fail` and `regression` only. Order matches `report.rows`
-    (which is sorted by rule_id at build time).
+    Includes `new_fail` and `regression` only, minus `managed` rule ids: rules
+    ks-gen enforces itself (see `exceptions_report.managed_rule_ids`), whose
+    failure means the enforcement did not take (#87). Order matches
+    `report.rows` (which is sorted by rule_id at build time).
     """
     date = report.timestamp_utc.split("T", 1)[0]
+    managed = managed or {}
     suggestions: list[Suggestion] = []
     for row in report.rows:
-        if row.category not in _SUGGESTABLE:
+        if row.category not in _SUGGESTABLE or _withheld(row.rule_id, managed):
             continue
         decl = ExceptionDecl(
             id=f"auto-{row.category}-{row.rule_id}",
@@ -59,6 +73,16 @@ def build_suggestions(report: VerifyReport) -> list[Suggestion]:
         )
         suggestions.append(Suggestion(decl=decl, category=row.category))
     return suggestions
+
+
+def withheld_managed(report: VerifyReport, managed: Mapping[str, str]) -> list[tuple[str, str]]:
+    """(rule_id, ks-gen rule) for each failure `build_suggestions` withheld
+    because ks-gen manages it — so the operator is told, not left guessing."""
+    return [
+        (row.rule_id, managed[row.rule_id])
+        for row in report.rows
+        if row.category in _SUGGESTABLE and _withheld(row.rule_id, managed)
+    ]
 
 
 def render_yaml(suggestions: list[Suggestion], report: VerifyReport) -> str:
