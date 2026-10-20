@@ -9,7 +9,7 @@ from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
 if TYPE_CHECKING:
     from ks_gen.config import HostConfig
 
-_PREFIX = "xccdf_org.ssgproject.content_rule_"
+RULE_PREFIX = "xccdf_org.ssgproject.content_rule_"
 # Stig-selected chronyd rules this rule satisfies. It writes chrony.conf after
 # oscap remediates it, so the file must pass them itself or every host
 # regresses fixed -> fail (#50). The checks are the same on every supported
@@ -19,25 +19,25 @@ _PREFIX = "xccdf_org.ssgproject.content_rule_"
 # - chronyd_client_only: `port 0` (never serve NTP);
 # - chronyd_no_chronyc_network: `cmdport 0` (chronyc over the local socket only);
 # - chronyd_server_directive: sources as `server` lines, never `pool`.
-# AL10's chrony_set_nts needs NTS servers, which pool.ntp.org is not, so it is
-# not addressed here.
-_MAXPOLL_RULE = f"{_PREFIX}chronyd_or_ntpd_set_maxpoll"
-_CLIENT_ONLY_RULE = f"{_PREFIX}chronyd_client_only"
-_NO_CMDPORT_RULE = f"{_PREFIX}chronyd_no_chronyc_network"
-_CHRONY_RULES = [
+# AL10 also selects chrony_set_nts (`nts` on every source line): see the
+# alma10 module, which passes it as `nts_rule` (#125).
+_MAXPOLL_RULE = f"{RULE_PREFIX}chronyd_or_ntpd_set_maxpoll"
+_CLIENT_ONLY_RULE = f"{RULE_PREFIX}chronyd_client_only"
+_NO_CMDPORT_RULE = f"{RULE_PREFIX}chronyd_no_chronyc_network"
+CHRONY_RULES = [
     _MAXPOLL_RULE,
     _CLIENT_ONLY_RULE,
     _NO_CMDPORT_RULE,
-    f"{_PREFIX}chronyd_server_directive",
+    f"{RULE_PREFIX}chronyd_server_directive",
 ]
-# Not in _CHRONY_RULES: SSG 0.1.82 selects it on AL8/AL9 only (AL10 and every
+# Not in CHRONY_RULES: SSG 0.1.82 selects it on AL8/AL9 only (AL10 and every
 # media floor lack it), and stig_rules_affected must be selected everywhere
 # this rule is re-exported. Its check wants /etc/systemd/system/
 # chrony-wait.service with an ExecStart free of `-h`; SSG ships no bash fix
 # for it, so oscap never remediates it. ks-gen writes it on every distro
 # anyway: with `cmdport 0` the packaged unit's `chronyc -h 127.0.0.1,::1`
 # cannot connect, and anything wanting time-sync.target would stall on it.
-_LOCAL_SOCKET_RULE = f"{_PREFIX}chronyd_configure_local_socket"
+_LOCAL_SOCKET_RULE = f"{RULE_PREFIX}chronyd_configure_local_socket"
 # The stig profile's var_time_service_set_maxpoll, as DISA's fix text writes it.
 # tests/rules/test_time_servers.py pins it against every pin's refine value.
 MAXPOLL = 16
@@ -73,7 +73,13 @@ def _excepted(cfg: HostConfig) -> set[str]:
 def _emit(cfg: HostConfig) -> str:
     waived = _excepted(cfg)
     maxpoll = "" if _MAXPOLL_RULE in waived else f" maxpoll {MAXPOLL}"
-    servers = "\n".join(f"server {s} iburst{maxpoll}" for s in cfg.time.servers)
+    nts = " nts" if cfg.time.nts else ""
+    # An NTS source with a certificate that looks expired or not yet valid is
+    # unusable, and chrony won't fall back to plain NTP, so a host whose RTC is
+    # far off would never get time. nocerttimecheck skips the date check for
+    # the first clock update only (#125).
+    nts_conf = "ntsdumpdir /var/lib/chrony\nnocerttimecheck 1\n" if cfg.time.nts else ""
+    servers = "\n".join(f"server {s} iburst{maxpoll}{nts}" for s in cfg.time.servers)
     hardening = [
         line
         for rule, line in (
@@ -95,7 +101,7 @@ driftfile /var/lib/chrony/drift
 makestep {cfg.time.chrony_makestep_threshold} 3
 rtcsync
 logdir /var/log/chrony
-{stig}__KS_GEN_EOF__
+{nts_conf}{stig}__KS_GEN_EOF__
 chmod 644 /etc/chrony.conf
 """
     if _LOCAL_SOCKET_RULE not in waived:
@@ -111,17 +117,32 @@ fi
 
 
 @dataclass(frozen=True)
-class _Rule:
+class TimeServers:
+    """`nts_rule`: the distro's stig NTS rule, when its profile selects one.
+    With time.nts off, that rule is tailored out and declared as an exception
+    rather than left failing unexplained (#125)."""
+
     id: str = meta.ID
     summary: str = meta.SUMMARY
     depends_on: list[str] = field(default_factory=lambda: list(meta.DEPENDS_ON))
-    stig_rules_affected: list[str] = field(default_factory=lambda: list(_CHRONY_RULES))
+    stig_rules_affected: list[str] = field(default_factory=lambda: list(CHRONY_RULES))
+    nts_rule: str | None = None
 
     def applies(self, cfg: HostConfig) -> bool:
         return True
 
+    def _waived_nts_rule(self, cfg: HostConfig) -> str | None:
+        """The NTS rule this rule tailors out and declares, or None: none when
+        the distro selects no NTS rule, NTS is on, or the operator already
+        declared it in cfg.exceptions (no duplicate entry)."""
+        rule = self.nts_rule
+        if rule is None or cfg.time.nts or rule in _excepted(cfg):
+            return None
+        return rule
+
     def emit_tailoring(self, cfg: HostConfig) -> list[TailoringOp]:
-        return []
+        rule = self._waived_nts_rule(cfg)
+        return [] if rule is None else [TailoringOp(rule_id=rule, action="disable")]
 
     def emit_post(self, cfg: HostConfig) -> str:
         return _emit(cfg)
@@ -130,7 +151,15 @@ class _Rule:
         return []
 
     def exception_entry(self, cfg: HostConfig) -> ExceptionEntry | None:
-        return None
+        rule = self._waived_nts_rule(cfg)
+        if rule is None:
+            return None
+        return ExceptionEntry(
+            rule_id=meta.ID,
+            summary=meta.NTS_EXCEPTION_SUMMARY,
+            stig_rules_disabled=[rule],
+            reason=meta.NTS_EXCEPTION_REASON,
+        )
 
 
-RULE: Rule = cast(Rule, _Rule())
+RULE: Rule = cast(Rule, TimeServers())

@@ -424,6 +424,24 @@ class Banner(StrictModel):
 class Time(StrictModel):
     servers: list[str] = Field(default_factory=lambda: ["pool.ntp.org"])
     chrony_makestep_threshold: float = 1.0
+    # Authenticate every server with NTS (#125). Every server must offer it:
+    # chrony never falls back to plain NTP for an `nts` source. Off means AL10's
+    # stig chrony_set_nts is tailored out and documented as an exception.
+    nts: bool = False
+
+    @model_validator(mode="after")
+    def _nts_servers_can_do_nts(self) -> Time:
+        # pool.ntp.org is the default and offers no NTS; turning nts on without
+        # replacing it would leave the host with no working time source.
+        if self.nts:
+            names = [(s, s.lower().rstrip(".")) for s in self.servers]
+            bad = [s for s, n in names if n == "pool.ntp.org" or n.endswith(".pool.ntp.org")]
+            if bad:
+                raise ValueError(
+                    f"time.nts requires NTS-capable servers; {', '.join(bad)} offers no NTS "
+                    "(set time.servers to servers that do)"
+                )
+        return self
 
 
 class CryptoPolicy(StrEnum):
@@ -1078,6 +1096,20 @@ class HostConfig(StrictModel):
                     f"a reserved or already-assigned mount point"
                 )
             seen.add(d.mount)
+        return self
+
+    @model_validator(mode="after")
+    def _nts_not_also_waived(self) -> HostConfig:
+        # time.nts writes `nts` on every server; an exception waiving
+        # chrony_set_nts says the opposite. Neither side can win silently: the
+        # exception would be inert, or nts would be ignored (#125).
+        if self.time.nts:
+            for ex in self.exceptions:
+                if any(r.endswith("_rule_chrony_set_nts") for r in ex.stig_rules_disabled):
+                    raise ValueError(
+                        f"time.nts is on but exception {ex.id!r} waives chrony_set_nts; "
+                        "drop one of them"
+                    )
         return self
 
     @model_validator(mode="after")

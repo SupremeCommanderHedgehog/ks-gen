@@ -10,3 +10,9 @@ from __future__ import annotations
 ID = "time_servers"
 SUMMARY = "Write a STIG-hardened chrony.conf with operator-chosen NTP servers (non-DoD by default)."
 DEPENDS_ON: list[str] = []
+NTS_EXCEPTION_SUMMARY = "chrony time sources are not authenticated with NTS."
+NTS_EXCEPTION_REASON = (
+    "time.nts is off: the configured time servers are used over plain NTP, so "
+    "chrony_set_nts cannot pass. Set time.nts: true with NTS-capable servers to "
+    "comply."
+)

@@ -107,6 +107,9 @@ def test_registry_alma10_re_exports_same_rule_instances_as_alma9():
         # AL10's stig profile selects none of the auditd action rules, so it
         # emits no set_value and has no STIG requirement to deviate from (#68).
         "auditd_actions",
+        # AL10's stig profile selects chrony_set_nts, which AL9's doesn't: with
+        # time.nts off it is tailored out and declared as an exception (#125).
+        "time_servers",
         # banner_text was divergent until #61: alma9 was referencing IDs its
         # own stig profile never selected, and dropping them left both distros
         # emitting identical tailoring.

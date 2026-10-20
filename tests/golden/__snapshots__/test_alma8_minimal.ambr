@@ -170,6 +170,7 @@
     servers:
     - pool.ntp.org
     chrony_makestep_threshold: 1.0
+    nts: false
   crypto:
     policy: MODERN
   packages:
