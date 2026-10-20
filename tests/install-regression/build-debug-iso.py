@@ -66,7 +66,6 @@ def main() -> int:
         ks_cfg=(bundle / "ks.cfg"),
         tailoring_xml=(bundle / "tailoring.xml"),
         out_iso=out_iso,
-        volid="ALMA9",
     )
     return 0
 

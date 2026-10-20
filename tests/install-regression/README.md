@@ -302,7 +302,8 @@ ok:   system_booted_in_fips_mode: absent from this datastream
   STIG). The vendor ISO's volume ID (`AlmaLinux-10-2-x86_64-dvd`) and layout
   (ESP as appended GPT partition 2) match the v2 ISO's, and the built
   installer's El Torito and ESP `grub.cfg` both carry the ks-gen entry. Both still
-  point at the hardcoded `ALMA9` label, which is #128.
+  pointed at the then-hardcoded `ALMA9` label (#128; installers are now
+  labelled `KS-AL<major>-<minor>`, e.g. `KS-AL10-2`).
 - **2026-06-12, AlmaLinux 9 default fixture** — 14 assertions.
 
 ## Eight traps documented for future maintainers

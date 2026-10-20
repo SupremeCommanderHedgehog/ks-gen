@@ -162,8 +162,9 @@ cd <repo-root>
   --volid ALMA9KS
 ```
 
-The `--volid ALMA9KS` label is distinct from the v0.1.0 default `ALMA9`
-to make the LABEL → boot-prompt mapping visually obvious below.
+The `--volid ALMA9KS` label is distinct from the default (`KS-AL<major>-<minor>`
+from the source ISO, e.g. `KS-AL9-8`) to make the LABEL → boot-prompt mapping
+visually obvious below.
 
 ### B. Create the VM (replaces Step 4)
 

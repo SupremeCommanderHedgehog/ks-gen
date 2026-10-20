@@ -5,7 +5,8 @@ import pytest
 from typer.testing import CliRunner
 
 from ks_gen.cli import app
-from ks_gen.iso import IsoBuildError, build_iso
+from ks_gen.iso import IsoBuild, IsoBuildError, VolidError, build_iso
+from ks_gen.loader import ExitCode
 
 runner = CliRunner()
 
@@ -219,12 +220,13 @@ ISOLINUX_STUB = "timeout 600\nlabel linux\n  kernel vmlinuz\n"
 GRUB_STUB = "set timeout=60\nmenuentry 'foo' { linuxefi vmlinuz\ninitrdefi initrd.img\n}\n"
 
 
-def _make_fake_run(missing=()):
-    """xorriso stub whose -extract fails for the given ISO paths."""
+def _make_fake_run(missing=(), *, volid="VENDOR", grub=None):
+    """xorriso stub whose -extract fails for the given ISO paths. The source
+    is labelled `volid`, and its grub configs read `grub` if given."""
 
     def fake_run(args, **kwargs):
         result = MagicMock()
-        result.stdout = "Volume Id    : VENDOR\n"
+        result.stdout = f"Volume Id    : {volid}\n"
         result.returncode = 0
         result.stderr = ""
         if "-extract" in args:
@@ -235,9 +237,8 @@ def _make_fake_run(missing=()):
                 result.stderr = "isofs: file not found"
                 return result
             dest = Path(args[idx + 2])
-            dest.write_text(
-                ISOLINUX_STUB if "isolinux" in iso_path else GRUB_STUB, encoding="utf-8"
-            )
+            text = ISOLINUX_STUB if "isolinux" in iso_path else (grub or GRUB_STUB)
+            dest.write_text(text, encoding="utf-8")
         return result
 
     return fake_run
@@ -331,9 +332,9 @@ def test_build_iso_efi_only_media_authors_without_bios_entry(tmp_path):
         patch("ks_gen.iso.builder.shutil.which", return_value="/usr/bin/xorriso"),
         patch("ks_gen.iso.builder.subprocess.run", side_effect=_make_fake_run(missing)) as run,
     ):
-        patched = build_iso(src, ks, tail, out, volid="ALMA10")
+        patched = build_iso(src, ks, tail, out, volid="ALMA10").patched
 
-    assert patched == ["/EFI/BOOT/grub.cfg"]
+    assert patched == ("/EFI/BOOT/grub.cfg",)
     args = _author_args(run)
     assert "/isolinux/isolinux.cfg" not in args
     assert "/boot/grub2/grub.cfg" not in args
@@ -348,9 +349,9 @@ def test_build_iso_reports_patched_bootloader_configs(tmp_path):
             side_effect=_make_fake_run(missing={"/isolinux/isolinux.cfg"}),
         ),
     ):
-        patched = build_iso(src, ks, tail, out, volid="ALMA10")
+        patched = build_iso(src, ks, tail, out, volid="ALMA10").patched
 
-    assert patched == ["/boot/grub2/grub.cfg", "/EFI/BOOT/grub.cfg"]
+    assert patched == ("/boot/grub2/grub.cfg", "/EFI/BOOT/grub.cfg")
 
 
 def _make_iso_cli_files(tmp_path, *, ks_has_url: bool):
@@ -369,7 +370,7 @@ def _make_iso_cli_files(tmp_path, *, ks_has_url: bool):
 
 def test_iso_cmd_autodetects_network_install_from_url_line(tmp_path):
     src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=True)
-    with patch("ks_gen.cli.build_iso") as mock_build:
+    with patch("ks_gen.cli.build_iso", return_value=_built()) as mock_build:
         result = runner.invoke(
             app,
             [
@@ -391,7 +392,7 @@ def test_iso_cmd_autodetects_network_install_from_url_line(tmp_path):
 
 def test_iso_cmd_autodetects_media_install_when_no_url_line(tmp_path):
     src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=False)
-    with patch("ks_gen.cli.build_iso") as mock_build:
+    with patch("ks_gen.cli.build_iso", return_value=_built()) as mock_build:
         result = runner.invoke(
             app,
             [
@@ -411,13 +412,19 @@ def test_iso_cmd_autodetects_media_install_when_no_url_line(tmp_path):
     assert mock_build.call_args.kwargs["network_install"] is False
 
 
+def _built(patched=("/isolinux/isolinux.cfg", "/EFI/BOOT/grub.cfg"), volid="KS-AL9-8"):
+    return IsoBuild(volid=volid, patched=tuple(patched))
+
+
 def _iso_cmd_args(src, ks, tail, out):
     return ["iso", "--src", str(src), "--ks", str(ks), "--tailoring", str(tail), "--out", str(out)]
 
 
 def test_iso_cmd_reports_patched_bootloader_configs(tmp_path):
     src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=False)
-    with patch("ks_gen.cli.build_iso", return_value=["/boot/grub2/grub.cfg", "/EFI/BOOT/grub.cfg"]):
+    with patch(
+        "ks_gen.cli.build_iso", return_value=_built(["/boot/grub2/grub.cfg", "/EFI/BOOT/grub.cfg"])
+    ):
         result = runner.invoke(app, _iso_cmd_args(src, ks, tail, out))
     assert result.exit_code == 0, result.output
     assert "/boot/grub2/grub.cfg" in result.output
@@ -426,7 +433,7 @@ def test_iso_cmd_reports_patched_bootloader_configs(tmp_path):
 
 def test_iso_cmd_warns_when_no_bios_bootloader_patched(tmp_path):
     src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=False)
-    with patch("ks_gen.cli.build_iso", return_value=["/EFI/BOOT/grub.cfg"]):
+    with patch("ks_gen.cli.build_iso", return_value=_built(["/EFI/BOOT/grub.cfg"])):
         result = runner.invoke(app, _iso_cmd_args(src, ks, tail, out))
     assert result.exit_code == 0, result.output
     assert "UEFI" in result.output
@@ -434,9 +441,7 @@ def test_iso_cmd_warns_when_no_bios_bootloader_patched(tmp_path):
 
 def test_iso_cmd_does_not_warn_when_bios_bootloader_patched(tmp_path):
     src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=False)
-    with patch(
-        "ks_gen.cli.build_iso", return_value=["/isolinux/isolinux.cfg", "/EFI/BOOT/grub.cfg"]
-    ):
+    with patch("ks_gen.cli.build_iso", return_value=_built()):
         result = runner.invoke(app, _iso_cmd_args(src, ks, tail, out))
     assert result.exit_code == 0, result.output
     assert "UEFI" not in result.output
@@ -444,7 +449,7 @@ def test_iso_cmd_does_not_warn_when_bios_bootloader_patched(tmp_path):
 
 def test_iso_cmd_rejects_no_network_install_flag_when_ks_has_url(tmp_path):
     src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=True)
-    with patch("ks_gen.cli.build_iso") as mock_build:
+    with patch("ks_gen.cli.build_iso", return_value=_built()) as mock_build:
         result = runner.invoke(
             app,
             [
@@ -466,7 +471,7 @@ def test_iso_cmd_rejects_no_network_install_flag_when_ks_has_url(tmp_path):
 
 def test_iso_cmd_rejects_network_install_flag_when_ks_has_no_url(tmp_path):
     src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=False)
-    with patch("ks_gen.cli.build_iso") as mock_build:
+    with patch("ks_gen.cli.build_iso", return_value=_built()) as mock_build:
         result = runner.invoke(
             app,
             [
@@ -484,3 +489,100 @@ def test_iso_cmd_rejects_network_install_flag_when_ks_has_no_url(tmp_path):
         )
     assert result.exit_code != 0
     mock_build.assert_not_called()
+
+
+# --- #128: the volume ID is derived from the source, not hardcoded ALMA9 ----
+
+_AL10_VENDOR = "AlmaLinux-10-2-x86_64-dvd"
+_AL10_GRUB = (
+    f"search --no-floppy --set=root -l '{_AL10_VENDOR}'\n"
+    "set timeout=60\n"
+    f"menuentry 'Install' {{ linuxefi vmlinuz inst.stage2=hd:LABEL={_AL10_VENDOR}\n"
+    "initrdefi initrd.img\n}\n"
+)
+
+
+def _build_capturing_grub(tmp_path, fake_run, **kwargs):
+    """build_iso with `fake_run` as xorriso; returns the result and the EFI
+    grub.cfg as authored (the staged copy is gone once build_iso returns)."""
+    src, ks, tail, out = _iso_inputs(tmp_path)
+    authored = {}
+
+    def run(args, **kw):
+        if "replay" in args:
+            i = args.index("/EFI/BOOT/grub.cfg")
+            authored["grub"] = Path(args[i - 1]).read_text(encoding="utf-8")
+        return fake_run(args, **kw)
+
+    with (
+        patch("ks_gen.iso.builder.shutil.which", return_value="/usr/bin/xorriso"),
+        patch("ks_gen.iso.builder.subprocess.run", side_effect=run) as mock_run,
+    ):
+        built = build_iso(src, ks, tail, out, **kwargs)
+    return built, authored["grub"], _author_args(mock_run)
+
+
+def test_build_iso_defaults_to_the_derived_volid(tmp_path):
+    """Our entry and the vendor's kept entries all look the media up by
+    KS-AL<major>-<minor>, and the ISO is authored with that label."""
+    built, grub, args = _build_capturing_grub(
+        tmp_path, _make_fake_run(volid=_AL10_VENDOR, grub=_AL10_GRUB)
+    )
+    assert built.volid == "KS-AL10-2"
+    assert args[args.index("-volid") + 1] == "KS-AL10-2"
+    assert _AL10_VENDOR not in grub
+    assert "-l 'KS-AL10-2'" in grub
+    assert "inst.ks=hd:LABEL=KS-AL10-2:/ks.cfg" in grub
+
+
+def test_build_iso_from_a_ks_gen_installer_keeps_its_label(tmp_path):
+    """Rebuilding from a ks-gen ISO, even one given a custom --volid, keeps
+    that label rather than deriving (WEB01 matches no AlmaLinux pattern)."""
+    first, grub, _ = _build_capturing_grub(
+        tmp_path, _make_fake_run(volid=_AL10_VENDOR, grub=_AL10_GRUB), volid="WEB01"
+    )
+    rebuilt, regrub, args = _build_capturing_grub(
+        tmp_path, _make_fake_run(volid=first.volid, grub=grub)
+    )
+    assert rebuilt.volid == "WEB01"
+    assert args[args.index("-volid") + 1] == "WEB01"
+    assert regrub == grub
+
+
+def test_build_iso_rejects_an_invalid_volid_before_running_xorriso(tmp_path):
+    src, ks, tail, out = _iso_inputs(tmp_path)
+    with (
+        patch("ks_gen.iso.builder.shutil.which", return_value="/usr/bin/xorriso"),
+        patch("ks_gen.iso.builder.subprocess.run") as run,
+        pytest.raises(VolidError),
+    ):
+        build_iso(src, ks, tail, out, volid="MY LABEL")
+    run.assert_not_called()
+
+
+def test_iso_cmd_defaults_volid_and_reports_it(tmp_path):
+    src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=False)
+    with patch("ks_gen.cli.build_iso", return_value=_built()) as mock_build:
+        result = runner.invoke(app, _iso_cmd_args(src, ks, tail, out))
+    assert result.exit_code == 0, result.output
+    assert mock_build.call_args.kwargs["volid"] is None
+    assert "volume ID KS-AL9-8" in result.output
+    assert "Rufus" not in result.output
+
+
+def test_iso_cmd_warns_when_the_volid_wont_survive_rufus_iso_mode(tmp_path):
+    src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=False)
+    args = [*_iso_cmd_args(src, ks, tail, out), "--volid", "web01-installer"]
+    with patch("ks_gen.cli.build_iso", return_value=_built(volid="web01-installer")):
+        result = runner.invoke(app, args)
+    assert result.exit_code == 0, result.output
+    assert "Rufus" in result.output
+
+
+def test_iso_cmd_invalid_volid_is_a_usage_error(tmp_path):
+    src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=False)
+    args = [*_iso_cmd_args(src, ks, tail, out), "--volid", "a b"]
+    with patch("ks_gen.cli.build_iso", side_effect=VolidError("invalid volume ID 'a b'")):
+        result = runner.invoke(app, args)
+    assert result.exit_code == int(ExitCode.USAGE)
+    assert "invalid volume ID" in result.output

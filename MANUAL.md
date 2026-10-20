@@ -991,8 +991,18 @@ ks-gen iso \
   --ks  build/web01/ks.cfg \
   --tailoring build/web01/tailoring.xml \
   --out web01-installer.iso \
-  --volid ALMA9            # default
+  --volid KS-AL9-8         # optional; this is the default for an AL9.8 source
 ```
+
+**Volume ID:** the boot entries find the media by `hd:LABEL=<volid>`.
+Without `--volid`, `ks-gen iso` derives `KS-AL<major>-<minor>` from the
+source ISO's own label (`AlmaLinux-9-8-x86_64-dvd` → `KS-AL9-8`,
+`AlmaLinux-10-2-x86_64-dvd` → `KS-AL10-2`), and prints it. That label names
+the release, differs from the stock vendor media's (so a vendor stick
+plugged in alongside can't answer the lookup), and fits a FAT32 label
+(11 characters, upper-case), which Rufus's ISO Image mode needs (§8.6). An
+explicit `--volid` that won't fit FAT32 gets a warning; one with spaces or
+over 32 characters is rejected.
 
 **Unattended boot:** the wrapper rewrites `isolinux/isolinux.cfg` and
 `EFI/BOOT/grub.cfg` to add a top-level "Unattended STIG install
@@ -1836,12 +1846,13 @@ drive's number wipes your OS.
    BIOS-CSM and UEFI targets. Pick GPT only if you know the target
    firmware has no CSM/legacy path.
 4. **Target system:** *BIOS or UEFI* (auto-set by the MBR choice).
-5. **Volume label:** must read exactly `ALMA9`. Rufus reads this
-   from the ISO's volid (which `ks-gen iso` sets via `-volid`), so
-   it should already be correct — but glance at the field before
-   clicking *Start*. **If it's anything else, type `ALMA9` in
+5. **Volume label:** must read exactly the volume ID `ks-gen iso`
+   printed (`Wrote … (volume ID KS-AL9-8; …)`, e.g. `KS-AL9-8` for an
+   AL9.8 source). Rufus reads this from the ISO's volid, so it should
+   already be correct — but glance at the field before clicking
+   *Start*. **If it's anything else, type the volume ID in
    manually.** The bootloader cmdline that ks-gen wrote references
-   `hd:LABEL=ALMA9` for both `inst.stage2=`, `inst.repo=`, and
+   `hd:LABEL=<volume ID>` for both `inst.stage2=`, `inst.repo=`, and
    `inst.ks=`. A label mismatch means anaconda can't find the
    install tree, the kickstart, or both.
 6. **File system:** *FAT32* (Rufus default for hybrid Linux ISOs).
@@ -2181,12 +2192,13 @@ If it's listed but its output isn't in the bundle, check
 Two near-certain causes:
 
 1. **Volume label mismatch.** The bootloader cmdline references the
-   install media by `hd:LABEL=ALMA9` for `inst.stage2=`,
+   install media by `hd:LABEL=<volume ID>` (the one `ks-gen iso`
+   printed, e.g. `KS-AL9-8`) for `inst.stage2=`,
    `inst.repo=`, and `inst.ks=`. If Rufus formatted the USB's FAT32
-   partition with a label other than `ALMA9`, none of those lookups
+   partition with any other label, none of those lookups
    resolve. Open the USB in Windows Explorer; the drive name must
-   read exactly `ALMA9`. If it doesn't, redo the write with Rufus's
-   "Volume label" field manually set to `ALMA9` before clicking
+   read exactly that volume ID. If it doesn't, redo the write with Rufus's
+   "Volume label" field manually set to it before clicking
    Start. See §8.6 step 2.
 2. **DD Image mode was picked at the ISOHybrid prompt.** Some UEFI
    firmwares only enumerate the ESP partition of a DD-written
