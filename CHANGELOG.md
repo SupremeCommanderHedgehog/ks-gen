@@ -3,6 +3,19 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.38.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.37.0...v0.38.0) (2026-10-20)
+
+
+### Features
+
+* **time:** add time.nts and document AL10's chrony_set_nts deviation ([#125](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/125)) ([#126](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/126)) ([51324ac](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/51324ac50946bd9fad44399d6aa896399f77d1a6))
+
+
+### Bug Fixes
+
+* **rules:** write a STIG-hardened chrony.conf and chrony-wait unit ([#50](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/50)) ([#124](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/124)) ([1915c66](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1915c660f88154bd4b51df2b98eb17a4375b7be1))
+* **verify:** never suggest waiving a rule ks-gen enforces ([#87](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/87)) ([#121](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/121)) ([795916a](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/795916a8e212cff42176d07e913e3f4ad8b6d56f))
+
 ## [0.37.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.36.0...v0.37.0) (2026-10-20)
 
 
