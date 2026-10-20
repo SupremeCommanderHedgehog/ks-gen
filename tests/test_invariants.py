@@ -80,14 +80,109 @@ def test_authorized_keys_always_before_sshd_touches(cfg):
     )
 
 
+def _services(script: str) -> tuple[set[str], set[str]]:
+    """(enabled, disabled) across every kickstart `services` line."""
+    enabled: set[str] = set()
+    disabled: set[str] = set()
+    for line in re.findall(r"^services\s+(.*)$", script, re.MULTILINE):
+        for flag, value in re.findall(r"--(enabled|disabled)=(\S+)", line):
+            names = {n for n in value.strip("\"'").split(",") if n}
+            (enabled if flag == "enabled" else disabled).update(names)
+    return enabled, disabled
+
+
+def _firewall_lockout_violations(script: str, port: int) -> list[str]:
+    """Why `script` could leave firewalld up without `port` open, or [] (#88).
+
+    Ordering inside the kickstart is not what protects ssh: %post runs in a
+    chroot where systemd is not PID 1, so nothing there can start firewalld
+    (`systemctl start` is ignored, `firewall-cmd` has no daemon to reach).
+    `services --enabled=firewalld` enables the unit during install and the
+    daemon first starts at first boot. What matters is that the port is in
+    firewalld's permanent config by then. So assert the mechanism that puts it
+    there: a real `firewall-offline-cmd --add-port` line (not a comment or an
+    echo), in a chrooted %post (a --nochroot one edits the installer, not the
+    target), marked --erroronfail (a failed write aborts the install instead
+    of shipping an unreachable host). And firewalld must actually be enabled,
+    or there is nothing to assert.
+    """
+    open_cmd = f"firewall-offline-cmd --add-port={port}/tcp"
+    m = re.search(rf"^[ \t]*{re.escape(open_cmd)}[ \t]*$", script, re.MULTILINE)
+    if m is None:
+        return [f"missing: a {open_cmd!r} command line"]
+    open_idx = m.start()
+    problems: list[str] = []
+    header_start = script.rfind("\n%post", 0, open_idx)
+    if header_start == -1 or script.rfind("\n%end", 0, open_idx) > header_start:
+        problems.append(f"{open_cmd} is not inside a %post section")
+    else:
+        header_end = script.find("\n", header_start + 1)
+        header = script[header_start + 1 : header_end if header_end != -1 else None]
+        if "--nochroot" in header:
+            problems.append(f"{open_cmd} runs in a --nochroot %post: {header!r}")
+        if "--erroronfail" not in header:
+            problems.append(f"{open_cmd} runs in a %post without --erroronfail: {header!r}")
+    enabled, disabled = _services(script)
+    if "firewalld" not in enabled or "firewalld" in disabled:
+        problems.append("firewalld is not enabled via `services --enabled`")
+    return problems
+
+
 @pytest.mark.parametrize("cfg", list(_fuzz_configs()))
-def test_ssh_port_opened_in_firewall_before_any_firewall_enable_command(cfg):
+def test_ssh_port_in_firewalld_config_before_first_boot(cfg):
+    """Lockout resistance: firewalld must never come up without ssh.port open."""
     script = _provisioning_script(cfg)
-    port_idx = script.find(f"--add-port={cfg.ssh.port}/tcp")
-    enable_idx = re.search(r"systemctl\s+(enable|start)\s+firewalld", script)
-    assert port_idx != -1, "ssh.port must be opened in the firewall during provisioning"
-    if enable_idx:
-        assert port_idx < enable_idx.start()
+    assert _firewall_lockout_violations(script, cfg.ssh.port) == []
+
+
+_GOOD_KS = """\
+services --enabled=chronyd,firewalld,sshd
+%post --erroronfail
+firewall-offline-cmd --add-port=2222/tcp
+%end
+"""
+_OPEN = "firewall-offline-cmd --add-port=2222/tcp\n"
+
+
+@pytest.mark.parametrize(
+    ("script", "expected"),
+    [
+        (_GOOD_KS, None),
+        (_GOOD_KS.replace("2222", "22"), "missing:"),
+        (_GOOD_KS.replace(_OPEN, "# was: " + _OPEN), "missing:"),
+        (_GOOD_KS.replace(_OPEN, "echo " + _OPEN), "missing:"),
+        (_GOOD_KS.replace("%post --erroronfail", "%post --nochroot --erroronfail"), "--nochroot"),
+        (_GOOD_KS.replace("%post --erroronfail", "%post"), "without --erroronfail"),
+        (_OPEN + _GOOD_KS.replace(_OPEN, ""), "not inside a %post"),
+        (_GOOD_KS.replace(_OPEN, "") + _OPEN, "not inside a %post"),
+        (_GOOD_KS.replace("firewalld,", ""), "not enabled"),
+        (_GOOD_KS + "services --disabled=firewalld\n", "not enabled"),
+        (_GOOD_KS.replace("=chronyd,firewalld,sshd", '="chronyd,firewalld,sshd"'), None),
+        ("services --enabled=firewalld\n%post --nochroot\n" + _OPEN.rstrip("\n"), "--nochroot"),
+    ],
+    ids=[
+        "good",
+        "port-never-opened",
+        "comment-only",
+        "echo-only",
+        "nochroot",
+        "no-erroronfail",
+        "before-any-post",
+        "after-end",
+        "not-enabled",
+        "disabled-later",
+        "quoted-services",
+        "no-trailing-newline",
+    ],
+)
+def test_firewall_lockout_check_fires(script, expected):
+    """#88: the old ordering half was guarded by a pattern that never matched,
+    so it never ran. Prove every branch of this check can fail."""
+    problems = _firewall_lockout_violations(script, 2222)
+    if expected is None:
+        assert problems == []
+    else:
+        assert any(expected in p for p in problems), problems
 
 
 @pytest.mark.parametrize("cfg", list(_fuzz_configs()))
