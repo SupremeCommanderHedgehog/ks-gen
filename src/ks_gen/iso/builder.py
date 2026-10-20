@@ -8,6 +8,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from ks_gen.iso._menu import IDEMPOTENCY_MARKER
 from ks_gen.iso.bootloader import (
     BootloaderRewriteError,
     rewrite_grub,
@@ -19,6 +20,10 @@ class IsoBuildError(Exception):
     pass
 
 
+class VolidError(IsoBuildError):
+    """The volume ID is unusable, or none can be derived: a usage error."""
+
+
 ISOLINUX_CFG = "/isolinux/isolinux.cfg"
 # EL10 dropped /isolinux — BIOS boot is grub2 there.
 GRUB_BIOS_CFG = "/boot/grub2/grub.cfg"
@@ -28,6 +33,13 @@ GRUB_EFI_CFG = "/EFI/BOOT/grub.cfg"
 ESP_GRUB_CFG = "::/EFI/BOOT/grub.cfg"
 
 _VOLID_RE = re.compile(r"^Volume Id\s*: (.*)$", re.MULTILINE)
+# What every `hd:LABEL=` / `search -l` reference can carry unescaped (no
+# spaces: those need \x20), within ISO9660's 32-byte volume ID.
+_VOLID_OK_RE = re.compile(r"^[A-Za-z0-9_.-]{1,32}$")
+# What also survives Rufus's ISO Image mode, which formats the stick FAT32 and
+# copies the label over: at most 11 characters, which Windows upper-cases.
+_FAT32_LABEL_RE = re.compile(r"^[A-Z0-9_-]{1,11}$")
+_ALMA_VOLID_RE = re.compile(r"^AlmaLinux-(\d+)-(\d+)-")
 _EFI_PATH_RE = re.compile(r"^-boot_image any efi_path='(.*)'$", re.MULTILINE)
 _APPENDED_EFI_RE = re.compile(r"^--interval:appended_partition_(\d+)_")
 # xorriso's "d" unit is a 512-byte block, and the range is inclusive.
@@ -40,13 +52,15 @@ def build_iso(
     tailoring_xml: Path,
     out_iso: Path,
     *,
-    volid: str,
+    volid: str | None = None,
     network_install: bool = False,
-) -> list[str]:
+) -> IsoBuild:
     """Repack `src_iso` with ks.cfg + tailoring.xml and an unattended boot
-    entry. Returns the ISO paths of the bootloader configs that were patched;
-    the EFI partition's copy is reported as `<image>:/EFI/BOOT/grub.cfg`.
+    entry, labelled `volid` or, by default, `default_volid` of the source's
+    own volume ID.
     """
+    if volid is not None:
+        validate_volid(volid)
     if shutil.which("xorriso") is None:
         raise IsoBuildError(
             "xorriso not on PATH (install: dnf install xorriso / brew install xorriso)"
@@ -71,6 +85,15 @@ def build_iso(
         _extract(src_iso, GRUB_EFI_CFG, efi_grub)
         staged.append((efi_grub, GRUB_EFI_CFG))
 
+        if volid is None:
+            # A source that is already a ks-gen installer keeps its label,
+            # whatever it is: its unattended entry is left as is (see
+            # rewrite_grub), and it looks the media up by that label.
+            if IDEMPOTENCY_MARKER in efi_grub.read_text(encoding="utf-8"):
+                volid = vendor_volid
+            else:
+                volid = default_volid(vendor_volid)
+
         for local, iso_path in staged:
             local.chmod(0o644)
             _rewrite_cfg(
@@ -90,7 +113,36 @@ def build_iso(
     reported = [iso_path for _, iso_path in staged]
     if esp is not None:
         reported.append(f"{esp.label}:{GRUB_EFI_CFG}")
-    return reported
+    return IsoBuild(volid=volid, patched=tuple(reported))
+
+
+def default_volid(vendor_volid: str) -> str:
+    """The installer's label for a source labelled `vendor_volid`:
+    `KS-AL<major>-<minor>` (#128). It differs from the vendor's own label,
+    so a stock vendor stick plugged in alongside can't answer the
+    installer's `hd:LABEL=` lookups, and it fits FAT32 (see
+    `is_fat32_safe`). It names the release, not the host: installers for
+    two hosts on one release share it unless given their own --volid."""
+    found = _ALMA_VOLID_RE.match(vendor_volid)
+    if found is None:
+        raise VolidError(
+            f"cannot derive a volume ID from the source ISO's {vendor_volid!r} "
+            "(expected an AlmaLinux-<major>-<minor>-... label); pass --volid"
+        )
+    return f"KS-AL{found.group(1)}-{found.group(2)}"
+
+
+def validate_volid(volid: str) -> None:
+    """Reject a volume ID the boot configs can't reference: over ISO9660's
+    32 bytes, or with characters `hd:LABEL=` would need escaped."""
+    if not _VOLID_OK_RE.match(volid):
+        raise VolidError(f"invalid volume ID {volid!r}: use 1-32 characters from A-Z a-z 0-9 _ . -")
+
+
+def is_fat32_safe(volid: str) -> bool:
+    """Whether `volid` survives Rufus's ISO Image mode unchanged, which the
+    MANUAL recommends for Windows: 11 characters at most, upper-case."""
+    return _FAT32_LABEL_RE.match(volid) is not None
 
 
 def _report_boot(src_iso: Path) -> str:
@@ -148,6 +200,16 @@ def _rewrite_cfg(
     except BootloaderRewriteError as e:
         raise IsoBuildError(f"bootloader rewrite aborted in {where}: {e}") from e
     local.write_text(patched, encoding="utf-8")
+
+
+@dataclass(frozen=True)
+class IsoBuild:
+    """What `build_iso` did: the volume ID it labelled the ISO with, and the
+    bootloader configs it patched (the EFI partition's copy as
+    `<image>:/EFI/BOOT/grub.cfg`)."""
+
+    volid: str
+    patched: tuple[str, ...]
 
 
 @dataclass(frozen=True)

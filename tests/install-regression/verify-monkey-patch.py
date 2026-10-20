@@ -35,11 +35,11 @@ print()
 from ks_gen.iso.bootloader import render_grub_cfg, render_isolinux_cfg
 
 print("Rendered grub.cfg (first 30 lines):")
-grub = render_grub_cfg(volid="ALMA9")
+grub = render_grub_cfg(volid="KS-AL9-8")
 for line in grub.splitlines()[:30]:
     print(" ", line)
 print()
 print("Rendered isolinux.cfg (first 30 lines):")
-isolinux = render_isolinux_cfg(volid="ALMA9")
+isolinux = render_isolinux_cfg(volid="KS-AL9-8")
 for line in isolinux.splitlines()[:30]:
     print(" ", line)

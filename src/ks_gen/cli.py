@@ -15,7 +15,14 @@ from ks_gen.config import (
     removed_distro_message,
 )
 from ks_gen.exceptions_report import managed_rule_ids
-from ks_gen.iso import GRUB_BIOS_CFG, ISOLINUX_CFG, IsoBuildError, build_iso
+from ks_gen.iso import (
+    GRUB_BIOS_CFG,
+    ISOLINUX_CFG,
+    IsoBuildError,
+    VolidError,
+    build_iso,
+    is_fat32_safe,
+)
 from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
 from ks_gen.registry import load_rules
@@ -186,7 +193,12 @@ def iso_cmd(
     ks: Path = typer.Option(..., "--ks", exists=True, dir_okay=False),  # noqa: B008
     tailoring: Path = typer.Option(..., "--tailoring", exists=True, dir_okay=False),  # noqa: B008
     out: Path = typer.Option(..., "--out", dir_okay=False),  # noqa: B008
-    volid: str = typer.Option("ALMA9", "--volid"),
+    volid: str | None = typer.Option(
+        None,
+        "--volid",
+        help="Volume ID the boot entries find the media by (hd:LABEL=). Default: "
+        "KS-AL<major>-<minor> from the source ISO's own, e.g. KS-AL10-2.",
+    ),
     network_install: bool | None = typer.Option(
         None,
         "--network-install/--no-network-install",
@@ -209,12 +221,25 @@ def iso_cmd(
         raise typer.Exit(code=int(ExitCode.USAGE))
 
     try:
-        patched = build_iso(src, ks, tailoring, out, volid=volid, network_install=network_install)
+        built = build_iso(src, ks, tailoring, out, volid=volid, network_install=network_install)
+    except VolidError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE)) from None
     except IsoBuildError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(code=int(ExitCode.TOOL_MISSING)) from None
-    typer.echo(f"Wrote {out} (unattended entry added to {', '.join(patched)})")
-    if not any(p in (ISOLINUX_CFG, GRUB_BIOS_CFG) for p in patched):
+    typer.echo(
+        f"Wrote {out} (volume ID {built.volid}; "
+        f"unattended entry added to {', '.join(built.patched)})"
+    )
+    if not is_fat32_safe(built.volid):
+        typer.echo(
+            f"warning: volume ID {built.volid!r} won't survive Rufus's ISO Image mode "
+            "(FAT32 labels are at most 11 characters, upper-case); the stick's label "
+            "would not match the boot entries. Write it in DD mode, or pick another --volid.",
+            err=True,
+        )
+    if not any(p in (ISOLINUX_CFG, GRUB_BIOS_CFG) for p in built.patched):
         typer.echo(
             "warning: source ISO has no BIOS bootloader config — the unattended "
             "entry only applies when booting under UEFI.",

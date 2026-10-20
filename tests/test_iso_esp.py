@@ -108,7 +108,7 @@ def test_esp_grub_cfg_carries_the_unattended_entry(tmp_path: Path, layout: str) 
     src = _make_source_iso(tmp_path, layout)
     ks, tail, out = _inputs(tmp_path)
 
-    patched = build_iso(src, ks, tail, out, volid="KSGEN")
+    patched = build_iso(src, ks, tail, out, volid="KSGEN").patched
 
     label = "/images/efiboot.img" if layout == "tree" else "EFI partition 2"
     assert patched[-1] == f"{label}:/EFI/BOOT/grub.cfg"
@@ -209,7 +209,7 @@ def test_mcopy_is_not_required_without_an_efi_image(tmp_path: Path) -> None:
     _sh("xorriso", "-as", "mkisofs", "-quiet", "-V", "VENDOR", "-o", src, tree)
     ks, tail, out = _inputs(tmp_path)
     with patch("ks_gen.iso.builder.shutil.which", side_effect=_which("mcopy")):
-        assert build_iso(src, ks, tail, out, volid="KSGEN") == ["/EFI/BOOT/grub.cfg"]
+        assert build_iso(src, ks, tail, out, volid="KSGEN").patched == ("/EFI/BOOT/grub.cfg",)
 
 
 def _report_only_run(report: str):
@@ -290,7 +290,7 @@ def test_appended_esp_is_copied_from_its_interval_and_appended_after_replay(
         patch("ks_gen.iso.builder.shutil.which", return_value="/usr/bin/x"),
         patch("ks_gen.iso.builder.subprocess.run", side_effect=fake_run) as run,
     ):
-        patched = build_iso(src, ks, tail, out, volid="KSGEN")
+        patched = build_iso(src, ks, tail, out, volid="KSGEN").patched
 
     assert copied == [b"E" * 512 * 3]
     assert patched[-1] == "EFI partition 2:/EFI/BOOT/grub.cfg"
