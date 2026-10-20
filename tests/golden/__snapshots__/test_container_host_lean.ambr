@@ -419,6 +419,42 @@
       useradd "${useradd_args[@]}" "$user"
   fi
   
+  # --- tighten init-file permissions (STIG) ---------------------------------
+  # useradd copies /etc/skel's dotfiles in at 0644, but the STIG rule
+  # file_permission_user_init_files_root needs every user's init files at 0740
+  # or stricter (#49). Despite the `_root` suffix, its OVAL checks every user.
+  # The name pattern is the STIG's var_user_initialization_files_regex,
+  # ^\.[\w\- ]+$, applied to regular files directly in $HOME. Strip only the
+  # offending bits, so owner bits are left alone. Runs for existing accounts
+  # too, since re-running the script is how an operator repairs one.
+  #
+  # The user can rewrite their own home while this runs, so root must never
+  # chmod in it: a dotfile swapped for a symlink between find's check and the
+  # chmod would hand root's chmod any file on the system. find therefore runs as
+  # the user, so chmod can't reach anything the user couldn't already change.
+  # setpriv rather than runuser, because runuser opens a PAM session, and in
+  # the install chroot that is the stack oscap has just hardened. -user only
+  # skips files the user can't chmod anyway, keeping their errors out of the log.
+  #
+  # The trailing slash follows a symlinked home (/home -> /var/home). LC_ALL=C
+  # keeps [[:alnum:]] ASCII, like the STIG's \w. The `cd /` matters: %post runs
+  # from /root, which the user can't enter, and find fails under -exec when it
+  # can't get back to its starting directory. Failing to tighten is a STIG
+  # finding, not a reason to abandon the rest of the setup, so it only warns.
+  home=$(getent passwd "$user" | cut -d: -f6) || true
+  if [ -n "$home" ] && [ -d "$home" ]; then
+      # Numeric ids: older setpriv (util-linux < 2.33, AlmaLinux 8) takes no names.
+      (cd / && LC_ALL=C setpriv --reuid "$(id -u "$user")" --regid "$(id -g "$user")" \
+          --init-groups -- \
+          find "$home/" -maxdepth 1 -type f -user "$user" -regextype posix-extended \
+          -regex '.*/\.[[:alnum:]_ -]+' -perm /0037 \
+          -exec chmod g-wx,o-rwx {} \; -printf '%p\n') |
+          while IFS= read -r f; do info "tightened $f"; done \
+          || warn "could not tighten init-file permissions in $home"
+  else
+      warn "home dir for '$user' not found; init-file permissions not tightened"
+  fi
+  
   # --- ensure subordinate id ranges -----------------------------------------
   # useradd auto-allocates these on Alma9, but a pre-existing account may lack
   # them. Compute the next free block and assign it via usermod.
@@ -463,7 +499,6 @@
   
   # --- optional: ssh key -----------------------------------------------------
   if [ -n "$ssh_key" ]; then
-      home=$(getent passwd "$user" | cut -d: -f6)
       [ -n "$home" ] || die "could not determine home dir for '$user'"
       info "installing SSH key into $home/.ssh/authorized_keys"
       install -d -m 0700 -o "$user" -g "$user" "$home/.ssh"
@@ -479,7 +514,6 @@
   
   # --- optional: starter Quadlet set (network + volume + container) ---------
   if [ "$scaffold_quadlet" -eq 1 ]; then
-      home=$(getent passwd "$user" | cut -d: -f6)
       [ -n "$home" ] || die "could not determine home dir for '$user'"
       qdir="$home/.config/containers/systemd"
       appdata="${CONTAINERS_ROOT}/${user}/appdata"
