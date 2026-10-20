@@ -853,6 +853,21 @@ matrix. Each entry:
 These flow straight into the generated `tailoring.xml`. Use them
 sparingly and keep the `reason` honest.
 
+`ks-gen gen` checks every id against the target distro's SSG datastream
+(the rule-id lists under `docs/audit-story/`, shipped in the package):
+
+- An id that isn't a rule in that datastream is an **error** (exit 2):
+  it would deselect nothing while `exceptions.md` documented it as
+  waived. A bare name like `encrypt_partitions` gets a hint with the
+  full `xccdf_org.ssgproject.content_rule_` id.
+- An id that exists but the `stig` profile never selects is a
+  **warning**: disabling it has no effect. (Only checked when
+  `meta.profile` is `stig`.)
+
+An id counts as known if the current SSG pin has it, or a supported
+older media release's stig profile selects it (offline installs
+remediate against the content on the media).
+
 ---
 
 ## 5. Subcommands
@@ -1018,7 +1033,7 @@ will give you autocomplete + inline validation via:
 |---|---|
 | 0 | Success |
 | 1 | Usage error (bad CLI arguments) |
-| 2 | Config invalid (YAML or schema failed) |
+| 2 | Config invalid (YAML or schema failed, or an exception names an unknown rule id) |
 | 3 | Rule conflict (e.g., `crypto.policy=MODERN` + `overrides.fips_mode=true`) |
 | 4 | Lint failure on generated `ks.cfg` |
 | 5 | External tool missing (`xorriso`, `ksvalidator`, `ssh`/`scp`) |

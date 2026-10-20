@@ -18,6 +18,7 @@ from ks_gen.iso import GRUB_BIOS_CFG, ISOLINUX_CFG, IsoBuildError, build_iso
 from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
 from ks_gen.registry import load_rules
+from ks_gen.ssg_ids import check_exception_ids
 from ks_gen.verify import run_verify
 from ks_gen.verify.auth import resolve_sudo_auth
 from ks_gen.verify.errors import VerifyError, error_label
@@ -66,6 +67,13 @@ def gen(
     except ConfigError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(code=int(e.exit_code)) from None
+    ids = check_exception_ids(cfg)
+    for w in ids.warnings:
+        typer.echo(f"warning: {w}", err=True)
+    if ids.errors:
+        for err in ids.errors:
+            typer.echo(f"error: {err}", err=True)
+        raise typer.Exit(code=int(ExitCode.CONFIG_INVALID))
     bundle = build_bundle(cfg)
     write_bundle(bundle, out)
     report = lint_kickstart(out / "ks.cfg")

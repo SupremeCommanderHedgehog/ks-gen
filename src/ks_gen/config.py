@@ -751,11 +751,10 @@ class Overrides(StrictModel):
 class ExceptionDecl(StrictModel):
     id: str
     reason: str
-    # NOTE: these ids reach tailoring.xml verbatim and, since #65, genuinely
-    # deselect rules — a typo'd or bare name silently suppresses nothing while
-    # exceptions.md presents it as a documented exception. Validating the shape
-    # here would reject previously-loadable host.yaml files, so it needs its own
-    # change with a release note rather than riding along in a bugfix. See #69.
+    # These ids reach tailoring.xml verbatim and, since #65, genuinely deselect
+    # rules. The schema stays free-form so every host.yaml keeps loading;
+    # `ks-gen gen` checks them against the distro's datastream instead (#69,
+    # ks_gen/ssg_ids.py) and refuses ids that would deselect nothing.
     stig_rules_disabled: list[str] = Field(..., min_length=1)
 
 
