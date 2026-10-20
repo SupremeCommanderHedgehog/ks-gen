@@ -19,6 +19,16 @@ Requires WSL (or Linux) with `qemu-system-x86_64`, `xorriso`, mtools, OVMF, and
 KVM. Everything it writes goes to `$BUILD`
 (default `~/.cache/ks-gen-install-regression`), never into the repo.
 
+AlmaLinux 10's standard `x86_64` media is built for **x86-64-v3** (AVX2, BMI2,
+FMA, MOVBE); the `x86_64_v2` ISO is the variant for older CPUs. Under KVM the
+harness passes the host CPU through (`-cpu host`), so the host itself must be
+v3: check with `/lib64/ld-linux-x86-64.so.2 --help | grep x86-64-v3`, which
+should say `supported`. Under TCG the harness uses `-cpu max`. Whether that covers
+v3 depends on the QEMU version, so a v3 ISO may not boot there. On such hosts,
+or ones without v3, use the v2 ISO.
+ks-gen's AL10 network-install mirrors point at the `x86_64` repo tree, so the
+v3 ISO is the one that matches a real install (#127).
+
 The VM needs outbound network through QEMU's user-mode NAT: network-install
 fixtures fetch packages, and smoke-check waits for chrony to actually sync
 (`chronyc waitsync`, up to 150s), so outbound UDP 123 must be open (#50). The
@@ -270,6 +280,29 @@ ok:   system_booted_in_fips_mode: absent from this datastream
   done, so it now passes rather than needing an `exceptions.md` entry.
   Note the mirror-image datastream split against AL10: `system_booted_in_fips_mode`
   is absent here and present there, `enable_dracut_fips_module` the reverse.
+- **2026-10-20, AlmaLinux 10.2 on the x86-64-v3 `x86_64` boot ISO** (#127) —
+  all three AL10 fixtures green end-to-end through `run-all.sh`, CD **and**
+  USB, under KVM with `-cpu host`. Every earlier AL10 run above booted the
+  `x86_64_v2` ISO; this is the first on the media that matches the `x86_64`
+  repo tree the network install pulls from:
+
+  | Fixture | Smoke checks | CD disk | USB disk |
+  |---|---|---|---|
+  | `al10-omit-dnf-automatic` (MODERN) | 38 | 4 GiB | 3.88 GiB |
+  | `al10-stig-crypto` (STIG, kernel FIPS) | 40 | 4 GiB | 3.95 GiB |
+  | `al10-nts` (MODERN + `time.nts`) | 39 | 3.94 GiB | 3.96 GiB |
+
+  Coverage previously seen only on v2 now passes on v3: the chrony STIG
+  directives and `chrony-wait` override (#124) on all three; `time is
+  NTS-authenticated` on `al10-nts` (#125); kernel FIPS on `al10-stig-crypto`,
+  whose bundle carries the `chrony_set_nts` exception with the FIPS / AES-SIV
+  reason and deselects the rule in `tailoring.xml` (#126); and the USB runs boot
+  through the ESP `grub.cfg` patching (#117). Nothing differed from the v2 runs
+  apart from slightly smaller disks (4.24 → 3.88–4 GiB MODERN, 4.36 → 3.95–4 GiB
+  STIG). The vendor ISO's volume ID (`AlmaLinux-10-2-x86_64-dvd`) and layout
+  (ESP as appended GPT partition 2) match the v2 ISO's, and the built
+  installer's El Torito and ESP `grub.cfg` both carry the ks-gen entry. Both still
+  point at the hardcoded `ALMA9` label, which is #128.
 - **2026-06-12, AlmaLinux 9 default fixture** — 14 assertions.
 
 ## Eight traps documented for future maintainers
