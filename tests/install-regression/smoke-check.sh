@@ -13,6 +13,34 @@ for svc in sshd chronyd firewalld auditd rsyslog; do
   ok "$svc active"
 done
 
+# --- #50: chrony.conf carries the STIG chronyd directives, and with
+#     `cmdport 0` root's chronyc must still reach chronyd over the local
+#     Unix socket. chrony-wait must be the override without `-h`, or it
+#     could never connect.
+grep -qx 'port 0' /etc/chrony.conf || fail "chrony.conf lacks 'port 0' (#50)"
+grep -qx 'cmdport 0' /etc/chrony.conf || fail "chrony.conf lacks 'cmdport 0' (#50)"
+grep -Eq '^server .* maxpoll 16' /etc/chrony.conf || fail "chrony.conf server lines lack maxpoll 16 (#50)"
+# waitsync, not just `sources`: `sources` exits 0 with nothing reachable.
+# Passing proves root's chronyc reaches chronyd over the local socket with
+# cmdport 0 AND that a source actually synced (up to 30 x 5s).
+chronyc waitsync 30 0 0 5 >/dev/null 2>&1 \
+  || fail "chrony never synced, or root's chronyc cannot reach chronyd over the local socket (#50): $(chronyc -n sources 2>&1 | tail -n +3 | tr '\n' ';')"
+ok "chrony.conf STIG directives present; chronyc answers over the local socket and synced"
+# #125: with time.nts every source is `nts`, so the sync above was NTS-authenticated.
+if grep -Eq '^server .* nts$' /etc/chrony.conf; then
+  # Captured, not piped into grep -q: an early grep exit can SIGPIPE chronyc
+  # and pipefail would report a failure that didn't happen.
+  authdata=$(chronyc -n authdata 2>/dev/null || true)
+  [[ "$authdata" == *" NTS "* ]] \
+    || fail "chrony.conf asks for NTS but chronyc authdata shows no NTS source (#125)"
+  ok "time is NTS-authenticated (#125)"
+fi
+if [[ -f /usr/lib/systemd/system/chrony-wait.service ]]; then
+  grep -Eq '^ExecStart=/usr/bin/chronyc waitsync ' /etc/systemd/system/chrony-wait.service \
+    || fail "chrony-wait.service override missing or still uses -h (#50)"
+  ok "chrony-wait.service override uses the local socket"
+fi
+
 # --- #118: on AL8, oscap's sshd_use_strong_rng makes sshd read the blocking
 #     /dev/random, and SSG never installs rngd on AlmaLinux, so the
 #     rngd_entropy rule does. sshd being up is not proof: this VM may simply

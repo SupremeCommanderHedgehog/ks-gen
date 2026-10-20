@@ -649,6 +649,16 @@ unexplained failure. AL8/AL9 don't select an NTS rule (#125). Turning
 `nts` on while an `exceptions:` entry waives `chrony_set_nts` is rejected
 as contradictory.
 
+**NTS doesn't work in FIPS mode, so `nts: true` is rejected with
+`crypto.policy: STIG`.** NTS key exchange runs over TLS and succeeds, but
+NTS protects each NTP packet with an AES-SIV cipher, and the FIPS crypto
+policy disables both AES-SIV variants chrony can use. Every source then
+stays unreachable and the host never gets time (seen on a real AL10 STIG
+install: chrony 4.8, gnutls 3.8.10). An AL10 STIG host therefore always
+has `chrony_set_nts` tailored out: ks-gen declares it with a reason that
+explains FIPS, unless you declared it yourself in `exceptions:`, in which
+case your reason is the one shown. Use NTS with `MODERN` or `FUTURE`.
+
 ### 4.9 `crypto`
 
 ```yaml

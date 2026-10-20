@@ -12,7 +12,8 @@ from __future__ import annotations
 from typing import cast
 
 from ks_gen.rules._types import Rule
-from ks_gen.rules.alma9.time_servers import CHRONY_RULES, RULE_PREFIX, TimeServers
+from ks_gen.rules.alma9.time_servers import CHRONY_RULES, TimeServers
+from ks_gen.ssg_ids import RULE_PREFIX
 
 _NTS_RULE = f"{RULE_PREFIX}chrony_set_nts"
 

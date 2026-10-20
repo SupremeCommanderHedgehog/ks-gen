@@ -1,0 +1,38 @@
+# AlmaLinux 10 NTS regression fixture (#125).
+#
+# Exercises time.nts: true end to end: every chrony source carries `nts`,
+# so chrony has no plain-NTP fallback and smoke-check's waitsync only passes
+# if NTS key exchange (TCP 4460) and authenticated sync really work. The
+# servers are public NTS endpoints, so the VM needs outbound TCP 4460 and
+# UDP 123.
+#
+# MODERN, not STIG: kernel FIPS mode disables the AES-SIV AEADs NTS protects
+# NTP packets with, so time.nts is rejected under STIG (found by running this
+# fixture with STIG: NTS-KE succeeded, then every source stayed unreachable).
+#
+# AL10 boot media carries no package payload, so install.source is network.
+system:
+  hostname: regression.local
+distro: alma10
+install:
+  source: network
+user:
+  admin:
+    name: opsadmin
+    authorized_keys:
+      - "__SSH_PUBKEY__"
+    sudo: nopasswd_yes
+crypto:
+  policy: MODERN
+time:
+  servers: [time.cloudflare.com, nts.netnod.se]
+  nts: true
+disk:
+  target: vda
+# smoke-check asserts the container-host layout unconditionally, as every
+# fixture enables it.
+containers:
+  enabled: true
+  users: []
+  volume:
+    size: "5G"

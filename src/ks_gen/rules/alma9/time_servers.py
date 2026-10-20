@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING, cast
 
 from ks_gen.rules._meta import time_servers as meta
 from ks_gen.rules._types import ExceptionEntry, Rule, TailoringOp
+from ks_gen.ssg_ids import RULE_PREFIX
 
 if TYPE_CHECKING:
     from ks_gen.config import HostConfig
 
-RULE_PREFIX = "xccdf_org.ssgproject.content_rule_"
 # Stig-selected chronyd rules this rule satisfies. It writes chrony.conf after
 # oscap remediates it, so the file must pass them itself or every host
 # regresses fixed -> fail (#50). The checks are the same on every supported
@@ -158,7 +158,7 @@ class TimeServers:
             rule_id=meta.ID,
             summary=meta.NTS_EXCEPTION_SUMMARY,
             stig_rules_disabled=[rule],
-            reason=meta.NTS_EXCEPTION_REASON,
+            reason=meta.NTS_EXCEPTION_REASON_FIPS if cfg.kernel_fips else meta.NTS_EXCEPTION_REASON,
         )
 
 

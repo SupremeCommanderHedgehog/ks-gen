@@ -225,3 +225,33 @@ def test_operator_waiver_is_not_declared_twice(minimal_cfg):
     }
     cfg = HostConfig.model_validate(data)
     assert AL10.emit_tailoring(cfg) == [] and AL10.exception_entry(cfg) is None
+
+
+def test_nts_is_rejected_on_a_fips_host(minimal_cfg):
+    """#125, found by an install run: under FIPS, NTS-KE succeeds but gnutls
+    refuses the AES-SIV AEAD for NTP packets, so chrony never syncs."""
+    from pydantic import ValidationError
+
+    from ks_gen.config import HostConfig
+
+    data = minimal_cfg.model_dump(exclude={"meta", "install"})
+    data |= {
+        "distro": "alma10",
+        "crypto": {"policy": "STIG"},
+        "time": {"servers": _NTS_SERVERS, "nts": True},
+    }
+    data["user"]["admin"]["authorized_keys"] = ["ssh-ed25519 A a@b", "ssh-rsa B a@b"]
+    with pytest.raises(ValidationError, match="kernel FIPS mode"):
+        HostConfig.model_validate(data)
+
+
+def test_alma10_stig_exception_explains_fips(minimal_cfg):
+    from ks_gen.config import HostConfig
+    from ks_gen.rules.alma10.time_servers import RULE as AL10
+
+    data = minimal_cfg.model_dump(exclude={"meta", "install"})
+    data |= {"distro": "alma10", "crypto": {"policy": "STIG"}}
+    data["user"]["admin"]["authorized_keys"] = ["ssh-ed25519 A a@b", "ssh-rsa B a@b"]
+    entry = AL10.exception_entry(HostConfig.model_validate(data))
+    assert entry is not None and "FIPS" in entry.reason
+    assert "FIPS" not in AL10.exception_entry(_nts(minimal_cfg, nts=False)).reason

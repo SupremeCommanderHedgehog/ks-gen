@@ -1099,6 +1099,21 @@ class HostConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
+    def _nts_not_under_fips(self) -> HostConfig:
+        # Verified on AL10 (chrony 4.8, gnutls 3.8.10, FIPS:STIG): NTS-KE
+        # succeeds over TLS, but the NTP packets need an AES-SIV AEAD and gnutls
+        # refuses both ("An algorithm that is not enabled was negotiated"), so
+        # every source stays unreachable and, with no plain-NTP fallback, the
+        # host never gets time (#125).
+        if self.time.nts and self.kernel_fips:
+            raise ValueError(
+                "time.nts cannot be used with crypto.policy STIG: kernel FIPS mode "
+                "disables the AES-SIV ciphers NTS authenticates NTP packets with, so "
+                "chrony would never sync. Leave time.nts off"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _nts_not_also_waived(self) -> HostConfig:
         # time.nts writes `nts` on every server; an exception waiving
         # chrony_set_nts says the opposite. Neither side can win silently: the
