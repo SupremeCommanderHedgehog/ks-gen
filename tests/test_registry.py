@@ -61,6 +61,10 @@ def test_registry_alma8_re_exports_same_rule_instances_as_alma9():
         # rules, whose checks read the Values; alma9 selects the `_stig`
         # variants, whose checks hardcode the accepted values (#68).
         "auditd_actions",
+        # rngd_entropy: AL8's stig profile applies sshd_use_strong_rng but its
+        # rngd rules are notapplicable on AlmaLinux, and AL8's /dev/random
+        # blocks, so alma8 installs rngd itself; alma9 never applies (#118).
+        "rngd_entropy",
     }
 
     alma9_rules = {r.id: r for r in load_rules("alma9")}

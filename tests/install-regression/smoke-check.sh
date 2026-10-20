@@ -13,6 +13,16 @@ for svc in sshd chronyd firewalld auditd rsyslog; do
   ok "$svc active"
 done
 
+# --- #118: on AL8, oscap's sshd_use_strong_rng makes sshd read the blocking
+#     /dev/random, and SSG never installs rngd on AlmaLinux, so the
+#     rngd_entropy rule does. sshd being up is not proof: this VM may simply
+#     have had entropy.
+if [[ "$(rpm -E %rhel 2>/dev/null || echo 0)" == 8 ]]; then
+  rpm -q rng-tools >/dev/null || fail "rng-tools not installed (#118: sshd can hang at boot)"
+  systemctl is-active --quiet rngd || fail "rngd not active (#118: sshd can hang at boot)"
+  ok "rngd active (#118)"
+fi
+
 # --- #53 regression: unattended_updates rule MUST cause dnf-automatic.timer
 #     to be enabled even when host.yaml's packages.required omitted
 #     dnf-automatic. Pre-#56, this timer doesn't exist and install dies

@@ -1065,6 +1065,7 @@ exact XCCDF IDs.
 | `usbguard` | Per `overrides.usbguard.enable`: either selects the USBGuard install + service oscap rules, or disables them. |
 | `kernel_module_blacklist` | Writes `/etc/modprobe.d/ks-gen-blacklist.conf` with `install <mod> /bin/true` lines for each configured module. |
 | `package_purge` | `dnf -y remove <packages.excluded>` after install completes — catches transitive pulls from group installs. |
+| `rngd_entropy` | AL8 only: installs `rng-tools` and enables `rngd`. The stig profile's `sshd_use_strong_rng` sets `SSH_USE_STRONG_RNG=32`, so sshd reads the blocking `/dev/random` at start, and the paired `package_rng-tools_installed` / `service_rngd_enabled` rules evaluate `notapplicable` on AlmaLinux (their RHEL platform check looks for an RPM named `redhat-release`). Without rngd, a low-entropy host never starts sshd (#118). This completes what the STIG asks for, so it has no tailoring and no exception. AL9/AL10 don't select `sshd_use_strong_rng` and their kernels' `/dev/random` doesn't block once seeded, so it never applies there. |
 | `unattended_updates` | Configures `dnf-automatic` for nightly security + monthly full updates and drops a `needs-restarting`-driven reboot timer that fires only inside `overrides.unattended_updates.reboot_window`. Stock `dnf-automatic.timer` is kept enabled with operator-supplied `OnCalendar` via drop-in. |
 
 ### What is NOT a rule (handled by oscap)
