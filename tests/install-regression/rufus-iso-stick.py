@@ -179,13 +179,14 @@ def build_stick(iso: Path, out: Path) -> None:
             check=True,
             capture_output=True,
         )
-        # xorriso keeps the ISO's read-only modes; the configs get rewritten.
-        # Symlinks are left alone: FAT has none, and mcopy copies their target.
+        # xorriso keeps the ISO's read-only modes, but the configs get
+        # rewritten and the tree removed afterwards. Owner-only: FAT32 has no
+        # modes to carry over. Symlinks are left alone; mcopy copies targets.
         for root, _dirs, names in os.walk(tree):
             for name in names:
                 if not (Path(root) / name).is_symlink():
-                    os.chmod(Path(root) / name, 0o644)
-            os.chmod(root, 0o755)
+                    os.chmod(Path(root) / name, 0o600)
+            os.chmod(root, 0o700)
 
         files = [f for f in tree.rglob("*") if f.is_file() and not f.is_symlink()]
         payload = sum(f.stat().st_size for f in files)
