@@ -1,7 +1,8 @@
 """alma8 ssh_keep_open — re-exports the alma9 implementation.
 
-firewalld is the default firewall on both RHEL 8 and 9. The
-`firewall-cmd --add-port` / `--permanent` flow is identical.
+firewalld is the default firewall on both RHEL 8 and 9, and
+`firewall-offline-cmd --add-port` (which writes the permanent config
+with no daemon, as %post's chroot requires) behaves the same on both.
 SELinux semanage port-rule semantics are unchanged.
 """
 
