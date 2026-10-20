@@ -1404,6 +1404,22 @@ help close the audit loop:
   which is more often a real correctness drift than a legitimate new
   exception. The two-flag dance forces an explicit operator decision.
 
+**Rules ks-gen enforces are never suggested** (#87), under any flag. A
+rule is *enforced* when an applicable ks-gen rule manages it
+(`stig_rules_affected` in `ks-gen rules --id <rule>`) and this
+`host.yaml` doesn't tailor it out: on a STIG host that's the FIPS
+rules (`enable_fips_mode`, `sysctl_crypto_fips_enabled`, ...), the
+crypto-policy sshd rules, and the auditd actions. When one fails, the
+enforcement didn't take — say the host isn't really in FIPS mode
+because dracut failed or it hasn't rebooted yet — and an exception
+would only hide that. It can't fix it either: kernel FIPS derives from
+`crypto.policy`, never from `exceptions`. `verify` lists each withheld
+rule on stderr (and in `--format json` as `withheld_suggestions`) with
+the ks-gen rule that enforces it; fix the host, or change that rule's
+config (e.g. `crypto.policy`). To accept one deliberately anyway, write
+the exception into `exceptions:` by hand: a declared exception tailors
+the rule out, so ks-gen stops enforcing it.
+
 Worked example:
 
 ```bash
