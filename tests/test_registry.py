@@ -110,6 +110,9 @@ def test_registry_alma10_re_exports_same_rule_instances_as_alma9():
         # AL10's stig profile selects chrony_set_nts, which AL9's doesn't: with
         # time.nts off it is tailored out and declared as an exception (#125).
         "time_servers",
+        # AL10's stig profile selects file_permission_user_init_files where
+        # AL9's selects the _root variant (#131).
+        "skel_init_files",
         # banner_text was divergent until #61: alma9 was referencing IDs its
         # own stig profile never selected, and dropping them left both distros
         # emitting identical tailoring.

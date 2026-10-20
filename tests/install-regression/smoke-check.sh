@@ -10,7 +10,7 @@ ok()   { echo "ok:   $*"; }
 # files directly in it matching var_user_initialization_files_regex (#49).
 loose_init_files() {
   LC_ALL=C find "$1/" -maxdepth 1 -type f -regextype posix-extended \
-    -regex '.*/\.[[:alnum:]_ -]+' -perm /0037 -printf '%p=%m ' 2>/dev/null || true
+    -regex '.*/\.[[:alnum:]_ -]+' -perm /7037 -printf '%p=%m ' 2>/dev/null || true
 }
 
 # --- Core services kickstart says it enables (#57 acceptance: "install
@@ -366,10 +366,28 @@ else
   done
 fi
 
+# --- #131: /etc/skel's init files are tight, so a home made from it with plain
+#     `useradd -m` (as an operator would, after install) passes. The user is
+#     created here so the live scan below covers it, and removed after.
+loose=$(loose_init_files /etc/skel)
+[[ -z "$loose" ]] || fail "/etc/skel has init files looser than 0740: $loose(#131)"
+ok "/etc/skel init files are 0740 or stricter ($(stat -c '%n=%a' /etc/skel/.bashrc))"
+SKEL_USER=ksgen-skelcheck
+# A leftover from an earlier, failed run on this VM would make useradd fail.
+userdel -r "$SKEL_USER" 2>/dev/null || true
+trap 'userdel -r "$SKEL_USER" 2>/dev/null || true' EXIT
+useradd -m "$SKEL_USER" || fail "useradd -m $SKEL_USER failed"
+skel_home=$(getent passwd "$SKEL_USER" | cut -d: -f6 || true)
+[[ -f "$skel_home/.bashrc" ]] || fail "useradd -m $SKEL_USER copied no .bashrc into '$skel_home' — nothing was tested"
+loose=$(loose_init_files "$skel_home")
+[[ -z "$loose" ]] || fail "a plain useradd -m home has init files looser than 0740: $loose(#131)"
+ok "plain useradd -m home gets init files 0740 or stricter"
+
 # --- #49: the STIG init-file rule, live. It checks every user's init files,
-#     so this covers the admin user and root on every fixture, and any
-#     container users above. AL8/AL9's stig selects the _root variant, AL10's
-#     the plain one (same var_user_initialization_files_regex). Selection comes
+#     so this covers the admin user and root on every fixture, any container
+#     users above, and the plain useradd -m user (#131). AL8/AL9's stig
+#     selects the _root variant, AL10's the plain one (same
+#     var_user_initialization_files_regex). Selection comes
 #     from the ARF, where an unselected rule reads notselected: `--rule`
 #     evaluates a rule whether or not the profile selects it, so a live scan
 #     of the unselected variant would assert something the profile doesn't.

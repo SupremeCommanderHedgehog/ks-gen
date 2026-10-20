@@ -9,4 +9,6 @@ from __future__ import annotations
 
 ID = "admin_user_and_keys"
 SUMMARY = "Create wheel admin, drop authorized_keys, sudoers fragment."
-DEPENDS_ON: list[str] = []
+# skel_init_files tightens /etc/skel before this rule's %post creates a home
+# from it (#131).
+DEPENDS_ON: list[str] = ["skel_init_files"]
