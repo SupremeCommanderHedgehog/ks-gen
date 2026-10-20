@@ -5,7 +5,7 @@ import pytest
 from typer.testing import CliRunner
 
 from ks_gen.cli import app
-from ks_gen.iso import IsoBuild, IsoBuildError, VolidError, build_iso
+from ks_gen.iso import IsoBuild, IsoBuildError, KickstartReadError, VolidError, build_iso
 from ks_gen.loader import ExitCode
 
 runner = CliRunner()
@@ -220,9 +220,12 @@ def test_build_iso_forwards_network_install(tmp_path, network_install, ks_text, 
     assert rg.call_args.kwargs["network_install"] is expected
 
 
-def test_build_iso_reports_a_missing_ks_cfg(tmp_path):
+@pytest.mark.parametrize("bad", ["missing", "latin-1"])
+def test_build_iso_reports_an_unreadable_ks_cfg(tmp_path, bad):
     ks = tmp_path / "ks.cfg"
-    with pytest.raises(IsoBuildError, match="cannot read"):
+    if bad == "latin-1":
+        ks.write_bytes("# caf\xe9\n".encode("latin-1"))
+    with pytest.raises(KickstartReadError, match="cannot read"):
         build_iso(tmp_path / "src.iso", ks, tmp_path / "t.xml", tmp_path / "o.iso")
 
 
@@ -508,11 +511,11 @@ def test_iso_cmd_rejects_network_install_flag_when_ks_has_no_url(tmp_path):
     mock_build.assert_not_called()
 
 
-def test_iso_cmd_accepts_a_non_utf8_ks_cfg(tmp_path):
-    """Detection reads ASCII keywords only; a Latin-1 comment is no error."""
+def test_iso_cmd_rejects_a_non_utf8_ks_cfg(tmp_path):
+    """Anaconda reads ks.cfg as UTF-8; refuse it at build time, not install."""
     src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=True)
     ks.write_bytes("# caf\xe9\n".encode("latin-1") + ks.read_bytes())
-    with patch("ks_gen.cli.build_iso", return_value=_built()) as mock_build:
+    with patch("ks_gen.cli.build_iso") as mock_build:
         result = runner.invoke(
             app,
             [
@@ -527,8 +530,9 @@ def test_iso_cmd_accepts_a_non_utf8_ks_cfg(tmp_path):
                 str(out),
             ],
         )
-    assert result.exit_code == 0, result.output
-    assert mock_build.call_args.kwargs["network_install"] is True
+    assert result.exit_code == int(ExitCode.USAGE), result.output
+    assert "cannot read" in result.output
+    mock_build.assert_not_called()
 
 
 # --- #128: the volume ID is derived from the source, not hardcoded ALMA9 ----

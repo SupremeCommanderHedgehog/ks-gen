@@ -24,6 +24,10 @@ class VolidError(IsoBuildError):
     """The volume ID is unusable, or none can be derived: a usage error."""
 
 
+class KickstartReadError(IsoBuildError):
+    """ks.cfg can't be read as the UTF-8 anaconda parses it: a usage error."""
+
+
 ISOLINUX_CFG = "/isolinux/isolinux.cfg"
 # EL10 dropped /isolinux — BIOS boot is grub2 there.
 GRUB_BIOS_CFG = "/boot/grub2/grub.cfg"
@@ -42,8 +46,7 @@ _FAT32_LABEL_RE = re.compile(r"^[A-Z0-9_-]{1,11}$")
 _ALMA_VOLID_RE = re.compile(r"^AlmaLinux-(\d+)-(\d+)-")
 # Top-level `%` commands; any other `%` line opens a section that runs to
 # %end, and a `url` line inside one (a %post heredoc, say) isn't the source.
-# A stray %end outside a section opens nothing.
-_KS_PERCENT_COMMANDS = frozenset({"%include", "%ksappend", "%end"})
+_KS_PERCENT_COMMANDS = frozenset({"%include", "%ksappend"})
 _EFI_PATH_RE = re.compile(r"^-boot_image any efi_path='(.*)'$", re.MULTILINE)
 _APPENDED_EFI_RE = re.compile(r"^--interval:appended_partition_(\d+)_")
 # xorriso's "d" unit is a 512-byte block, and the range is inclusive.
@@ -69,13 +72,7 @@ def build_iso(
     if volid is not None:
         validate_volid(volid)
     if network_install is None:
-        try:
-            # Detection needs only ASCII keywords; the file itself is copied
-            # onto the media byte for byte.
-            ks_text = ks_cfg.read_text(encoding="utf-8", errors="replace")
-        except OSError as e:
-            raise IsoBuildError(f"cannot read {ks_cfg}: {e}") from e
-        network_install = kickstart_is_network(ks_text)
+        network_install = kickstart_file_is_network(ks_cfg)
     if shutil.which("xorriso") is None:
         raise IsoBuildError(
             "xorriso not on PATH (install: dnf install xorriso / brew install xorriso)"
@@ -168,11 +165,23 @@ def kickstart_is_network(ks_text: str) -> bool:
             continue
         if in_section:
             in_section = words[0] != "%end"
+        elif words[0] == "%end":
+            continue  # stray, outside any section: opens nothing
         elif words[0].startswith("%") and words[0] not in _KS_PERCENT_COMMANDS:
             in_section = True
         elif words[0] == "url":
             return True
     return False
+
+
+def kickstart_file_is_network(ks_cfg: Path) -> bool:
+    """`kickstart_is_network` of a ks.cfg file. Read strictly, as anaconda
+    reads it: a file it can't decode should fail the build, not the
+    install. Raises KickstartReadError."""
+    try:
+        return kickstart_is_network(ks_cfg.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError) as e:
+        raise KickstartReadError(f"cannot read {ks_cfg} as UTF-8: {e}") from e
 
 
 def is_fat32_safe(volid: str) -> bool:

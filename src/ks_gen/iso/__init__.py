@@ -6,9 +6,11 @@ from ks_gen.iso.builder import (
     ISOLINUX_CFG,
     IsoBuild,
     IsoBuildError,
+    KickstartReadError,
     VolidError,
     build_iso,
     is_fat32_safe,
+    kickstart_file_is_network,
     kickstart_is_network,
 )
 
@@ -18,8 +20,10 @@ __all__ = [
     "ISOLINUX_CFG",
     "IsoBuild",
     "IsoBuildError",
+    "KickstartReadError",
     "VolidError",
     "build_iso",
     "is_fat32_safe",
+    "kickstart_file_is_network",
     "kickstart_is_network",
 ]

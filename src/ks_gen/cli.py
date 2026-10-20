@@ -18,10 +18,11 @@ from ks_gen.iso import (
     GRUB_BIOS_CFG,
     ISOLINUX_CFG,
     IsoBuildError,
+    KickstartReadError,
     VolidError,
     build_iso,
     is_fat32_safe,
-    kickstart_is_network,
+    kickstart_file_is_network,
 )
 from ks_gen.lint import lint_kickstart
 from ks_gen.loader import ConfigError, ExitCode, load_host_config
@@ -207,8 +208,11 @@ def iso_cmd(
         "detected from whether the kickstart has a `url` install source.",
     ),
 ) -> None:
-    # Only ASCII keywords matter; ks.cfg is copied onto the media as is.
-    ks_is_network = kickstart_is_network(ks.read_text(encoding="utf-8", errors="replace"))
+    try:
+        ks_is_network = kickstart_file_is_network(ks)
+    except KickstartReadError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE)) from None
     if network_install is None:
         network_install = ks_is_network
     elif network_install != ks_is_network:
@@ -222,7 +226,7 @@ def iso_cmd(
 
     try:
         built = build_iso(src, ks, tailoring, out, volid=volid, network_install=network_install)
-    except VolidError as e:
+    except (VolidError, KickstartReadError) as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(code=int(ExitCode.USAGE)) from None
     except IsoBuildError as e:

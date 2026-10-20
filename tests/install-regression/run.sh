@@ -266,8 +266,10 @@ echo "expected container users: ${EXPECTED_CONTAINER_USERS:-<none>}"
 # kickstart's `url` (#136). Worked out here from ks.cfg rather than taken
 # from build-debug-iso.py, so the check below doesn't trust what it checks.
 INSTALL_KIND="$("$KS_GEN_PY" -c 'import sys
-from ks_gen.iso import kickstart_is_network
-print("network" if kickstart_is_network(sys.stdin.read()) else "media")' < "$BUNDLE_DIR/ks.cfg")"
+from pathlib import Path
+from ks_gen.iso import kickstart_file_is_network
+print("network" if kickstart_file_is_network(Path(sys.argv[1])) else "media")' \
+  "$BUNDLE_DIR/ks.cfg")"
 if [[ "$INSTALL_KIND" == network ]]; then EXPECT_INST_REPO=no; else EXPECT_INST_REPO=yes; fi
 echo "install source: $INSTALL_KIND (boot entry inst.repo=: $EXPECT_INST_REPO)"
 
