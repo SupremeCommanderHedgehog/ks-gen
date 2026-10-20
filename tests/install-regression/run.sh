@@ -294,7 +294,8 @@ check_boot_entry() {
 
 # The built ISO's own entry, before anything boots: a wrong one (say a
 # SKIP_ISO_BUILD reuse of an ISO from before #136) fails in seconds, not after
-# an install. The ESP image's grub.cfg is patched identically.
+# an install. Only the tree's grub.cfg: the EFI image's copy, which the cd
+# and usb modes boot, is covered by the booted check in step 7b.
 iso_grub="$BUILD/installer-grub.cfg"
 xorriso -osirrox on -indev "$INSTALLER_ISO" -extract /EFI/BOOT/grub.cfg "$iso_grub" \
   >/dev/null 2>&1 || { echo "cannot read /EFI/BOOT/grub.cfg out of $INSTALLER_ISO" >&2; exit 1; }
@@ -341,7 +342,7 @@ elif [[ "$MEDIA" == usb-iso ]]; then
   # filesystem, the way Rufus does. ~ISO size; a DVD stick is ~11 GiB.
   # Through tee, so a DVD-sized write streams and a failure keeps its output
   # (pipefail carries the script's status).
-  "$KS_GEN_PY" "$HERE/rufus-iso-stick.py" "$INSTALLER_ISO" "$USB_ISO_IMG" \
+  "$KS_GEN_PY" -u "$HERE/rufus-iso-stick.py" "$INSTALLER_ISO" "$USB_ISO_IMG" \
     | tee "$BUILD/rufus-iso.log"
   # Rufus's RH8+ rewrite turns inst.stage2= into inst.repo=, so that stick
   # boots with one whatever the ISO's entry says.
@@ -442,11 +443,14 @@ SSH_ERR="$BUILD/ssh-wait.err"
 # The kernel logs its command line at boot; the installer's is the first one
 # with inst.ks= (the installed system's comes later, without it). Booted
 # rather than built, so it covers the usb-iso stick's rewritten grub.cfg too.
-# Returns 0 without checking while the line hasn't appeared yet.
+# Returns 0 without checking while the line hasn't appeared yet. Matched
+# through build-debug-iso.py's last argument, so a line QEMU has only half
+# written to serial.log yet isn't taken for the whole one.
 boot_checked=""
 check_booted_entry() {
   local line
-  line="$(grep -a -m1 'Command line: .*inst\.ks=' "$SERIAL_LOG" 2>/dev/null || true)"
+  line="$(grep -a -m1 'Command line: .*inst\.ks=.* console=ttyS0,115200n8' "$SERIAL_LOG" \
+    2>/dev/null || true)"
   [[ -n "$line" ]] || return 0
   line="${line%$'\r'}"
   echo "installer kernel ${line#*] }"
@@ -496,7 +500,7 @@ if ! ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 true 2>"$SSH_ERR"; then
   exit 1
 fi
 
-check_booted_entry || exit 1
+[[ -n "$boot_checked" ]] || check_booted_entry || exit 1
 if [[ -z "$boot_checked" ]]; then
   echo "no installer kernel command line in $SERIAL_LOG" >&2
   exit 1

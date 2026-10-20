@@ -40,8 +40,11 @@ _VOLID_OK_RE = re.compile(r"^[A-Za-z0-9_.-]{1,32}$")
 # copies the label over: at most 11 characters, which Windows upper-cases.
 _FAT32_LABEL_RE = re.compile(r"^[A-Z0-9_-]{1,11}$")
 _ALMA_VOLID_RE = re.compile(r"^AlmaLinux-(\d+)-(\d+)-")
-# The install source ks.cfg.j2 writes for install.source: network.
-_URL_SOURCE_RE = re.compile(r"(?m)^url\s+--url=")
+# Kickstart sections, which run to %end; a `url` line inside one (a %post
+# heredoc, say) isn't the install source.
+_KS_SECTIONS = frozenset(
+    {"%pre", "%pre-install", "%post", "%packages", "%onerror", "%traceback", "%addon", "%anaconda"}
+)
 _EFI_PATH_RE = re.compile(r"^-boot_image any efi_path='(.*)'$", re.MULTILINE)
 _APPENDED_EFI_RE = re.compile(r"^--interval:appended_partition_(\d+)_")
 # xorriso's "d" unit is a 512-byte block, and the range is inclusive.
@@ -67,7 +70,11 @@ def build_iso(
     if volid is not None:
         validate_volid(volid)
     if network_install is None:
-        network_install = kickstart_is_network(ks_cfg.read_text(encoding="utf-8"))
+        try:
+            ks_text = ks_cfg.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            raise IsoBuildError(f"cannot read {ks_cfg}: {e}") from e
+        network_install = kickstart_is_network(ks_text)
     if shutil.which("xorriso") is None:
         raise IsoBuildError(
             "xorriso not on PATH (install: dnf install xorriso / brew install xorriso)"
@@ -150,8 +157,20 @@ def kickstart_is_network(ks_text: str) -> bool:
     """Whether a kickstart installs from a `url` source, so its boot entries
     should drop `inst.repo=hd:LABEL=` (`build_iso`'s `network_install`).
     Shared by `ks-gen iso` and the install-regression harness, which must
-    boot the same entries operators get (#136)."""
-    return _URL_SOURCE_RE.search(ks_text) is not None
+    boot the same entries operators get (#136). Any `url` command counts
+    (`--url`, `--mirrorlist`, `--metalink`), but not one inside a section."""
+    in_section = False
+    for line in ks_text.splitlines():
+        words = line.split()
+        if not words:
+            continue
+        if in_section:
+            in_section = words[0] != "%end"
+        elif words[0] in _KS_SECTIONS:
+            in_section = True
+        elif words[0] == "url":
+            return True
+    return False
 
 
 def is_fat32_safe(volid: str) -> bool:

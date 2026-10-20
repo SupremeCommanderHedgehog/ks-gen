@@ -25,7 +25,7 @@ from pathlib import Path
 
 # Import bootloader FIRST so the names exist in its namespace.
 from ks_gen.iso import bootloader  # noqa: E402
-from ks_gen.iso.builder import build_iso, kickstart_is_network  # noqa: E402
+from ks_gen.iso.builder import build_iso  # noqa: E402
 
 # inst.text       — TUI installer, no GUI
 # inst.notmux     — don't wrap the UI in a tmux session; write straight to the
@@ -37,7 +37,8 @@ from ks_gen.iso.builder import build_iso, kickstart_is_network  # noqa: E402
 # given, the last one becomes /dev/console — if that's tty0, anaconda writes
 # its UI to the (invisible-under-nographic) framebuffer and the install hangs
 # waiting for input we can never send. The first end-to-end attempt lost 2h
-# of wall-clock to that exact failure mode.
+# of wall-clock to that exact failure mode. run.sh's boot-entry check also
+# keys on the trailing console= to know the logged command line is whole.
 DEBUG_KERNEL_ARGS = "inst.text inst.notmux inst.console=ttyS0,115200n8 console=ttyS0,115200n8"
 
 # Replace `quiet` with the debug-friendly kernel args in both menu templates.
@@ -61,16 +62,13 @@ def main() -> int:
     src_iso = Path(sys.argv[1])
     bundle = Path(sys.argv[2])
     out_iso = Path(sys.argv[3])
-    ks_cfg = bundle / "ks.cfg"
-    # build_iso decides it from ks.cfg when unset, as for `ks-gen iso`, so a
-    # network fixture boots the entry without inst.repo=hd:LABEL= (#136).
-    # Printed for the log only; run.sh checks the built entry itself.
-    network = kickstart_is_network(ks_cfg.read_text(encoding="utf-8"))
-    print(f"build-debug-iso: network_install={network}")
 
+    # network_install is left to build_iso, which reads it off ks.cfg as for
+    # `ks-gen iso`, so a network fixture boots the entry without
+    # inst.repo=hd:LABEL= (#136). run.sh checks the built entry.
     build_iso(
         src_iso=src_iso,
-        ks_cfg=ks_cfg,
+        ks_cfg=(bundle / "ks.cfg"),
         tailoring_xml=(bundle / "tailoring.xml"),
         out_iso=out_iso,
         # Default: KS-AL<major>-<minor> from the source. VOLID overrides it,

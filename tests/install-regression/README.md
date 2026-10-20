@@ -128,8 +128,8 @@ anaconda's "Installation source" error in either mode.
 
 The harness ISO carries the boot entries `ks-gen iso` would build for the
 same bundle (#136). `build_iso` decides `network_install` from `ks.cfg`
-when it isn't given (`ks_gen.iso.kickstart_is_network`: a `url --url=`
-line), so a network fixture's entry has no `inst.repo=hd:LABEL=`. `run.sh`
+when it isn't given (`ks_gen.iso.kickstart_is_network`: a `url` command
+outside any `%` section), so a network fixture's entry has no `inst.repo=hd:LABEL=`. `run.sh`
 checks it twice: in the built ISO's `/EFI/BOOT/grub.cfg` before QEMU starts,
 and in the installer kernel's command line in `serial.log` as soon as it is
 logged. Either fails the run if `inst.repo=` is present for a network

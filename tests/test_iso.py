@@ -220,6 +220,15 @@ def test_build_iso_forwards_network_install(tmp_path, network_install, ks_text, 
     assert rg.call_args.kwargs["network_install"] is expected
 
 
+@pytest.mark.parametrize("bad", ["missing", "latin-1"])
+def test_build_iso_reports_an_unreadable_ks_cfg(tmp_path, bad):
+    ks = tmp_path / "ks.cfg"
+    if bad == "latin-1":
+        ks.write_bytes("# caf\xe9\n".encode("latin-1"))
+    with pytest.raises(IsoBuildError, match="cannot read"):
+        build_iso(tmp_path / "src.iso", ks, tmp_path / "t.xml", tmp_path / "o.iso")
+
+
 # ---------------- alma10 (#58) ----------------
 #
 # EL10 install media has no /isolinux at all — BIOS boot moved to
