@@ -3,6 +3,29 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.37.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.36.0...v0.37.0) (2026-10-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* **gen:** `ks-gen gen` exits 2 when an exception's stig_rules_disabled names a rule id that is not in the target distro's SSG datastream. Such configs previously generated a bundle whose waiver deselected nothing; fix the id (the error suggests the full xccdf_org.ssgproject.content_rule_ id).
+* distro=ubuntu2404 is no longer supported. Host files that set it fail to load; use ks-gen 0.36.x to regenerate them.
+
+### Features
+
+* **gen:** reject exception rule ids the datastream doesn't have ([#69](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/69)) ([#120](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/120)) ([174bbf5](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/174bbf5980d28719635d4ec002e3a4bf60dcbe66))
+* **install-regression:** add a USB-media variant and run-all.sh ([#115](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/115)) ([78c5d59](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/78c5d59d798d46f06f91a2932e700dfbb4be8d4e))
+* remove Ubuntu support; ks-gen targets AlmaLinux 8/9/10 only ([#107](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/107)) ([b7ea81b](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/b7ea81b629f580b3f77b0df71cfc00ea155d3896)), closes [#103](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/103)
+
+
+### Bug Fixes
+
+* **ci:** make ssg-drift.yml loadable and lint workflows in CI ([#111](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/111)) ([1f1e3bc](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1f1e3bcf8128814ae04e9ae8d22a59e79fce8afc)), closes [#109](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/109)
+* **crypto:** bind the crypto-policy target once so CodeQL sees it initialised ([#105](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/105)) ([1651bee](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1651bee6a394bb4628dde91055f846f016167de0))
+* **iso:** patch the EFI partition's grub.cfg so USB sticks boot ([#117](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/117)) ([faf7d7f](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/faf7d7f41e904f0c1e8ae711d000aa88a4be7451)), closes [#116](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/116)
+* **rules:** install and enable rngd on alma8 so sshd can't hang ([#118](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/118)) ([#119](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/119)) ([adff218](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/adff218a52ef87244fd120dbeb96535bf509ab13))
+* **rules:** tailor auditd actions to each distro's stig profile ([#114](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/114)) ([61c9fe9](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/61c9fe9c1798b66132b8a86d94a0c7e5823e37b5)), closes [#68](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/68)
+
 ## [0.36.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.35.1...v0.36.0) (2026-09-05)
 
 
