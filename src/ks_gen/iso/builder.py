@@ -65,14 +65,17 @@ def build_iso(
     """Repack `src_iso` with ks.cfg + tailoring.xml and an unattended boot
     entry, labelled `volid` or, by default, `default_volid` of the source's
     own volume ID. `network_install` drops `inst.repo=hd:LABEL=` from the
-    entry; by default it follows `kickstart_is_network` of ks.cfg, so a
-    caller can't ship media entries for a network kickstart by omission
-    (#136).
+    entry; by default it follows `kickstart_file_is_network` of ks.cfg, so
+    a caller can't ship media entries for a network kickstart by omission
+    (#136). ks.cfg is read either way, and one anaconda couldn't parse as
+    UTF-8 raises KickstartReadError, a usage error: catch it before the
+    IsoBuildError it subclasses.
     """
     if volid is not None:
         validate_volid(volid)
+    ks_is_network = kickstart_file_is_network(ks_cfg)
     if network_install is None:
-        network_install = kickstart_file_is_network(ks_cfg)
+        network_install = ks_is_network
     if shutil.which("xorriso") is None:
         raise IsoBuildError(
             "xorriso not on PATH (install: dnf install xorriso / brew install xorriso)"
@@ -179,9 +182,13 @@ def kickstart_file_is_network(ks_cfg: Path) -> bool:
     reads it: a file it can't decode should fail the build, not the
     install. Raises KickstartReadError."""
     try:
-        return kickstart_is_network(ks_cfg.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError) as e:
-        raise KickstartReadError(f"cannot read {ks_cfg} as UTF-8: {e}") from e
+        # -sig: a Windows editor's BOM would otherwise hide the first command.
+        text = ks_cfg.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as e:
+        raise KickstartReadError(f"{ks_cfg} isn't valid UTF-8, which anaconda needs: {e}") from e
+    except OSError as e:
+        raise KickstartReadError(f"cannot read {ks_cfg}: {e}") from e
+    return kickstart_is_network(text)
 
 
 def is_fat32_safe(volid: str) -> bool:

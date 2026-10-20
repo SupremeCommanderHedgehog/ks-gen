@@ -263,8 +263,9 @@ echo "expected container users: ${EXPECTED_CONTAINER_USERS:-<none>}"
 
 # Whether the boot entry should carry inst.repo=hd:LABEL=: only for a media
 # install. A network one drops it so anaconda takes packages from the
-# kickstart's `url` (#136). Worked out here from ks.cfg rather than taken
-# from build-debug-iso.py, so the check below doesn't trust what it checks.
+# kickstart's `url` (#136). The same detector build_iso uses (its cases are
+# unit-tested); what the checks below catch is a built or booted entry that
+# doesn't follow it.
 INSTALL_KIND="$("$KS_GEN_PY" -c 'import sys
 from pathlib import Path
 from ks_gen.iso import kickstart_file_is_network

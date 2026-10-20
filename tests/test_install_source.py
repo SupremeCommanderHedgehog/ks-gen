@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from ks_gen.config import HostConfig, Install, InstallSourceKind
-from ks_gen.iso import kickstart_is_network
+from ks_gen.iso import kickstart_file_is_network, kickstart_is_network
 from ks_gen.loader import ConfigError, load_host_config
 from ks_gen.writer import build_bundle
 
@@ -198,6 +198,12 @@ def test_kickstart_is_network_matches_what_the_bundle_renders(distro, source):
                     "appstream_url": "https://m.example/AppStream/"}  # fmt: skip
     cfg = HostConfig(distro=distro, install=install, **_minimal_kwargs())
     assert kickstart_is_network(build_bundle(cfg).ks_cfg) is (source == "network")
+
+
+def test_kickstart_file_is_network_skips_a_bom(tmp_path):
+    ks = tmp_path / "ks.cfg"
+    ks.write_bytes(b"\xef\xbb\xbfurl --url=https://m/\n")
+    assert kickstart_file_is_network(ks) is True
 
 
 @pytest.mark.parametrize(

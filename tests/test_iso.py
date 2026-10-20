@@ -225,8 +225,14 @@ def test_build_iso_reports_an_unreadable_ks_cfg(tmp_path, bad):
     ks = tmp_path / "ks.cfg"
     if bad == "latin-1":
         ks.write_bytes("# caf\xe9\n".encode("latin-1"))
-    with pytest.raises(KickstartReadError, match="cannot read"):
+    match = "isn't valid UTF-8" if bad == "latin-1" else "cannot read"
+    with pytest.raises(KickstartReadError, match=match):
         build_iso(tmp_path / "src.iso", ks, tmp_path / "t.xml", tmp_path / "o.iso")
+    # Validated even when the caller decides network_install itself.
+    with pytest.raises(KickstartReadError):
+        build_iso(
+            tmp_path / "src.iso", ks, tmp_path / "t.xml", tmp_path / "o.iso", network_install=True
+        )
 
 
 # ---------------- alma10 (#58) ----------------
@@ -531,7 +537,7 @@ def test_iso_cmd_rejects_a_non_utf8_ks_cfg(tmp_path):
             ],
         )
     assert result.exit_code == int(ExitCode.USAGE), result.output
-    assert "cannot read" in result.output
+    assert "isn't valid UTF-8" in result.output
     mock_build.assert_not_called()
 
 
