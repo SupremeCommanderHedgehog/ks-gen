@@ -72,17 +72,13 @@ def test_ids_are_checked_per_distro(minimal_cfg):
 
 
 def test_missing_lists_fail_closed(minimal_cfg, monkeypatch):
-    import ks_gen.ssg_ids as mod
-
-    monkeypatch.setattr(mod, "_lists", lambda distro: None)
+    monkeypatch.setattr("ks_gen.ssg_ids._lists", lambda distro: None)
     report = check_exception_ids(_cfg(minimal_cfg, _SELECTED))
     assert report.errors and "cannot be checked" in report.errors[0]
 
 
 def test_no_exceptions_needs_no_lists(minimal_cfg, monkeypatch):
-    import ks_gen.ssg_ids as mod
-
-    monkeypatch.setattr(mod, "_lists", lambda distro: None)
+    monkeypatch.setattr("ks_gen.ssg_ids._lists", lambda distro: None)
     cfg = minimal_cfg.model_copy(update={"exceptions": []})
     assert check_exception_ids(cfg).errors == []
 
