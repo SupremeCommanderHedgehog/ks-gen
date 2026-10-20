@@ -40,11 +40,9 @@ _VOLID_OK_RE = re.compile(r"^[A-Za-z0-9_.-]{1,32}$")
 # copies the label over: at most 11 characters, which Windows upper-cases.
 _FAT32_LABEL_RE = re.compile(r"^[A-Z0-9_-]{1,11}$")
 _ALMA_VOLID_RE = re.compile(r"^AlmaLinux-(\d+)-(\d+)-")
-# Kickstart sections, which run to %end; a `url` line inside one (a %post
-# heredoc, say) isn't the install source.
-_KS_SECTIONS = frozenset(
-    {"%pre", "%pre-install", "%post", "%packages", "%onerror", "%traceback", "%addon", "%anaconda"}
-)
+# Top-level `%` commands; any other `%` line opens a section that runs to
+# %end, and a `url` line inside one (a %post heredoc, say) isn't the source.
+_KS_PERCENT_COMMANDS = frozenset({"%include", "%ksappend"})
 _EFI_PATH_RE = re.compile(r"^-boot_image any efi_path='(.*)'$", re.MULTILINE)
 _APPENDED_EFI_RE = re.compile(r"^--interval:appended_partition_(\d+)_")
 # xorriso's "d" unit is a 512-byte block, and the range is inclusive.
@@ -158,7 +156,8 @@ def kickstart_is_network(ks_text: str) -> bool:
     should drop `inst.repo=hd:LABEL=` (`build_iso`'s `network_install`).
     Shared by `ks-gen iso` and the install-regression harness, which must
     boot the same entries operators get (#136). Any `url` command counts
-    (`--url`, `--mirrorlist`, `--metalink`), but not one inside a section."""
+    (`--url`, `--mirrorlist`, `--metalink`), but not one inside a section.
+    A source pulled in by `%include` isn't seen: it may not exist until %pre."""
     in_section = False
     for line in ks_text.splitlines():
         words = line.split()
@@ -166,7 +165,7 @@ def kickstart_is_network(ks_text: str) -> bool:
             continue
         if in_section:
             in_section = words[0] != "%end"
-        elif words[0] in _KS_SECTIONS:
+        elif words[0].startswith("%") and words[0] not in _KS_PERCENT_COMMANDS:
             in_section = True
         elif words[0] == "url":
             return True

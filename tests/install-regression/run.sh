@@ -443,15 +443,16 @@ SSH_ERR="$BUILD/ssh-wait.err"
 # The kernel logs its command line at boot; the installer's is the first one
 # with inst.ks= (the installed system's comes later, without it). Booted
 # rather than built, so it covers the usb-iso stick's rewritten grub.cfg too.
-# Returns 0 without checking while the line hasn't appeared yet. Matched
-# through build-debug-iso.py's last argument, so a line QEMU has only half
-# written to serial.log yet isn't taken for the whole one.
+# Returns 0 without checking while the line hasn't appeared yet, or hasn't
+# been written to its newline: a half-written one isn't the whole entry.
 boot_checked=""
 check_booted_entry() {
-  local line
-  line="$(grep -a -m1 'Command line: .*inst\.ks=.* console=ttyS0,115200n8' "$SERIAL_LOG" \
-    2>/dev/null || true)"
-  [[ -n "$line" ]] || return 0
+  local found n line
+  found="$(grep -a -n -m1 'Command line: .*inst\.ks=' "$SERIAL_LOG" 2>/dev/null || true)"
+  [[ -n "$found" ]] || return 0
+  n="${found%%:*}"
+  (( n <= $(wc -l < "$SERIAL_LOG") )) || return 0
+  line="${found#*:}"
   line="${line%$'\r'}"
   echo "installer kernel ${line#*] }"
   check_boot_entry "the booted kernel command line" "$line" || return 1

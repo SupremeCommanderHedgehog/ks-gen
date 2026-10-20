@@ -37,8 +37,7 @@ from ks_gen.iso.builder import build_iso  # noqa: E402
 # given, the last one becomes /dev/console — if that's tty0, anaconda writes
 # its UI to the (invisible-under-nographic) framebuffer and the install hangs
 # waiting for input we can never send. The first end-to-end attempt lost 2h
-# of wall-clock to that exact failure mode. run.sh's boot-entry check also
-# keys on the trailing console= to know the logged command line is whole.
+# of wall-clock to that exact failure mode.
 DEBUG_KERNEL_ARGS = "inst.text inst.notmux inst.console=ttyS0,115200n8 console=ttyS0,115200n8"
 
 # Replace `quiet` with the debug-friendly kernel args in both menu templates.

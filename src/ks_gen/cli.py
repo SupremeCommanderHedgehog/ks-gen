@@ -207,13 +207,17 @@ def iso_cmd(
         "detected from whether the kickstart has a `url` install source.",
     ),
 ) -> None:
-    ks_is_network = kickstart_is_network(ks.read_text(encoding="utf-8"))
+    try:
+        ks_is_network = kickstart_is_network(ks.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError) as e:
+        typer.echo(f"cannot read {ks}: {e}", err=True)
+        raise typer.Exit(code=int(ExitCode.USAGE)) from None
     if network_install is None:
         network_install = ks_is_network
     elif network_install != ks_is_network:
         typer.echo(
             "--network-install / --no-network-install contradicts the kickstart: "
-            f"it {'has' if ks_is_network else 'has no'} a `url` install source. "
+            f"it has {'a' if ks_is_network else 'no'} `url` install source. "
             "Regenerate the bundle (install.source) or drop the flag.",
             err=True,
         )

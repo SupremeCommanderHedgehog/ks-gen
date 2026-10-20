@@ -212,6 +212,8 @@ def test_kickstart_is_network_matches_what_the_bundle_renders(distro, source):
         ("text\n%post\ncat <<X\nurl --url=https://m/\nX\n%end\n", False),
         ("%packages\n@core\n%end  # done\nurl --url=https://m/\n", True),
         ("urls --url=https://m/\n", False),
+        ("%pre-install --log=/tmp/x\nurl --url=https://m/\n%end\n", False),
+        ("%include /tmp/part.ks\nurl --url=https://m/\n", True),
         ('repo --name=AppStream --baseurl="https://m/"\n', False),
         ("cdrom\n", False),
     ],

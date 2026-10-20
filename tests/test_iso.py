@@ -507,6 +507,30 @@ def test_iso_cmd_rejects_network_install_flag_when_ks_has_no_url(tmp_path):
             ],
         )
     assert result.exit_code != 0
+    assert "it has no `url` install source" in result.output
+    mock_build.assert_not_called()
+
+
+def test_iso_cmd_reports_a_non_utf8_ks_cfg(tmp_path):
+    src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=False)
+    ks.write_bytes("# caf\xe9\n".encode("latin-1"))
+    with patch("ks_gen.cli.build_iso") as mock_build:
+        result = runner.invoke(
+            app,
+            [
+                "iso",
+                "--src",
+                str(src),
+                "--ks",
+                str(ks),
+                "--tailoring",
+                str(tail),
+                "--out",
+                str(out),
+            ],
+        )
+    assert result.exit_code == int(ExitCode.USAGE), result.output
+    assert "cannot read" in result.output
     mock_build.assert_not_called()
 
 
