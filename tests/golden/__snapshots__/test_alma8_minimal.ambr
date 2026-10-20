@@ -7,7 +7,7 @@
   Host: `a8-min`
   
   ## Summary
-  - Applied rules: 13
+  - Applied rules: 14
   - Tailored XCCDF rules: 15
   - Declared exceptions: 0
   
@@ -20,6 +20,7 @@
   - `faillock_safety` — Set faillock unlock_time and disable even_deny_root for remote safety.
   - `kernel_module_blacklist` — Write modprobe blacklist for unused/disallowed kernel modules.
   - `package_purge` — Remove disallowed packages after install (catches transitive pulls).
+  - `rngd_entropy` — Install + enable rngd so SSH_USE_STRONG_RNG cannot starve sshd at boot.
   - `ssh_keep_open` — Ensure ssh.port reachable in firewalld + SELinux before sshd starts.
   - `ssh_config_apply` — Write sshd drop-in config for Port/PermitRootLogin/PasswordAuthentication.
   - `time_servers` — Write chrony.conf with operator-chosen NTP servers (non-DoD by default).
@@ -301,6 +302,7 @@
   policycoreutils-python-utils
   dnf-automatic
   dnf-utils
+  rng-tools
   -telnet-server
   -rsh-server
   -tftp-server
@@ -465,6 +467,10 @@
   # ===== package_purge =====
   # Remove disallowed packages (no-op if not installed)
   dnf -y remove telnet-server rsh-server tftp-server vsftpd ypserv || true
+  
+  # ===== rngd_entropy =====
+  # rngd: keep /dev/random fed so SSH_USE_STRONG_RNG cannot hang sshd (#118)
+  systemctl enable rngd.service
   
   # ===== ssh_keep_open =====
   # Pre-open SSH port in firewalld + SELinux (before sshd starts on first boot)
