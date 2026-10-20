@@ -3,6 +3,25 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.39.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.38.0...v0.39.0) (2026-10-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* **iso:** without --volid, installers are labelled KS-AL<major>-<minor> (e.g. KS-AL9-8) instead of ALMA9. Anything that assumed ALMA9, such as typing it into Rufus's "Volume label" field, must use the label ks-gen iso prints, or pass --volid ALMA9 to keep the old one.
+
+### Features
+
+* **iso:** derive the installer's volume ID from the source ISO ([#128](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/128)) ([#133](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/133)) ([798a49c](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/798a49c2d4267957a7295c62a5ceb411f11fc3a7))
+
+
+### Bug Fixes
+
+* **assets:** tighten rootless users' init files to STIG 0740 ([#49](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/49)) ([#130](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/130)) ([8585e56](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/8585e561eadcde2748fcc58d3ff8780ca45cf50f))
+* **iso:** emulate Rufus ISO Image mode and correct its volume-ID note ([#134](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/134)) ([#135](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/135)) ([ac04ee8](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/ac04ee8d212917e5ad7209a712f0d603ec7050b2))
+* **iso:** give harness ISOs the network-install boot entry ks-gen iso ships ([#136](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/136)) ([#138](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/138)) ([1ec9204](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/1ec92045a420448d1f05f578873afd68a929a270))
+* **rules:** tighten /etc/skel's init files so every new home meets the STIG ([#131](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/131)) ([#137](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/137)) ([f1cac27](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/f1cac271bf380cc3647421b416477141d91f8306))
+
 ## [0.38.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.37.0...v0.38.0) (2026-10-20)
 
 
