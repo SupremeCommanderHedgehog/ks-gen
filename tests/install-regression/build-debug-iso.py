@@ -62,6 +62,9 @@ def main() -> int:
     bundle = Path(sys.argv[2])
     out_iso = Path(sys.argv[3])
 
+    # network_install is left to build_iso, which reads it off ks.cfg as for
+    # `ks-gen iso`, so a network fixture boots the entry without
+    # inst.repo=hd:LABEL= (#136). run.sh checks the built entry.
     build_iso(
         src_iso=src_iso,
         ks_cfg=(bundle / "ks.cfg"),

@@ -126,6 +126,20 @@ installs from the ISO itself (the default `install.source`) needs a DVD
 from a boot ISO. A boot ISO with an install-from-ISO fixture stops at
 anaconda's "Installation source" error in either mode.
 
+The harness ISO carries the boot entries `ks-gen iso` would build for the
+same bundle (#136). `build_iso` decides `network_install` from `ks.cfg`
+when it isn't given (`ks_gen.iso.kickstart_is_network`: a `url` command
+outside any `%` section), so a network fixture's entry has no `inst.repo=hd:LABEL=`. `run.sh`
+checks it twice: in the built ISO's `/EFI/BOOT/grub.cfg` before QEMU starts,
+and in the installer kernel's command line in `serial.log` as soon as it is
+logged. Either fails the run if `inst.repo=` is present for a network
+install, missing for a media install, or names a different label from
+`inst.ks=`. The usb-iso exception: when Rufus's RH8+
+`inst.stage2` → `inst.repo` rewrite fires (above), `inst.repo=` is expected
+either way. Every run recorded below from before #136 booted network
+fixtures *with* `inst.repo=hd:LABEL=`, so none of them covers the entry
+network-install operators get.
+
 To run a single mode with `run.sh`:
 
 ```bash
@@ -207,6 +221,8 @@ an 800G virtual disk, and a guest that really did fill it would fill the host.
   that monkey-patches the menu-entry constants in
   `ks_gen.iso.bootloader` to inject `inst.text inst.notmux
   inst.console=ttyS0,115200n8 console=ttyS0,115200n8`. No source edit.
+  It leaves `network_install` to `build_iso`, which reads it off the
+  bundle's `ks.cfg` (#136).
 - `fixtures/omit-dnf-automatic.host.yaml.tmpl` — fixture template
   with `__SSH_PUBKEY__` placeholder. `packages.required` explicitly
   omits `dnf-automatic` and `dnf-utils` so the harness exercises the
@@ -257,6 +273,17 @@ Note the `configure_crypto_policy` line above predates the live-re-scan change
 
 ## Other runs
 
+- **2026-10-20, the network-install boot entry, first booted** (#136, AL10.2
+  x86_64 boot ISO, every AL10 network fixture). `run-all.sh` green on all
+  three media for each, booting `inst.stage2=hd:LABEL=KS-AL10-2
+  inst.ks=hd:LABEL=KS-AL10-2:/ks.cfg` with no `inst.repo=`, the entry
+  `ks-gen iso` ships for a `url` kickstart. Both boot-entry checks passed
+  in every mode, and Rufus's RH8 rewrite did not fire on the usb-iso sticks.
+  Installed disk sizes (cd / usb / usb-iso, GiB):
+  `al10-omit-dnf-automatic` 3.92 / 3.90 / 3.93 (re-run on the final code),
+  `al10-stig-crypto` 3.95 / 3.86 / 4.06,
+  `al10-nts` 3.83 / 3.90 / 3.92,
+  `al10-container-users` 3.95 / 3.99 / 3.92.
 - **2026-10-20, all three media incl. emulated Rufus ISO mode** (#134,
   `al10-omit-dnf-automatic`, AL10.2 x86_64 boot ISO, network install).
   `run-all.sh` green on `cd` (`3.89 GiB`), `usb` (`3.93 GiB`) and `usb-iso`

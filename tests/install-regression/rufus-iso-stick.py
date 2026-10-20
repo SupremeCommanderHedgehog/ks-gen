@@ -196,7 +196,8 @@ def build_stick(iso: Path, out: Path) -> None:
         total = PART_START + part_sectors
         usb_label = rufus_fat_label(iso_label, total * SECTOR)
         print(f"rufus-iso: ISO label {iso_label!r} -> FAT32 label {usb_label!r}")
-        print(f"rufus-iso: RH8+ inst.stage2->inst.repo rewrite: {'yes' if rh8 else 'no'}")
+        # run.sh keys on this exact line (its boot-entry check, #136).
+        print(f"rufus-iso: rh8_stage2_rewrite={'yes' if rh8 else 'no'}")
 
         for f in sorted(files):
             rel = f.relative_to(tree)

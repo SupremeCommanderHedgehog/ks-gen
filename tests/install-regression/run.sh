@@ -261,6 +261,52 @@ EXPECTED_CONTAINER_USERS="$(sed -n 's/^# Provision container user: \([a-z_][a-z0
 EXPECTED_CONTAINER_USERS="${EXPECTED_CONTAINER_USERS% }"
 echo "expected container users: ${EXPECTED_CONTAINER_USERS:-<none>}"
 
+# Whether the boot entry should carry inst.repo=hd:LABEL=: only for a media
+# install. A network one drops it so anaconda takes packages from the
+# kickstart's `url` (#136). The same detector build_iso uses (its cases are
+# unit-tested); what the checks below catch is a built or booted entry that
+# doesn't follow it.
+INSTALL_KIND="$("$KS_GEN_PY" -c 'import sys
+from pathlib import Path
+from ks_gen.iso import kickstart_file_is_network
+print("network" if kickstart_file_is_network(Path(sys.argv[1])) else "media")' \
+  "$BUNDLE_DIR/ks.cfg")"
+if [[ "$INSTALL_KIND" == network ]]; then EXPECT_INST_REPO=no; else EXPECT_INST_REPO=yes; fi
+echo "install source: $INSTALL_KIND (boot entry inst.repo=: $EXPECT_INST_REPO)"
+
+# Check one unattended boot line ($2, from $1) against EXPECT_INST_REPO: a
+# harness ISO must carry what `ks-gen iso` ships for the same bundle. It once
+# kept inst.repo=hd:LABEL= on every network fixture, so the entry network-
+# install operators get was never booted (#136). Present, it must name the
+# same label as inst.ks=.
+check_boot_entry() {
+  local where="$1" line="$2" label has
+  label="$(sed -n 's/.*inst\.ks=hd:LABEL=\([^: ]*\):.*/\1/p' <<<"$line")"
+  if [[ "$line" == *" inst.repo="* ]]; then has=yes; else has=no; fi
+  if [[ "$has" != "$EXPECT_INST_REPO" ]]; then
+    echo "boot entry mismatch in $where: $INSTALL_KIND install, expected inst.repo= $EXPECT_INST_REPO, got $has (#136):" >&2
+    echo "  $line" >&2
+    return 1
+  fi
+  if [[ "$has" == yes && "$line" != *" inst.repo=hd:LABEL=$label "* ]]; then
+    echo "boot entry in $where: inst.repo= doesn't name inst.ks='s label ${label:-<none>}:" >&2
+    echo "  $line" >&2
+    return 1
+  fi
+}
+
+# The built ISO's own entry, before anything boots: a wrong one (say a
+# SKIP_ISO_BUILD reuse of an ISO from before #136) fails in seconds, not after
+# an install. Only the tree's grub.cfg: the EFI image's copy, which the cd
+# and usb modes boot, is covered by the booted check in step 7b.
+iso_grub="$BUILD/installer-grub.cfg"
+xorriso -osirrox on -indev "$INSTALLER_ISO" -extract /EFI/BOOT/grub.cfg "$iso_grub" \
+  >/dev/null 2>&1 || { echo "cannot read /EFI/BOOT/grub.cfg out of $INSTALLER_ISO" >&2; exit 1; }
+iso_entry="$(grep -m1 'inst\.ks=' "$iso_grub" || true)"
+[[ -n "$iso_entry" ]] || { echo "no inst.ks= entry in $INSTALLER_ISO's grub.cfg" >&2; exit 1; }
+check_boot_entry "installer.iso /EFI/BOOT/grub.cfg" "$iso_entry" || exit 1
+echo "ok: installer.iso boot entry matches a $INSTALL_KIND install"
+
 # ---- step 5: disk + EFI nvram --------------------------------------------
 [[ -f "$DISK" ]]      && rm "$DISK"
 [[ -f "$DATA_DISK" ]] && rm "$DATA_DISK"
@@ -297,7 +343,17 @@ if [[ "$MEDIA" == usb ]]; then
 elif [[ "$MEDIA" == usb-iso ]]; then
   # A real copy, not an overlay: the files are rewritten onto a new FAT32
   # filesystem, the way Rufus does. ~ISO size; a DVD stick is ~11 GiB.
-  "$KS_GEN_PY" "$HERE/rufus-iso-stick.py" "$INSTALLER_ISO" "$USB_ISO_IMG"
+  # Through tee, so a DVD-sized write streams and a failure keeps its output
+  # (pipefail carries the script's status).
+  "$KS_GEN_PY" -u "$HERE/rufus-iso-stick.py" "$INSTALLER_ISO" "$USB_ISO_IMG" \
+    | tee "$BUILD/rufus-iso.log"
+  # Rufus's RH8+ rewrite turns inst.stage2= into inst.repo=, so that stick
+  # boots with one whatever the ISO's entry says.
+  if grep -qx 'rufus-iso: rh8_stage2_rewrite=yes' "$BUILD/rufus-iso.log"; then
+    EXPECT_INST_REPO=yes
+  elif ! grep -qx 'rufus-iso: rh8_stage2_rewrite=no' "$BUILD/rufus-iso.log"; then
+    echo "rufus-iso-stick.py printed no rh8_stage2_rewrite= line" >&2; exit 1
+  fi
 fi
 
 # ---- step 6: boot QEMU ----------------------------------------------------
@@ -386,7 +442,31 @@ COMMON_SSH_OPTS=(-F /dev/null
 SSH_OPTS=("${COMMON_SSH_OPTS[@]}" -p "$SSH_HOST_PORT")
 SSH_ERR="$BUILD/ssh-wait.err"
 
+# ---- step 7b: the boot entry the installer ran ---------------------------
+# The kernel logs its command line at boot; the installer's is the first one
+# with inst.ks= (the installed system's comes later, without it). Booted
+# rather than built, so it covers the usb-iso stick's rewritten grub.cfg too.
+# Returns 0 without checking while the line hasn't appeared yet, or hasn't
+# been written to its newline: a half-written one isn't the whole entry.
+boot_checked=""
+check_booted_entry() {
+  local lines line
+  # Count the finished lines first and search only those: counted after the
+  # grep, a line still being written could finish in between and pass.
+  lines="$( { wc -l < "$SERIAL_LOG"; } 2>/dev/null)" || return 0
+  line="$(head -n "$lines" "$SERIAL_LOG" | grep -a -m1 'Command line: .*inst\.ks=' || true)"
+  [[ -n "$line" ]] || return 0
+  line="${line%$'\r'}"
+  echo "installer kernel ${line#*] }"
+  check_boot_entry "the booted kernel command line" "$line" || return 1
+  boot_checked=1
+}
+
 while (( $(date +%s) < DEADLINE )); do
+  # The entry the installer actually booted: checked as soon as the kernel
+  # has logged it, and first, so a wrong one is named even when it is what
+  # made QEMU exit.
+  [[ -n "$boot_checked" ]] || check_booted_entry || exit 1
   if ! kill -0 "$QEMU_PID" 2>/dev/null; then
     echo "qemu exited before SSH came up — install likely failed" >&2
     if [[ -s "$SERIAL_LOG" ]]; then
@@ -421,6 +501,12 @@ if ! ssh "${SSH_OPTS[@]}" "$ADMIN_USER"@127.0.0.1 true 2>"$SSH_ERR"; then
   # means the guest is up and the problem is the key, user or KEY_TYPE.
   echo "--- last ssh error ---" >&2
   cat "$SSH_ERR" >&2 || true
+  exit 1
+fi
+
+[[ -n "$boot_checked" ]] || check_booted_entry || exit 1
+if [[ -z "$boot_checked" ]]; then
+  echo "no installer kernel command line in $SERIAL_LOG" >&2
   exit 1
 fi
 

@@ -5,7 +5,7 @@ import pytest
 from typer.testing import CliRunner
 
 from ks_gen.cli import app
-from ks_gen.iso import IsoBuild, IsoBuildError, VolidError, build_iso
+from ks_gen.iso import IsoBuild, IsoBuildError, KickstartReadError, VolidError, build_iso
 from ks_gen.loader import ExitCode
 
 runner = CliRunner()
@@ -172,11 +172,21 @@ def test_build_iso_rewrite_error_raises(tmp_path):
         build_iso(src, ks, tail, out, volid="ALMA9")
 
 
-def test_build_iso_forwards_network_install(tmp_path):
+@pytest.mark.parametrize(
+    ("network_install", "ks_text", "expected"),
+    [
+        (True, "text\n", True),
+        (False, 'url --url="https://m/"\n', False),
+        # Unset: follows the kickstart, so a caller can't forget it (#136).
+        (None, 'url --url="https://m/"\n', True),
+        (None, "text\n", False),
+    ],
+)
+def test_build_iso_forwards_network_install(tmp_path, network_install, ks_text, expected):
     src = tmp_path / "src.iso"
     src.write_bytes(b"\0" * 1024)
     ks = tmp_path / "ks.cfg"
-    ks.write_text("text\n", encoding="utf-8")
+    ks.write_text(ks_text, encoding="utf-8")
     tail = tmp_path / "tailoring.xml"
     tail.write_text("<x/>", encoding="utf-8")
     out = tmp_path / "out.iso"
@@ -204,10 +214,25 @@ def test_build_iso_forwards_network_install(tmp_path):
         patch("ks_gen.iso.builder.rewrite_isolinux", return_value="x") as ri,
         patch("ks_gen.iso.builder.rewrite_grub", return_value="x") as rg,
     ):
-        build_iso(src, ks, tail, out, volid="DEV0", network_install=True)
+        build_iso(src, ks, tail, out, volid="DEV0", network_install=network_install)
 
-    assert ri.call_args.kwargs["network_install"] is True
-    assert rg.call_args.kwargs["network_install"] is True
+    assert ri.call_args.kwargs["network_install"] is expected
+    assert rg.call_args.kwargs["network_install"] is expected
+
+
+@pytest.mark.parametrize("bad", ["missing", "latin-1"])
+def test_build_iso_reports_an_unreadable_ks_cfg(tmp_path, bad):
+    ks = tmp_path / "ks.cfg"
+    if bad == "latin-1":
+        ks.write_bytes("# caf\xe9\n".encode("latin-1"))
+    match = "isn't valid UTF-8" if bad == "latin-1" else "cannot read"
+    with pytest.raises(KickstartReadError, match=match):
+        build_iso(tmp_path / "src.iso", ks, tmp_path / "t.xml", tmp_path / "o.iso")
+    # Validated even when the caller decides network_install itself.
+    with pytest.raises(KickstartReadError):
+        build_iso(
+            tmp_path / "src.iso", ks, tmp_path / "t.xml", tmp_path / "o.iso", network_install=True
+        )
 
 
 # ---------------- alma10 (#58) ----------------
@@ -488,6 +513,31 @@ def test_iso_cmd_rejects_network_install_flag_when_ks_has_no_url(tmp_path):
             ],
         )
     assert result.exit_code != 0
+    assert "it has no `url` install source" in result.output
+    mock_build.assert_not_called()
+
+
+def test_iso_cmd_rejects_a_non_utf8_ks_cfg(tmp_path):
+    """Anaconda reads ks.cfg as UTF-8; refuse it at build time, not install."""
+    src, ks, tail, out = _make_iso_cli_files(tmp_path, ks_has_url=True)
+    ks.write_bytes("# caf\xe9\n".encode("latin-1") + ks.read_bytes())
+    with patch("ks_gen.cli.build_iso") as mock_build:
+        result = runner.invoke(
+            app,
+            [
+                "iso",
+                "--src",
+                str(src),
+                "--ks",
+                str(ks),
+                "--tailoring",
+                str(tail),
+                "--out",
+                str(out),
+            ],
+        )
+    assert result.exit_code == int(ExitCode.USAGE), result.output
+    assert "isn't valid UTF-8" in result.output
     mock_build.assert_not_called()
 
 

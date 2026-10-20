@@ -24,6 +24,10 @@ class VolidError(IsoBuildError):
     """The volume ID is unusable, or none can be derived: a usage error."""
 
 
+class KickstartReadError(IsoBuildError):
+    """ks.cfg can't be read as the UTF-8 anaconda parses it: a usage error."""
+
+
 ISOLINUX_CFG = "/isolinux/isolinux.cfg"
 # EL10 dropped /isolinux — BIOS boot is grub2 there.
 GRUB_BIOS_CFG = "/boot/grub2/grub.cfg"
@@ -40,6 +44,9 @@ _VOLID_OK_RE = re.compile(r"^[A-Za-z0-9_.-]{1,32}$")
 # copies the label over: at most 11 characters, which Windows upper-cases.
 _FAT32_LABEL_RE = re.compile(r"^[A-Z0-9_-]{1,11}$")
 _ALMA_VOLID_RE = re.compile(r"^AlmaLinux-(\d+)-(\d+)-")
+# Top-level `%` commands; any other `%` line opens a section that runs to
+# %end, and a `url` line inside one (a %post heredoc, say) isn't the source.
+_KS_PERCENT_COMMANDS = frozenset({"%include", "%ksappend"})
 _EFI_PATH_RE = re.compile(r"^-boot_image any efi_path='(.*)'$", re.MULTILINE)
 _APPENDED_EFI_RE = re.compile(r"^--interval:appended_partition_(\d+)_")
 # xorriso's "d" unit is a 512-byte block, and the range is inclusive.
@@ -53,14 +60,22 @@ def build_iso(
     out_iso: Path,
     *,
     volid: str | None = None,
-    network_install: bool = False,
+    network_install: bool | None = None,
 ) -> IsoBuild:
     """Repack `src_iso` with ks.cfg + tailoring.xml and an unattended boot
     entry, labelled `volid` or, by default, `default_volid` of the source's
-    own volume ID.
+    own volume ID. `network_install` drops `inst.repo=hd:LABEL=` from the
+    entry; by default it follows `kickstart_file_is_network` of ks.cfg, so
+    a caller can't ship media entries for a network kickstart by omission
+    (#136). ks.cfg is read either way, and one anaconda couldn't parse as
+    UTF-8 raises KickstartReadError, a usage error: catch it before the
+    IsoBuildError it subclasses.
     """
     if volid is not None:
         validate_volid(volid)
+    ks_is_network = kickstart_file_is_network(ks_cfg)
+    if network_install is None:
+        network_install = ks_is_network
     if shutil.which("xorriso") is None:
         raise IsoBuildError(
             "xorriso not on PATH (install: dnf install xorriso / brew install xorriso)"
@@ -137,6 +152,43 @@ def validate_volid(volid: str) -> None:
     32 bytes, or with characters `hd:LABEL=` would need escaped."""
     if not _VOLID_OK_RE.match(volid):
         raise VolidError(f"invalid volume ID {volid!r}: use 1-32 characters from A-Z a-z 0-9 _ . -")
+
+
+def kickstart_is_network(ks_text: str) -> bool:
+    """Whether a kickstart installs from a `url` source, so its boot entries
+    should drop `inst.repo=hd:LABEL=` (`build_iso`'s `network_install`).
+    Shared by `ks-gen iso` and the install-regression harness, which must
+    boot the same entries operators get (#136). Any `url` command counts
+    (`--url`, `--mirrorlist`, `--metalink`), but not one inside a section.
+    A source pulled in by `%include` isn't seen: it may not exist until %pre."""
+    in_section = False
+    for line in ks_text.splitlines():
+        words = line.split()
+        if not words:
+            continue
+        if in_section:
+            in_section = words[0] != "%end"
+        elif words[0] == "%end":
+            continue  # stray, outside any section: opens nothing
+        elif words[0].startswith("%") and words[0] not in _KS_PERCENT_COMMANDS:
+            in_section = True
+        elif words[0] == "url":
+            return True
+    return False
+
+
+def kickstart_file_is_network(ks_cfg: Path) -> bool:
+    """`kickstart_is_network` of a ks.cfg file. Read strictly, as anaconda
+    reads it: a file it can't decode should fail the build, not the
+    install. Raises KickstartReadError."""
+    try:
+        # -sig: a Windows editor's BOM would otherwise hide the first command.
+        text = ks_cfg.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as e:
+        raise KickstartReadError(f"{ks_cfg} isn't valid UTF-8, which anaconda needs: {e}") from e
+    except OSError as e:
+        raise KickstartReadError(f"cannot read {ks_cfg}: {e}") from e
+    return kickstart_is_network(text)
 
 
 def is_fat32_safe(volid: str) -> bool:

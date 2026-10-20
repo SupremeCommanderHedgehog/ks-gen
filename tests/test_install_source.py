@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from ks_gen.config import HostConfig, Install, InstallSourceKind
+from ks_gen.iso import kickstart_file_is_network, kickstart_is_network
 from ks_gen.loader import ConfigError, load_host_config
 from ks_gen.writer import build_bundle
 
@@ -183,3 +184,49 @@ def test_media_source_omits_url():
     cfg = load_host_config(_GOLDEN9, sets=[])
     ks = build_bundle(cfg).ks_cfg
     assert "url --url=" not in ks
+
+
+@pytest.mark.parametrize("distro", ["alma8", "alma9", "alma10"])
+@pytest.mark.parametrize("source", ["network", "media"])
+def test_kickstart_is_network_matches_what_the_bundle_renders(distro, source):
+    """`ks-gen iso` and the install-regression harness pick the boot entry
+    from the rendered ks.cfg (#136), so the check must agree with the
+    template on every distro."""
+    install: dict[str, str] = {"source": source}
+    if distro == "alma8" and source == "network":
+        install |= {"baseos_url": "https://m.example/BaseOS/",
+                    "appstream_url": "https://m.example/AppStream/"}  # fmt: skip
+    cfg = HostConfig(distro=distro, install=install, **_minimal_kwargs())
+    assert kickstart_is_network(build_bundle(cfg).ks_cfg) is (source == "network")
+
+
+def test_kickstart_file_is_network_skips_a_bom(tmp_path):
+    ks = tmp_path / "ks.cfg"
+    ks.write_bytes(b"\xef\xbb\xbfurl --url=https://m/\n")
+    assert kickstart_file_is_network(ks) is True
+
+
+@pytest.mark.parametrize(
+    ("text", "network"),
+    [
+        ('url --url="https://m/BaseOS/"\n', True),
+        ("lang en_US\nurl  --url=https://m/\n", True),
+        ('# url --url="https://m/"\n', False),  # a comment
+        ("  url --mirrorlist=https://m/ml\n", True),
+        ("url --metalink=https://m/ml\n", True),
+        ('url --url "https://m/"\n', True),
+        ("text\n%post\ncat <<X\nurl --url=https://m/\nX\n%end\n", False),
+        ("%packages\n@core\n%end  # done\nurl --url=https://m/\n", True),
+        ("urls --url=https://m/\n", False),
+        ("%pre-install --log=/tmp/x\nurl --url=https://m/\n%end\n", False),
+        ("%include /tmp/part.ks\nurl --url=https://m/\n", True),
+        ("%ksappend /tmp/part.ks\nurl --url=https://m/\n", True),
+        ("%end\nurl --url=https://m/\n", True),  # a stray %end opens nothing
+        # Any other % header opens a section, listed anywhere or not.
+        ("%certificate --filename=c.pem\nurl --url=https://m/\n%end\n", False),
+        ('repo --name=AppStream --baseurl="https://m/"\n', False),
+        ("cdrom\n", False),
+    ],
+)
+def test_kickstart_is_network(text, network):
+    assert kickstart_is_network(text) is network
