@@ -141,8 +141,9 @@ def validate_volid(volid: str) -> None:
 
 def is_fat32_safe(volid: str) -> bool:
     """Whether `volid` survives Rufus's ISO Image mode unchanged, which the
-    MANUAL recommends for Windows: 11 characters at most, upper-case."""
-    return _FAT32_LABEL_RE.match(volid) is not None
+    MANUAL recommends for Windows: 11 characters at most, upper-case, and not
+    mostly underscores (Rufus swaps such a label for the disk size)."""
+    return _FAT32_LABEL_RE.match(volid) is not None and len(volid) >= 2 * volid.count("_")
 
 
 def _report_boot(src_iso: Path) -> str:
