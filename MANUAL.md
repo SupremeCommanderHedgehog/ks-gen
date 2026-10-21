@@ -405,7 +405,10 @@ override the default.
 The PV grows to fill the disk; LVs are fixed-size, leaving free VG
 space for future `lvextend`. The `/boot` and `/boot/efi` partitions
 default to 1G xfs/efi respectively and can be overridden with a top-level
-`boot:` or `efi:` block.
+`boot:` or `efi:` block. On `distro: alma10` with `disk.wipe` (the default),
+every preset and layout also gets a 1 MiB `biosboot` partition. AL10's installer labels the disk GPT even
+under BIOS firmware, and GRUB needs that partition to boot GPT from BIOS. Under
+UEFI it sits unused (#140).
 
 STIG-required mountpoints (`/`, `/home`, `/tmp`, `/var`, `/var/log`,
 `/var/log/audit`, `/var/tmp`) are enforced at config-load — a layout
@@ -1871,8 +1874,8 @@ The ks-gen menu entry runs by default after a 5-second timeout.
 **What's tested.** ks-gen's install-regression harness emulates this
 ISO Image-mode write (Rufus v4.15: FAT32 label, config rewrites,
 copied tree) and installs from it under **UEFI**. It has not been run
-on real Windows/Rufus. **BIOS/CSM boot is not tested on any media**: the
-harness boots UEFI firmware only. Prefer UEFI on the target.
+on real Windows/Rufus. **BIOS/CSM boot is tested from a CD only**
+(SeaBIOS, #140), not from a USB stick. Prefer UEFI on the target.
 
 If a custom `--volid` isn't a valid FAT32 label (over 11 characters,
 lower-case, or containing `.`), Rufus writes a sanitised label (e.g.

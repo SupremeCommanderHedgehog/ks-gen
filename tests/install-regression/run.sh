@@ -6,7 +6,8 @@
 #   1. ks-gen gen + ks-gen iso (twice — exercises #52 idempotency)
 #   2. boot the ISO in QEMU/OVMF (KVM if available, else TCG), as a CD or
 #      as a USB stick, or as an emulated Rufus ISO-mode stick
-#      (MEDIA=cd|usb|usb-iso; run-all.sh runs all three)
+#      (MEDIA=cd|usb|usb-iso), or as a CD under SeaBIOS (FIRMWARE=bios);
+#      run-all.sh runs all four
 #   3. wait for anaconda to install + reboot + sshd to come up
 #   4. SSH in and run smoke-check.sh
 #
@@ -116,6 +117,19 @@ MEDIA="${MEDIA:-cd}"
   echo "MEDIA must be cd, usb or usb-iso (got: $MEDIA)" >&2; exit 1; }
 echo "install media: $MEDIA"
 
+# Firmware the VM boots (#140). `uefi` is OVMF on q35. `bios` is SeaBIOS on
+# the i440fx `pc` machine, what BIOS-only hypervisors (many cloud VPSes)
+# present. AL10's installer labels the disk GPT either way, which BIOS can
+# only boot from a biosboot partition. CD only: anaconda's `reboot --eject`
+# is what moves SeaBIOS on to the installed disk, and a stick is never
+# ejected.
+FIRMWARE="${FIRMWARE:-uefi}"
+[[ "$FIRMWARE" == uefi || "$FIRMWARE" == bios ]] || {
+  echo "FIRMWARE must be uefi or bios (got: $FIRMWARE)" >&2; exit 1; }
+[[ "$FIRMWARE" == uefi || "$MEDIA" == cd ]] || {
+  echo "FIRMWARE=bios needs MEDIA=cd (got: $MEDIA)" >&2; exit 1; }
+echo "firmware: $FIRMWARE"
+
 # Ubuntu's ovmf package. As of 26.04 the legacy plain-name files
 # (OVMF_CODE.fd) are gone; only the 4M variants ship. SecureBoot off
 # variant — kickstart has no secure-boot signing story.
@@ -139,14 +153,21 @@ DATA_DISK_MARKER="KS_GEN_DISK_TARGET_REGRESSION_MARKER_2026_06_12"
 NVRAM="$BUILD/OVMF_VARS.fd"
 SERIAL_LOG="$BUILD/serial.log"
 QEMU_LOG="$BUILD/qemu.log"
-SSH_HOST_PORT=2222
+# Override to run beside another VM that already forwards 2222.
+SSH_HOST_PORT="${SSH_HOST_PORT:-2222}"
+[[ "$SSH_HOST_PORT" =~ ^[1-9][0-9]{0,4}$ ]] && (( SSH_HOST_PORT <= 65535 )) \
+  || { echo "SSH_HOST_PORT must be a port number, 1-65535 (got: $SSH_HOST_PORT)" >&2; exit 1; }
+# Keyed to the port, so two runs side by side don't share a monitor socket.
+QMP_SOCK="/tmp/ks-gen-install-regression-qmp-$SSH_HOST_PORT.sock"
 
 # ---- preflight ------------------------------------------------------------
 for bin in qemu-system-x86_64 qemu-img xorriso mcopy ssh-keygen ssh "$KS_GEN" "$KS_GEN_PY"; do
   command -v "$bin" >/dev/null 2>&1 || { echo "missing: $bin" >&2; exit 1; }
 done
-[[ -r "$OVMF_CODE"          ]] || { echo "missing: $OVMF_CODE (apt install ovmf)"      >&2; exit 1; }
-[[ -r "$OVMF_VARS_TEMPLATE" ]] || { echo "missing: $OVMF_VARS_TEMPLATE (apt install ovmf)" >&2; exit 1; }
+if [[ "$FIRMWARE" == uefi ]]; then
+  [[ -r "$OVMF_CODE"          ]] || { echo "missing: $OVMF_CODE (apt install ovmf)"      >&2; exit 1; }
+  [[ -r "$OVMF_VARS_TEMPLATE" ]] || { echo "missing: $OVMF_VARS_TEMPLATE (apt install ovmf)" >&2; exit 1; }
+fi
 [[ -r "$SRC_ISO"            ]] || { echo "missing: $SRC_ISO"                              >&2; exit 1; }
 if [[ "$MEDIA" == usb-iso ]]; then
   command -v mkfs.fat >/dev/null 2>&1 \
@@ -305,6 +326,21 @@ xorriso -osirrox on -indev "$INSTALLER_ISO" -extract /EFI/BOOT/grub.cfg "$iso_gr
 iso_entry="$(grep -m1 'inst\.ks=' "$iso_grub" || true)"
 [[ -n "$iso_entry" ]] || { echo "no inst.ks= entry in $INSTALLER_ISO's grub.cfg" >&2; exit 1; }
 check_boot_entry "installer.iso /EFI/BOOT/grub.cfg" "$iso_entry" || exit 1
+# SeaBIOS boots the BIOS menu instead: EL10's i386-pc grub.cfg, or EL8/9's
+# isolinux.cfg. Same check, so a BIOS-only menu regression fails here rather
+# than as an interactive installer that never brings SSH up.
+if [[ "$FIRMWARE" == bios ]]; then
+  bios_cfg="$BUILD/installer-bios.cfg" bios_src=""
+  for f in /boot/grub2/grub.cfg /isolinux/isolinux.cfg; do
+    if xorriso -osirrox on -indev "$INSTALLER_ISO" -extract "$f" "$bios_cfg" >/dev/null 2>&1; then
+      bios_src="$f"; break
+    fi
+  done
+  [[ -n "$bios_src" ]] || { echo "no BIOS boot menu in $INSTALLER_ISO" >&2; exit 1; }
+  bios_entry="$(grep -m1 'inst\.ks=' "$bios_cfg" || true)"
+  [[ -n "$bios_entry" ]] || { echo "no inst.ks= entry in $INSTALLER_ISO's $bios_src" >&2; exit 1; }
+  check_boot_entry "installer.iso $bios_src" "$bios_entry" || exit 1
+fi
 echo "ok: installer.iso boot entry matches a $INSTALL_KIND install"
 
 # ---- step 5: disk + EFI nvram --------------------------------------------
@@ -331,7 +367,7 @@ qemu-img create -f qcow2 "$DISK" "$DISK_SIZE" >/dev/null
 qemu-img create -f raw "$DATA_DISK" 1G >/dev/null
 printf '%s' "$DATA_DISK_MARKER" \
   | dd of="$DATA_DISK" bs=1 conv=notrunc status=none
-cp "$OVMF_VARS_TEMPLATE" "$NVRAM"
+[[ "$FIRMWARE" == uefi ]] && cp "$OVMF_VARS_TEMPLATE" "$NVRAM"
 # A fresh stick per run. The guest sees the ISO's bytes exactly as `dd` would
 # write them, and the image is hybrid (MBR/GPT + EFI System partition, kept by
 # xorriso's `-boot_image any replay`), so OVMF boots it as a removable disk.
@@ -362,7 +398,7 @@ ACCEL=()
 [[ -r /dev/kvm ]] && ACCEL=(-enable-kvm -cpu host) || ACCEL=(-accel tcg -cpu max)
 
 # Memory + cores: 4G/2 is enough for anaconda + oscap.
-# Networking: SLIRP user net forwards host:2222 → guest:22. DHCP is built in.
+# Networking: SLIRP user net forwards host:$SSH_HOST_PORT → guest:22. DHCP is built in.
 # Boot: leave EFI to decide. anaconda's `reboot --eject` will eject the CD on
 #       success; OVMF's BootOrder gets written by anaconda's efibootmgr to
 #       prefer the installed HD, so the second boot picks up the new system.
@@ -383,20 +419,28 @@ elif [[ "$MEDIA" == usb-iso ]]; then
 else
   MEDIA_ARGS=(-cdrom "$INSTALLER_ISO")
 fi
+if [[ "$FIRMWARE" == uefi ]]; then
+  # shellcheck disable=SC2054
+  FIRMWARE_ARGS=(-machine q35,smm=on
+                 -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE"
+                 -drive if=pflash,format=raw,file="$NVRAM")
+else
+  # SeaBIOS, disk before CD: the blank disk falls through to the CD on the
+  # first boot, the installed one boots once the CD is ejected.
+  FIRMWARE_ARGS=(-machine pc -boot order=cd)
+fi
 qemu-system-x86_64 \
   "${ACCEL[@]}" \
   -smp 2 -m 4096 \
-  -machine q35,smm=on \
-  -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
-  -drive if=pflash,format=raw,file="$NVRAM" \
+  "${FIRMWARE_ARGS[@]}" \
   -drive file="$DISK",if=virtio,format=qcow2 \
   -drive file="$DATA_DISK",if=virtio,format=raw \
   "${MEDIA_ARGS[@]}" \
-  -netdev user,id=n0,hostfwd=tcp:127.0.0.1:$SSH_HOST_PORT-:22 \
+  -netdev user,id=n0,hostfwd=tcp:127.0.0.1:"$SSH_HOST_PORT"-:22 \
   -device virtio-net-pci,netdev=n0 \
   -nographic \
   -serial file:"$SERIAL_LOG" \
-  -monitor unix:/tmp/ks-gen-install-regression-qmp.sock,server,nowait \
+  -monitor unix:"$QMP_SOCK",server,nowait \
   > "$QEMU_LOG" 2>&1 &
 QEMU_PID=$!
 echo "qemu pid=$QEMU_PID  serial=$SERIAL_LOG"
@@ -413,7 +457,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# ---- step 7: wait for SSH on host:2222 -----------------------------------
+# ---- step 7: wait for SSH on host:$SSH_HOST_PORT --------------------------
 # Generous-but-not-stupid: TCG anaconda install ~ 60-90 min. KVM ~ 8-15 min.
 # Bound the outer wait at 90 min. Also abort if serial.log goes silent for
 # 10 minutes — a hung anaconda emits nothing, and the first end-to-end
@@ -552,7 +596,7 @@ scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_HOST_PORT" \
     "$HERE/smoke-check.sh" "$ADMIN_USER"@127.0.0.1:/tmp/smoke-check.sh
 
 SMOKE_ENV="DATA_DISK_MARKER='$DATA_DISK_MARKER' EXPECTED_CRYPTO_POLICY='$EXPECTED_CRYPTO_POLICY'"
-SMOKE_ENV+=" EXPECTED_CONTAINER_USERS='$EXPECTED_CONTAINER_USERS'"
+SMOKE_ENV+=" EXPECTED_CONTAINER_USERS='$EXPECTED_CONTAINER_USERS' EXPECTED_FIRMWARE='$FIRMWARE'"
 if [[ -n "$ADMIN_SUDO_PASSWORD" ]]; then
   # -S reads the password from stdin, -p '' drops the prompt. Fed over ssh
   # stdin so it never appears in the guest's process list.
@@ -565,4 +609,4 @@ else
 fi
 
 echo
-echo "install-regression PASS (MEDIA=$MEDIA) — install completed end-to-end + smoke check green"
+echo "install-regression PASS (MEDIA=$MEDIA FIRMWARE=$FIRMWARE) — install completed end-to-end + smoke check green"

@@ -45,11 +45,12 @@ wsl -- bash -c "cd \"$(git rev-parse --show-toplevel)\" && tests/install-regress
 ```
 
 `run-all.sh` runs the CD variant, then the USB variant, then the emulated
-Rufus ISO-mode variant (`usb-iso`, below) against the same `installer.iso`
+Rufus ISO-mode variant (`usb-iso`, below), then the CD variant again under
+SeaBIOS (`cd-bios`, below) against the same `installer.iso`
 (reused only if the CD run finished building it), and exits non-zero if any
 failed. Per mode, `$BUILD/run-all/` keeps that run's `serial.log`/`qemu.log`
 and the installed disk's `qemu-img info`, and the summary prints each disk's
-size — trap 2 below applies to all of them. Expect roughly three times a
+size — trap 2 below applies to all of them. Expect roughly four times a
 single run's wall-clock. `FORCE_ISO_REBUILD=1` rebuilds the
 ISO even if `SKIP_ISO_BUILD` is set.
 
@@ -68,6 +69,30 @@ It attaches the ISO as xHCI USB mass storage through a fresh copy-on-write
 overlay (`$BUILD/usb-stick.qcow2`), so the guest sees exactly the bytes `dd`
 would write without a multi-GiB copy, with no `bootindex` (which QEMU re-applies every boot
 and would reinstall forever, since a stick is never ejected).
+
+### BIOS firmware (`FIRMWARE=bios`, #140)
+
+Every other mode boots OVMF (UEFI) on q35. `FIRMWARE=bios` boots SeaBIOS on
+the i440fx `pc` machine instead, which is what BIOS-only hypervisors (many
+cloud VPS plans) present:
+
+```bash
+FIXTURE_TEMPLATE=tests/install-regression/fixtures/al10-omit-dnf-automatic.host.yaml.tmpl \
+  SRC_ISO=/path/to/AlmaLinux-10.2-x86_64-boot.iso FIRMWARE=bios tests/install-regression/run.sh
+```
+
+AL10's installer labels every disk GPT, and GPT under BIOS needs a 1 MiB
+`biosboot` partition. Without one, anaconda stops at "Kickstart
+insufficient" and waits. The smoke check asserts the firmware the guest
+booted under. Under BIOS it also checks that a GPT boot disk has the
+`biosboot` partition and that `grub2-pc` is installed, and on AL10 that the
+label is GPT. Only an AL10 fixture tests #140 itself: AL8/9 put a BIOS install
+on an msdos label, which needs no `biosboot`. CD only: `reboot
+--eject` is what moves SeaBIOS on to the installed disk, and a USB stick is
+never ejected.
+
+`SSH_HOST_PORT` (default 2222) moves the SSH forward, so a run can sit beside
+another VM that already has 2222. Pair it with its own `BUILD` directory.
 
 ### Rufus ISO Image mode (`MEDIA=usb-iso`, #134)
 
@@ -116,8 +141,8 @@ and what the emulation mirrors:
   media always have one.
 
 Not reproduced: Rufus's **BIOS/legacy bootloader** (it installs its own
-syslinux/GRUB for CSM boot). The harness boots OVMF, so no mode covers BIOS
-boot. Also Rufus releases after v4.15: re-check `fix_config` and
+syslinux/GRUB for CSM boot). `usb-iso` boots OVMF, and `cd-bios` covers BIOS
+only from a CD. Also Rufus releases after v4.15: re-check `fix_config` and
 `redhat8_derivative` when bumping the pinned version.
 
 A full USB run needs the same install source as a CD run. A fixture that
@@ -206,8 +231,8 @@ an 800G virtual disk, and a guest that really did fill it would fill the host.
 ## Files
 
 - `run-all.sh` — runs `run.sh` with `MEDIA=cd`, `MEDIA=usb` and
-  `MEDIA=usb-iso`; the invocation to use when validating an install-pipeline
-  change (#26, #134).
+  `MEDIA=usb-iso` under UEFI, then `MEDIA=cd FIRMWARE=bios`; the invocation
+  to use when validating an install-pipeline change (#26, #134, #140).
 - `rufus-iso-stick.py` — builds the `MEDIA=usb-iso` stick: an emulated Rufus
   v4.15 ISO Image-mode write of `installer.iso` (see above).
 - `run.sh` — orchestrator. Generates an SSH keypair, renders the

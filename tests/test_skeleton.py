@@ -1,3 +1,5 @@
+import pytest
+
 from ks_gen.skeleton import render_skeleton
 
 
@@ -286,3 +288,51 @@ def test_skeleton_tang_block_not_emitted_for_partial():
     out = render_skeleton(cfg, post_blocks=[])
     assert "clevis luks bind" not in out
     assert "clevis-luks-askpass" not in out
+
+
+def _disk(kind: str):
+    from ks_gen.config import Disk, DiskLayout, DiskLvDef
+
+    if kind == "layout":
+        mounts = {
+            "root": "/",
+            "home": "/home",
+            "tmp": "/tmp",
+            "var": "/var",
+            "varlog": "/var/log",
+            "varlogaudit": "/var/log/audit",
+            "vartmp": "/var/tmp",
+        }
+        lvs = [DiskLvDef(name=n, mount=m) for n, m in mounts.items()]
+        return Disk(
+            layout=DiskLayout(lvs=[*lvs, DiskLvDef(name="swap", fstype="swap")]), target="vda"
+        )
+    return Disk(preset=kind, target="vda")
+
+
+@pytest.mark.parametrize("kind", ["stig_server", "minimal", "layout"])
+def test_skeleton_alma10_adds_biosboot_before_efi(minimal_cfg, kind):
+    # AL10 labels every disk GPT, which BIOS firmware can't boot without a
+    # biosboot partition; anaconda refuses the kickstart otherwise.
+    cfg = minimal_cfg.model_copy(update={"distro": "alma10", "disk": _disk(kind)})
+    parts = [
+        line
+        for line in render_skeleton(cfg, post_blocks=[]).splitlines()
+        if line.startswith("part ")
+    ]
+    assert parts[0] == "part biosboot --fstype=biosboot --size=1 --ondisk=vda"
+    assert parts[1].startswith("part /boot/efi ")
+
+
+@pytest.mark.parametrize("kind", ["stig_server", "minimal", "layout"])
+def test_skeleton_alma9_has_no_biosboot(minimal_cfg, kind):
+    # AL8/9 give BIOS machines an msdos label, where biosboot doesn't belong.
+    cfg = minimal_cfg.model_copy(update={"distro": "alma9", "disk": _disk(kind)})
+    assert "biosboot" not in render_skeleton(cfg, post_blocks=[])
+
+
+def test_skeleton_alma10_no_biosboot_without_wipe(minimal_cfg):
+    # No clearpart, so the disk keeps its label; on msdos, biosboot can't exist.
+    disk = _disk("stig_server").model_copy(update={"wipe": False})
+    cfg = minimal_cfg.model_copy(update={"distro": "alma10", "disk": disk})
+    assert "biosboot" not in render_skeleton(cfg, post_blocks=[])

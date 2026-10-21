@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Run the install-regression harness in every media mode: CD, then USB, then
-# an emulated Rufus ISO Image-mode stick (#26, #134).
+# an emulated Rufus ISO Image-mode stick (#26, #134), then CD again under
+# SeaBIOS (#140).
 #
 # CD alone is not enough: it boots the ISO as /dev/sr0, where anaconda
 # auto-detects its install source, so it never exercises the USB-disk path
 # operators hit with a `dd`/Rufus-DD stick. PR #73's two bugs (no
 # inst.repo=hd:LABEL=..., no top-level `user` directive) passed CD and broke
 # USB. Neither boots what MANUAL §8.6's Rufus ISO-mode write does (a FAT32
-# copy of the tree, booting its own grub.cfg), which usb-iso emulates. A fix
-# to the install pipeline is validated only when all three pass.
+# copy of the tree, booting its own grub.cfg), which usb-iso emulates. All
+# three boot UEFI; cd-bios boots what BIOS-only hypervisors present, where an
+# AL10 GPT disk without a biosboot partition stops anaconda (#140). A fix to
+# the install pipeline is validated only when all four pass.
 #
 # Every mode runs even if an earlier one fails — each is a 13-90 min install,
 # so one invocation reports all results. Exit status is non-zero if any
@@ -43,7 +46,8 @@ command -v mkfs.fat >/dev/null 2>&1 || {
   echo "missing: mkfs.fat (dosfstools; needed for the usb-iso run)" >&2; exit 1; }
 
 declare -A result
-for media in cd usb usb-iso; do
+MODES=(cd usb usb-iso cd-bios)
+for media in "${MODES[@]}"; do
   echo
   echo "=================== install-regression: MEDIA=$media ==================="
   rm -f "$LOGS/$media"-*
@@ -62,7 +66,14 @@ for media in cd usb usb-iso; do
   stamp="$LOGS/.started-$media"
   touch "$stamp"
   [[ "$media" == cd ]] && started_cd="$stamp"
-  MEDIA="$media" SKIP_ISO_BUILD="$skip" bash "$HERE/run.sh"
+  if [[ "$media" == cd-bios ]]; then
+    # Only an AL10 fixture's install lands on GPT and needs biosboot (#140).
+    grep -qE '^distro: *alma10' "${FIXTURE_TEMPLATE:-$HERE/fixtures/omit-dnf-automatic.host.yaml.tmpl}" \
+      || echo "note: cd-bios on a non-AL10 fixture boots an msdos label, not the #140 biosboot path"
+    MEDIA=cd FIRMWARE=bios SKIP_ISO_BUILD="$skip" bash "$HERE/run.sh"
+  else
+    MEDIA="$media" FIRMWARE=uefi SKIP_ISO_BUILD="$skip" bash "$HERE/run.sh"
+  fi
   rc=$?
   result[$media]=$rc
   # run.sh deletes serial.log/qemu.log only once it gets past preflight, so a
@@ -79,7 +90,7 @@ done
 echo
 echo "=================== install-regression summary ==================="
 failed=0
-for media in cd usb usb-iso; do
+for media in "${MODES[@]}"; do
   used="$(sed -n 's/^disk size: //p' "$LOGS/$media-disk.txt" 2>/dev/null)"
   if (( result[$media] == 0 )); then
     echo "  $media: PASS  (installed disk size: ${used:-unknown})"

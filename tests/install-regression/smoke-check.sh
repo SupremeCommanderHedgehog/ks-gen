@@ -13,6 +13,37 @@ loose_init_files() {
     -regex '.*/\.[[:alnum:]_ -]+' -perm /7037 -printf '%p=%m ' 2>/dev/null || true
 }
 
+# --- #140: booted from disk under the firmware run.sh gave the VM. Under BIOS,
+#     a GPT boot disk (AL10's installer labels every disk GPT) needs a biosboot
+#     partition for GRUB's core image; AL8/9 use an msdos label instead.
+if [[ -n "${EXPECTED_FIRMWARE:-}" ]]; then
+  if [[ -d /sys/firmware/efi ]]; then live_fw=uefi; else live_fw=bios; fi
+  [[ "$live_fw" == "$EXPECTED_FIRMWARE" ]] \
+    || fail "booted under $live_fw, but run.sh started the VM with FIRMWARE=$EXPECTED_FIRMWARE"
+  ok "booted under $live_fw"
+  if [[ "$live_fw" == bios ]]; then
+    boot_disk="/dev/$(lsblk -no PKNAME "$(findmnt -no SOURCE /boot)")"
+    label="$(lsblk -dno PTTYPE "$boot_disk")"
+    . /etc/os-release
+    # AL10 is the case #140 is about: there the label must be GPT, or this run
+    # didn't test the biosboot path at all.
+    [[ "${VERSION_ID%%.*}" != 10 || "$label" == gpt ]] \
+      || fail "AL10 boot disk $boot_disk is labelled ${label:-none}, expected gpt"
+    if [[ "$label" == gpt ]]; then
+      # By type GUID: lsblk's PARTTYPENAME is too new for AL8's util-linux.
+      # Captured first: grep -q would SIGPIPE lsblk under pipefail.
+      part_types="$(lsblk -no PARTTYPE "$boot_disk")"
+      grep -qix '21686148-6449-6e6f-744e-656564454649' <<<"$part_types" \
+        || fail "GPT $boot_disk booted under BIOS has no biosboot partition"
+      ok "GPT $boot_disk carries a biosboot partition"
+    else
+      ok "BIOS boot disk $boot_disk is labelled ${label:-none}"
+    fi
+    rpm -q grub2-pc >/dev/null || fail "grub2-pc not installed on a BIOS boot"
+    ok "grub2-pc installed"
+  fi
+fi
+
 # --- Core services kickstart says it enables (#57 acceptance: "install
 #     completed and reachable"; sshd is implicit since we got here).
 for svc in sshd chronyd firewalld auditd rsyslog; do
