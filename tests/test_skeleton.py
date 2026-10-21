@@ -1,3 +1,7 @@
+import os
+import shutil
+import subprocess
+
 import pytest
 
 from ks_gen.skeleton import render_skeleton
@@ -336,3 +340,60 @@ def test_skeleton_alma10_no_biosboot_without_wipe(minimal_cfg):
     disk = _disk("stig_server").model_copy(update={"wipe": False})
     cfg = minimal_cfg.model_copy(update={"distro": "alma10", "disk": disk})
     assert "biosboot" not in render_skeleton(cfg, post_blocks=[])
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_skeleton_clears_aging_on_locked_regular_accounts_last(minimal_cfg, tmp_path):
+    """#139: useradd after the STIG remediation gives accounts max 60 days and
+    35 inactive, which a key-only account can never reset. The final pass must
+    run after custom_post, in its own %post so an early `exit` there can't skip
+    it, and clear aging only on regular accounts with no password to unlock."""
+    cfg = minimal_cfg.model_copy(update={"custom_post": ["useradd -m opsadmin2\nexit 0"]})
+    out = render_skeleton(cfg, post_blocks=[])
+    marker = "# ===== key-only account aging (#139) ====="
+    start = out.index(marker)
+    assert out.index("%end", out.index("exit 0")) < start  # custom_post's %post closed first
+    assert out.rindex("%post --erroronfail --log=/root/ks-post-aging.log", 0, start) > out.index(
+        "exit 0"
+    )
+    block = out[start : out.index("%end", start)]
+
+    etc = tmp_path / "etc"
+    etc.mkdir()
+    # A repeated key must not turn the bound into a string: the first wins.
+    (etc / "login.defs").write_text(
+        "PASS_MAX_DAYS 60\n#UID_MIN 5\nUID_MIN   1000\nUID_MAX 60000\nUID_MIN 1003\n"
+    )
+    accounts = {  # name: (uid, shadow password field)
+        "root": (0, "!"),
+        "sshd": (74, "!!"),
+        "opsadmin": (1000, "!"),
+        "webapp": (1001, "!!"),
+        "legacy": (1002, "*"),
+        "pwuser": (1003, "$6$salt$hash"),
+        "staged": (1004, "!$6$salt$hash"),  # an unlock brings its password back
+        "nobody": (65534, "!"),
+    }
+    (etc / "passwd").write_text(
+        "".join(f"{n}:x:{uid}:{uid}::/home/{n}:/bin/bash\n" for n, (uid, _) in accounts.items())
+    )
+    (etc / "shadow").write_text(
+        "".join(f"{n}:{pw}:20000:1:60:7:35::\n" for n, (_, pw) in accounts.items())
+    )
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    calls = tmp_path / "chage.calls"
+    (bindir / "chage").write_text(f'#!/usr/bin/env bash\necho "$*" >> {calls}\n')
+    (bindir / "chage").chmod(0o755)
+
+    script = "set -euo pipefail\n" + block.replace("/etc/", f"{etc}/")
+    proc = subprocess.run(
+        [shutil.which("bash") or "bash", "-c", script],
+        capture_output=True,
+        text=True,
+        env={"PATH": f"{bindir}:{os.environ['PATH']}"},
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert calls.read_text().splitlines() == [
+        f"-M 99999 -I -1 {n}" for n in ("opsadmin", "webapp", "legacy")
+    ]

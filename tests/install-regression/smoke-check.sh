@@ -397,6 +397,29 @@ else
   done
 fi
 
+# --- #139: a locked, key-only account must never age out. The STIG gives new
+#     accounts max 60 days and 35 inactive, which a key-only account can never
+#     reset, so sshd refuses it about 95 days after install. Covers the admin
+#     (if its password is locked) and every container user. Only the container
+#     users test the fix: anaconda makes the admin before the STIG remediation,
+#     so it never had the limits. Without them, this checks the pass ran.
+#     Read /etc/shadow, not `chage -l`: chage prints the inactive period as
+#     "never" whenever max age is 10000+ days, so it would hide a lost -I -1.
+[[ -s /root/ks-post-aging.log ]] || fail "/root/ks-post-aging.log missing: the key-only aging %post never ran (#139)"
+[[ -n "${SUDO_USER:-}" ]] || fail "SUDO_USER unset; can't tell which account is the admin"
+for u in "$SUDO_USER" ${EXPECTED_CONTAINER_USERS:-}; do
+  IFS=: read -r _ pw _ _ max _ inactive _ < <(getent shadow "$u") \
+    || fail "no shadow entry for $u"
+  # Key-only: nothing but ! and *, so there is no password an unlock restores.
+  if [[ "$pw" =~ ^[!*]+$ ]]; then
+    [[ "$max" == 99999 && -z "$inactive" ]] \
+      || fail "key-only $u ages out: max '$max' (want 99999), inactive '$inactive' (want none) (#139)"
+    ok "key-only $u never ages out (max 99999, no inactive period)"
+  else
+    ok "$u has a password, so it keeps the STIG's password aging"
+  fi
+done
+
 # --- #131: /etc/skel's init files are tight, so a home made from it with plain
 #     `useradd -m` (as an operator would, after install) passes. The user is
 #     created here so the live scan below covers it, and removed after.
