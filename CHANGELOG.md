@@ -3,6 +3,14 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.39.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.39.0...v0.39.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **rules:** stop key-only accounts aging out of SSH ~95 days after install ([#139](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/139)) ([#143](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/143)) ([9312c2a](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/9312c2af1230a8d1ec089bede819829488b27145))
+* **templates:** give AL10 disks a biosboot partition so BIOS installs boot ([#140](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/140)) ([#141](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/141)) ([d9ff48d](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/d9ff48d1a1991dd2197fa1c29cdce7c64c9cd253))
+
 ## [0.39.0](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.38.0...v0.39.0) (2026-10-20)
 
 
