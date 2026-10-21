@@ -60,6 +60,7 @@ the rule change predicts and nothing else.
   network requires GRUB emergency shell (`rd.break=switch_root`).
 - Anaconda's "error at line N" dialog points at the `%post` block header,
   not the failing command. Real failure is in `/mnt/sysimage/root/ks-post.log`
+  (or `ks-post-aging.log`, the last `%post`, #139)
   — last `+ <cmd>` line under `set -euxo pipefail`. Switch to tty2 before
   dismissing the dialog.
 - For debug rebuilds, edit `src/ks_gen/iso/_menu.py` to drop `quiet` and add

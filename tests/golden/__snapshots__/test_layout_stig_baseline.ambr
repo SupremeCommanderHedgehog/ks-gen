@@ -383,6 +383,35 @@
   
   %end
   
+  %post --erroronfail --log=/root/ks-post-aging.log
+  set -euxo pipefail
+  
+  # ===== key-only account aging (#139) =====
+  # The STIG remediation can set PASS_MAX_DAYS 60 and INACTIVE=35 (AL10's does),
+  # and useradd gives every later account those limits. A key-only account can
+  # never change its password, so sshd refuses it about 95 days in. Clear max age
+  # and inactive on regular accounts (UID_MIN..UID_MAX, first value wins) whose
+  # password field is only ! and *, with no hash behind the lock to unlock into.
+  # The STIG's per-account aging checks skip locked accounts: no new finding.
+  # Captured first, so set -e stops the install if awk fails.
+  key_only=$(awk -F: '
+    FILENAME == "/etc/login.defs" {
+      split($0, f, " ")
+      if (f[1] == "UID_MIN" && lo == "") lo = f[2] + 0
+      if (f[1] == "UID_MAX" && hi == "") hi = f[2] + 0
+      next
+    }
+    FILENAME == "/etc/passwd" {
+      if ($3 >= (lo == "" ? 1000 : lo) && $3 <= (hi == "" ? 60000 : hi)) regular[$1] = 1
+      next
+    }
+    ($1 in regular) && $2 ~ /^[!*]+$/ { print $1 }
+  ' /etc/login.defs /etc/passwd /etc/shadow)
+  for u in $key_only; do
+    chage -M 99999 -I -1 "$u"
+  done
+  %end
+  
   reboot --eject
   
   '''

@@ -781,6 +781,39 @@ sudo /root/create-rootless-user.sh -l -q -c "Sandbox" sandbox
 
 The script is idempotent — re-running it on an existing user is safe and will just (re)apply any options you pass.
 
+#### Password aging on key-only accounts
+
+The STIG remediation can set `PASS_MAX_DAYS 60` in `/etc/login.defs` and
+`INACTIVE=35` in `/etc/default/useradd` (AlmaLinux 10's does), and `useradd`
+gives every new account those limits. A key-only account has a locked password
+nobody can change, so about 60 days after it's created sshd demands a password
+change, and 35 days later it refuses the key (#139).
+
+ks-gen handles this for every account the install makes. A final `%post`
+(logged to `/root/ks-post-aging.log`), after `custom_post`, clears the max age
+and inactive period (`chage -M 99999 -I -1`) on each regular account
+(`UID_MIN`–`UID_MAX`) whose password field is only `!` and `*`: locked, with
+no password behind the lock. That covers container users and any key-only
+account a `custom_post` block adds. (The admin is made by anaconda before the
+STIG remediation runs, so it never had the limits.) The script does the same for local
+accounts it creates or re-runs on later. An account with a password keeps the
+STIG's aging, including one locked with `usermod -L`, which an unlock would
+bring back. Minimum age and account expiry are never touched. The STIG's
+per-account aging checks skip locked accounts, so this adds no finding.
+
+Two cases are yours to handle:
+
+- A key-only account you create after install without the script, such as a
+  second admin, needs the same `chage`:
+
+  ```bash
+  sudo useradd -m -G wheel opsadmin2
+  sudo chage -M 99999 -I -1 opsadmin2   # key-only: never ages out
+  ```
+
+- If you later give a key-only account a password, restore its aging with
+  `sudo chage -M 60 -I 35 <user>`.
+
 #### Constraints
 
 - Container users' names must be distinct from `user.admin.name` (container users are for rootless workloads; admins manage the host).
@@ -862,6 +895,11 @@ custom_post:
 Each list entry becomes its own `%post` block separated by
 `# ===== custom_post =====` markers. Runs **after** every ks-gen
 rule's `emit_post`.
+
+That includes the STIG remediation, so an account a block makes with
+`useradd` gets the STIG's password aging. A final pass after the blocks clears
+it again on accounts with no password behind the lock, so a key-only account made here
+doesn't get refused over SSH about 95 days in (§4.11, #139).
 
 ### 4.14 `exceptions`
 
@@ -2137,8 +2175,9 @@ a bug — please file it.
 ### "oscap remediation failed during install"
 
 Check `/root/ks-post-oscap-fetch.log`, `/root/ks-post-oscap.log`,
-and `/root/ks-post.log` (in that order — they correspond to the
-fetch / eval / overrides `%post` blocks), and `/tmp/anaconda.log`
+`/root/ks-post.log` and `/root/ks-post-aging.log` (in that order — they
+correspond to the fetch / eval / overrides / key-only account aging
+`%post` blocks), and `/tmp/anaconda.log`
 on the install media or via VNC. The most
 common remediation failures:
 

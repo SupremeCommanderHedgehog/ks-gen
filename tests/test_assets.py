@@ -46,6 +46,17 @@ def _stub(bindir, name, body):
     path.chmod(0o755)
 
 
+def _script_with_shadow(tmp_path, shadow_text):
+    """A copy of the script that reads a fake /etc/shadow, so it runs unprivileged."""
+    shadow = tmp_path / "shadow"
+    shadow.write_text(shadow_text, encoding="utf-8")
+    src = files("ks_gen.assets").joinpath("create-rootless-user.sh").read_text(encoding="utf-8")
+    assert 'SHADOW="/etc/shadow"' in src
+    script = tmp_path / "create-rootless-user.sh"
+    script.write_text(src.replace('SHADOW="/etc/shadow"', f"SHADOW={shlex.quote(str(shadow))}"))
+    return script
+
+
 def _gnu_find() -> bool:
     find = shutil.which("find")
     if find is None:
@@ -102,7 +113,7 @@ def test_init_files_tightened_to_stig_0740(tmp_path, existing):
     )
     _stub(bindir, "useradd", populate)
     _stub(bindir, "getent", f'echo "{user}:x:1000:1000::{home}:/bin/bash"')
-    for name in ("semanage", "mountpoint", "restorecon", "usermod", "install"):
+    for name in ("semanage", "mountpoint", "restorecon", "usermod", "install", "chage"):
         _stub(bindir, name, "exit 0")
     _stub(bindir, "runuser", "exit 1")
     skip_opts = 'while [ "$1" != -- ]; do shift; done; shift'
@@ -110,7 +121,7 @@ def test_init_files_tightened_to_stig_0740(tmp_path, existing):
     if existing:
         subprocess.run([shutil.which("bash") or "bash", "-c", populate], check=True)
 
-    script = files("ks_gen.assets").joinpath("create-rootless-user.sh")
+    script = _script_with_shadow(tmp_path, f"{user}:!!:20000:1:60:7:35::\n")
     proc = subprocess.run(
         [shutil.which("bash") or "bash", str(script), user],
         capture_output=True,
@@ -133,3 +144,52 @@ def test_init_files_tightened_to_stig_0740(tmp_path, existing):
         "--regid",
         "1000",
     ]
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+@pytest.mark.parametrize(
+    ("shadow_line", "cleared", "says"),
+    [
+        ("svc:!!:20000:1:60:7:35::", True, "clearing password aging"),
+        ("svc:*:20000:1:60:7:35::", True, "clearing password aging"),
+        # Locked over a hash: an unlock brings the password back, so it keeps aging.
+        ("svc:!$6$salt$hash:20000:1:60:7:35::", False, "has a password"),
+        ("svc:$6$salt$hash:20000:1:60:7:35::", False, "has a password"),
+        ("svc::20000:1:60:7:35::", False, "empty password field"),
+        # A directory (SSSD) account: chage can't edit it, and must not abort the script.
+        (None, False, "not a local account"),
+    ],
+    ids=["new-locked", "star", "locked-hash", "has-password", "empty", "not-local"],
+)
+def test_key_only_account_aging_cleared(tmp_path, shadow_line, cleared, says):
+    """#139: useradd stamps the STIG's max 60 / inactive 35 on a new account,
+    which a locked, key-only account can never reset, so sshd refuses it
+    about 95 days in. Aging is cleared only on a local account whose password
+    field is nothing but ! and *."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    chage_args = tmp_path / "chage.args"
+    script = _script_with_shadow(
+        tmp_path, "root:!:20000:0:99999:7:::\n" + (f"{shadow_line}\n" if shadow_line else "")
+    )
+    # An existing account, so the aging step also runs on a re-run.
+    _stub(bindir, "id", 'case "$1$#" in -u1) echo 0 ;; esac')
+    _stub(bindir, "getent", f'echo "svc:x:1000:1000::{tmp_path}/nohome:/bin/bash"')
+    _stub(bindir, "chage", f'echo "$*" >> {shlex.quote(str(chage_args))}')
+    for name in ("useradd", "semanage", "mountpoint", "restorecon", "usermod", "install"):
+        _stub(bindir, name, "exit 0")
+    _stub(bindir, "runuser", "exit 1")
+
+    proc = subprocess.run(
+        [shutil.which("bash") or "bash", str(script), "svc"],
+        capture_output=True,
+        text=True,
+        env={"PATH": f"{bindir}:{os.environ['PATH']}"},
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert says in proc.stdout + proc.stderr
+    if cleared:
+        # Min age and expiry (-E) are left alone: only max and inactive lock it out.
+        assert chage_args.read_text(encoding="utf-8") == "-M 99999 -I -1 svc\n"
+    else:
+        assert not chage_args.exists()

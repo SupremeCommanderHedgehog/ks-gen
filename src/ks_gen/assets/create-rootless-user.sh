@@ -24,6 +24,7 @@ CONTAINERS_ROOT="/srv/containers"          # mount point of the mirror
 STORAGE_CONF="/etc/containers/storage.conf"
 SUBID_COUNT=65536                          # size of each subuid/subgid block
 DEFAULT_SHELL="/bin/bash"
+SHADOW="/etc/shadow"                       # local accounts only; chage edits this
 
 # --- logging ---------------------------------------------------------------
 info() { printf '[*] %s\n' "$*"; }
@@ -114,6 +115,32 @@ else
     useradd_args=(--create-home --shell "$shell")
     [ -n "$comment" ] && useradd_args+=(--comment "$comment")
     useradd "${useradd_args[@]}" "$user"
+fi
+
+# --- password aging for key-only accounts (#139) --------------------------
+# The STIG remediation sets PASS_MAX_DAYS 60 in login.defs and INACTIVE=35 in
+# /etc/default/useradd, and useradd stamps both onto every new account. A
+# locked, key-only account can never change its password, so about 60 days in,
+# sshd demands a change nobody can make, and 35 days later it refuses the key
+# outright. Clear the max age and inactive period, but only while the password
+# field is nothing but ! and * (locked, with no hash behind the lock that an
+# unlock would bring back). The STIG's per-account aging checks skip locked
+# accounts, so this adds no finding. Min age and expiry (-E) are left alone. If
+# the account is later given a password, restore its aging with
+# `chage -M 60 -I 35`. Only the local /etc/shadow is read: chage can't edit a
+# directory (SSSD) account. ks.cfg.j2's aging %post makes the same test at
+# install; keep the two in step.
+[ -r "$SHADOW" ] || die "cannot read $SHADOW"
+if ! pw=$(awk -F: -v u="$user" '$1 == u { print $2; found = 1; exit } END { exit !found }' \
+        "$SHADOW"); then
+    info "'$user' is not a local account; leaving its password aging alone"
+elif [[ "$pw" =~ ^[!*]+$ ]]; then
+    info "clearing password aging for key-only account '$user'"
+    chage -M 99999 -I -1 "$user"
+elif [[ -z "$pw" ]]; then
+    warn "'$user' has an empty password field; password aging not cleared"
+else
+    info "'$user' has a password; leaving its password aging alone"
 fi
 
 # --- tighten init-file permissions (STIG) ---------------------------------
