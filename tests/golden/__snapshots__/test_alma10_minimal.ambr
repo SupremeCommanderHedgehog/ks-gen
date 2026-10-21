@@ -277,6 +277,7 @@
   
   zerombr
   clearpart --all --initlabel
+  part biosboot --fstype=biosboot --size=1
   part /boot/efi --fstype=efi --size=1024 --asprimary
   part /boot --fstype=xfs --size=1024 --fsoptions="nodev,nosuid" --asprimary
   part pv.01 --grow --size=1

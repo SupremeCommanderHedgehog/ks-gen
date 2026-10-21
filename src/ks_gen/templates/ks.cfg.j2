@@ -40,6 +40,14 @@ clearpart --all --initlabel --drives={{ _wipe_targets | join(',') }}
 {% else -%}
 clearpart --all --initlabel
 {% endif -%}
+{# AL10's installer labels a wiped disk GPT whatever the firmware, and GPT
+   under BIOS needs a 1 MiB biosboot partition for GRUB's core image (#140).
+   Unused under UEFI, so one layout boots either way. AL8/9 give BIOS machines
+   an msdos label instead. Only with wipe: a kept label may be msdos. #}
+{% if cfg.distro == "alma10" -%}
+part biosboot --fstype=biosboot --size=1{% if cfg.disk.target %} --ondisk={{ cfg.disk.target }}{% endif %}
+
+{% endif -%}
 {% endif -%}
 
 {% if cfg.disk.layout -%}
