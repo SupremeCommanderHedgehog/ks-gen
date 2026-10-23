@@ -198,6 +198,9 @@
     - tftp-server
     - vsftpd
     - ypserv
+    - sssd-common
+    - sssd-kcm
+    - sssd-client
   overrides:
     console_login_only: false
     faillock:
@@ -288,7 +291,7 @@
   logvol swap          --vgname=vg_root --name=swap     --fstype=swap --recommended
   
   services --enabled=chronyd,firewalld,auditd,rsyslog,sshd
-  authselect select sssd --force
+  authselect select minimal --force
   
   %packages
   @^minimal-environment
@@ -310,6 +313,9 @@
   -tftp-server
   -vsftpd
   -ypserv
+  -sssd-common
+  -sssd-kcm
+  -sssd-client
   %end
   
   %post --nochroot --erroronfail --log=/mnt/sysimage/root/ks-post-oscap-fetch.log
@@ -479,7 +485,7 @@
   
   # ===== package_purge =====
   # Remove disallowed packages (no-op if not installed)
-  dnf -y remove telnet-server rsh-server tftp-server vsftpd ypserv || true
+  dnf -y remove telnet-server rsh-server tftp-server vsftpd ypserv sssd-common sssd-kcm sssd-client || true
   
   # ===== rngd_entropy =====
   # rngd: keep /dev/random fed so SSH_USE_STRONG_RNG cannot hang sshd (#118)
