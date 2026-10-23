@@ -63,7 +63,12 @@ logvol /srv/containers --vgname={{ cfg.disk.layout.vg_name if cfg.disk.layout el
 {% endif %}
 
 services --enabled=chronyd,firewalld,auditd,rsyslog,sshd
-authselect select sssd --force
+{# Local accounts only: no sss in PAM or nsswitch, and no sssd.service left
+   failing at boot because nothing configured it. The STIG remediation
+   derives custom/hardening from whatever profile this selects. AL10's
+   authselect renamed `minimal` to `local`. A host that joins a domain
+   later selects sssd itself (realm join does). #}
+authselect select {{ 'local' if cfg.distro == 'alma10' else 'minimal' }} --force
 
 %packages
 {% for grp in cfg.packages.effective_base_groups %}{{ grp }}

@@ -590,6 +590,11 @@ class Packages(StrictModel):
             "tftp-server",
             "vsftpd",
             "ypserv",
+            # Unused with the local-accounts authselect profile: the daemon,
+            # its client modules and the KCM credential cache.
+            "sssd-common",
+            "sssd-kcm",
+            "sssd-client",
         ]
     )
 
