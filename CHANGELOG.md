@@ -3,6 +3,13 @@
 All notable changes to ks-gen are tracked here. Rule additions especially:
 the catalog drives the audit story.
 
+## [0.39.2](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.39.1...v0.39.2) (2026-10-31)
+
+
+### Bug Fixes
+
+* **templates:** select authselect's local-accounts profile, not sssd ([#144](https://github.com/SupremeCommanderHedgehog/ks-gen/issues/144)) ([79bce54](https://github.com/SupremeCommanderHedgehog/ks-gen/commit/79bce54d9b568622030f4db57229b820981fb465))
+
 ## [0.39.1](https://github.com/SupremeCommanderHedgehog/ks-gen/compare/v0.39.0...v0.39.1) (2026-10-21)
 
 
