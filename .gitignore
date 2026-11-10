@@ -36,8 +36,11 @@ out/
 .DS_Store
 Thumbs.db
 
-# Claude Code local state (per-developer; do not publish)
+# Claude Code local state and notes (per-developer; do not publish)
 .claude/
+CLAUDE.md
+CLAUDE.local.md
+docs/superpowers/
 .scratch/
 
 # Local scratch logs from CI parity runs (mypy, pytest, ruff)
